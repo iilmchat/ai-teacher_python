@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +72,12 @@ class ChatMessage(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     code_blocks: Mapped[list[Any]] = mapped_column(JSONB, default=list)
+    # Метаданные ответа: провайдер, модель, версия промпта, предупреждения
+    # (S12-006). Имя атрибута отличается от колонки: `metadata` занято
+    # DeclarativeBase.
+    message_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, default=dict, server_default=text("'{}'::jsonb")
+    )
     # 1536 — размерность эмбеддингов, используемая в проекте
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

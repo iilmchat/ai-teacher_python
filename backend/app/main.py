@@ -16,6 +16,8 @@ from app.config import settings
 from app.core.rate_limiter import RateLimitMiddleware
 from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
+from app.services.llm import LLMError, LLMUnavailableError, create_llm_provider
+from app.services.llm.health import check_provider_health
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +73,15 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
+@app.exception_handler(LLMUnavailableError)
+async def llm_unavailable_handler(
+    request: Request, exc: LLMUnavailableError
+) -> JSONResponse:
+    """Провайдер LLM недоступен → 503 вместо 500 и «тихого» пустого ответа"""
+    logger.error("llm_unavailable", path=request.url.path, error=str(exc))
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
@@ -83,12 +94,36 @@ app.include_router(websocket.router)
 
 @app.get("/api/v1/health", tags=["Health"])
 async def health_check() -> dict[str, Any]:
-    """Health check endpoint"""
+    """Health check endpoint.
+
+    Секция `llm` показывает состояние провайдера: `ok`, `degraded` или
+    `not_configured` (S12-001). Результат проверки кэшируется на 60 секунд,
+    чтобы мониторинг не создавал нагрузку на API модели.
+    """
+    provider = None
+    try:
+        provider = create_llm_provider()
+        llm_health: dict[str, Any] = (await check_provider_health(provider)).as_dict()
+    except LLMError as exc:
+        logger.warning("llm_health_failed", error=str(exc))
+        llm_health = {
+            "provider": settings.llm_provider,
+            "model": None,
+            "configured": False,
+            "reachable": False,
+            "status": "not_configured",
+            "fallback": None,
+        }
+    finally:
+        if provider is not None:
+            await provider.close()
+
     return {
         "status": "ok",
         "version": settings.version,
         "app_name": settings.app_name,
         "llm_provider": settings.llm_provider,
+        "llm": llm_health,
     }
 
 

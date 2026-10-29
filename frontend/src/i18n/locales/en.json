@@ -58,7 +58,8 @@
     "copied": "Copied",
     "levelLabel": "Help level",
     "connected": "Streaming connected",
-    "disconnected": "Streaming unavailable, replies arrive complete"
+    "disconnected": "Streaming unavailable, replies arrive complete",
+    "policyWarning": "The basic level should not give a ready solution — please tell your teacher"
   },
   "code": {
     "title": "Playground",
@@ -133,6 +134,15 @@
     "avgAttempts": "Attempts per task",
     "messages": "Chat messages",
     "executions": "Code runs",
+    "llmTitle": "Assistant in the last 24 hours",
+    "llmProvider": "Provider",
+    "llmRequests": "Requests",
+    "llmErrors": "Errors",
+    "llmLatency": "Average latency",
+    "llmFirstToken": "First token",
+    "llmTokens": "Tokens",
+    "llmFallback": "Fallbacks",
+    "llmEmpty": "No calls yet",
     "generatedAt": "Data as of",
     "usersTitle": "Users",
     "search": "Search",

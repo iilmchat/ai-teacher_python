@@ -1,10 +1,12 @@
 """
-Сборка промптов для трёх уровней ассистента (S4-003, S5-001).
+Сборка промптов для трёх уровней ассистента (S4-003, S5-001, S12-006).
 
 Промпты лежат в файлах `prompts/<level>.txt`, а не в коде: изменение
-текста инструкций — отдельный PR с тестом (RULES §8.1).
+текста инструкций — отдельный PR с тестом (RULES §8.1). Версии промптов
+хранятся в `prompts/versions.json` и попадают в метаданные сообщения.
 """
 
+import json
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from app.models.user import UserLevel
 from app.services.llm.base import LLMMessage
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
+VERSIONS_FILE = PROMPTS_DIR / "versions.json"
 
 #: Сколько последних сообщений диалога попадает в контекст
 MAX_CONTEXT_MESSAGES = 20
@@ -22,6 +25,30 @@ MAX_MESSAGE_CHARS = 4000
 
 class PromptError(ValueError):
     """Ошибка сборки промпта"""
+
+
+@lru_cache(maxsize=1)
+def load_prompt_versions() -> dict[str, int]:
+    """Прочитать карту «уровень → версия промпта» из `versions.json`"""
+    if not VERSIONS_FILE.is_file():
+        return {}
+    try:
+        raw = json.loads(VERSIONS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        str(level): int(version)
+        for level, version in raw.items()
+        if isinstance(version, int) and not isinstance(version, bool)
+    }
+
+
+def prompt_version(level: UserLevel | str) -> int:
+    """Версия промпта уровня (1, если версия не задана явно)"""
+    level_value = level.value if isinstance(level, UserLevel) else level
+    return load_prompt_versions().get(level_value, 1)
 
 
 @lru_cache(maxsize=8)

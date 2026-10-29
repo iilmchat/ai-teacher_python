@@ -29,7 +29,7 @@ export function useChatSession(sessionId: string | null) {
       onClose: () => setConnected(false),
       onStart: () => startAssistantDraft(),
       onToken: (delta) => appendToken(delta),
-      onDone: (full) => finishStream(full),
+      onDone: (full, warnings) => finishStream(full, warnings),
       onError: (detail) => failStream(detail),
     });
 

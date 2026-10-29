@@ -35,7 +35,7 @@ interface ChatState {
   addUserMessage: (content: string) => void;
   startAssistantDraft: () => void;
   appendToken: (delta: string) => void;
-  finishStream: (full?: string) => void;
+  finishStream: (full?: string, warnings?: string[]) => void;
   failStream: (message: string) => void;
   /** Отправка без стриминга (fallback) */
   sendViaRest: (content: string) => Promise<void>;
@@ -45,7 +45,12 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-function localMessage(sessionId: string, role: ChatMessage['role'], content: string): ChatMessage {
+function localMessage(
+  sessionId: string,
+  role: ChatMessage['role'],
+  content: string,
+  warnings: string[] = [],
+): ChatMessage {
   return {
     id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     session_id: sessionId,
@@ -53,6 +58,8 @@ function localMessage(sessionId: string, role: ChatMessage['role'], content: str
     content,
     code_blocks: [],
     created_at: nowIso(),
+    metadata: {},
+    warnings,
   };
 }
 
@@ -128,7 +135,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ draft: state.draft + delta }));
   },
 
-  finishStream(full) {
+  finishStream(full, warnings = []) {
     const { active, draft } = get();
     const content = (full ?? draft).trim();
     if (!active || !content) {
@@ -138,7 +145,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       active: {
         ...active,
-        messages: [...active.messages, localMessage(active.id, 'assistant', content)],
+        messages: [
+          ...active.messages,
+          localMessage(active.id, 'assistant', content, warnings),
+        ],
       },
       draft: '',
       streaming: false,

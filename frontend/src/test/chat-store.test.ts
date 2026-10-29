@@ -129,6 +129,17 @@ describe('chat store', () => {
     expect(useChatStore.getState().active?.messages).toHaveLength(0);
   });
 
+  it('сохраняет предупреждения политики уровня в сообщении', () => {
+    useChatStore.setState({ active: { ...SESSION_WITH_MESSAGES, messages: [] } });
+    useChatStore.getState().startAssistantDraft();
+
+    useChatStore.getState().finishStream('Вот решение', ['basic_full_solution']);
+
+    expect(useChatStore.getState().active?.messages.at(-1)?.warnings).toEqual([
+      'basic_full_solution',
+    ]);
+  });
+
   it('фиксирует ошибку стриминга', () => {
     useChatStore.getState().failStream('Требуется авторизация');
 

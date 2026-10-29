@@ -1,15 +1,16 @@
 """
-Сервис чата (S4-002, S4-004, S5-003).
+Сервис чата (S4-002, S4-004, S5-003, S12-005, S12-006).
 
 Отвечает за сессии, историю сообщений, сборку контекста с учётом уровня
 и вызов LLM. Провайдер передаётся снаружи — это делает слой тестируемым
 без сети.
 """
 
-import re
 from collections.abc import AsyncIterator
+from typing import Any
 from uuid import UUID
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.chat import ChatMessageRepository, ChatSessionRepository
@@ -18,15 +19,15 @@ from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.user import User, UserLevel
 from app.services.levels import resolve_level
 from app.services.llm.base import LLMMessage, LLMProvider
-from app.services.llm.prompt_builder import build_messages
+from app.services.llm.policy import (
+    detect_level_policy_violations,
+    extract_code_blocks,
+)
+from app.services.llm.prompt_builder import build_messages, prompt_version
 
-#: Регулярное выражение для блоков кода в markdown
-CODE_BLOCK_RE = re.compile(r"```(?:python)?\s*(.+?)```", re.DOTALL)
+logger = structlog.get_logger(__name__)
 
-
-def extract_code_blocks(text: str) -> list[str]:
-    """Извлечь блоки кода из markdown-ответа модели"""
-    return [block.strip() for block in CODE_BLOCK_RE.findall(text) if block.strip()]
+__all__ = ["ChatService", "extract_code_blocks", "parse_level"]
 
 
 def parse_level(value: str | UserLevel) -> UserLevel:
@@ -48,6 +49,8 @@ class ChatService:
         self.provider = provider
         self.sessions = ChatSessionRepository(db)
         self.messages = ChatMessageRepository(db)
+        #: Предупреждения политики уровня для последнего ответа (S12-005)
+        self.last_warnings: list[str] = []
 
     # --- Сессии ---------------------------------------------------------
 
@@ -110,6 +113,25 @@ class ChatService:
             for message in items
         ]
 
+    def _assistant_metadata(self, level: UserLevel, answer: str) -> dict[str, Any]:
+        """Метаданные ответа: провайдер, модель, версия промпта, предупреждения"""
+        metadata: dict[str, Any] = {
+            "provider": self.provider.used_provider,
+            "model": self.provider.model,
+            "prompt_version": prompt_version(level),
+        }
+        warnings = detect_level_policy_violations(level, answer)
+        self.last_warnings = warnings
+        if warnings:
+            metadata["warnings"] = warnings
+            logger.warning(
+                "level_policy_warning",
+                level=level.value,
+                codes=warnings,
+                provider=self.provider.used_provider,
+            )
+        return metadata
+
     async def send_message(
         self, session: ChatSession, content: str
     ) -> tuple[ChatMessage, ChatMessage]:
@@ -124,8 +146,9 @@ class ChatService:
         # Последнее сообщение истории — только что сохранённый вопрос,
         # его передаём в build_messages отдельно, чтобы не дублировать
         history = await self.get_history(session.id)
+        level = resolve_level(parse_level(session.level))
         llm_messages = build_messages(
-            resolve_level(parse_level(session.level)),
+            level,
             self._history_for_llm(history),
             text,
         )
@@ -136,6 +159,7 @@ class ChatService:
             role=MessageRole.ASSISTANT,
             content=answer,
             code_blocks=extract_code_blocks(answer),
+            metadata=self._assistant_metadata(level, answer),
         )
         return user_message, assistant_message
 
@@ -148,12 +172,14 @@ class ChatService:
         if not text:
             raise ValidationError("Сообщение не может быть пустым")
 
+        self.last_warnings = []
         await self.messages.create_message(
             session_id=session.id, role=MessageRole.USER, content=text
         )
         history = await self.get_history(session.id)
+        level = resolve_level(parse_level(session.level))
         llm_messages = build_messages(
-            resolve_level(parse_level(session.level)),
+            level,
             self._history_for_llm(history),
             text,
         )
@@ -170,4 +196,5 @@ class ChatService:
                 role=MessageRole.ASSISTANT,
                 content=answer,
                 code_blocks=extract_code_blocks(answer),
+                metadata=self._assistant_metadata(level, answer),
             )

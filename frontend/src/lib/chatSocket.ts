@@ -3,7 +3,8 @@
  *
  * Протокол backend:
  *   client → {"type":"chat","content":"..."} | {"type":"ping"}
- *   server → {"type":"start"|"token"|"done"|"error"|"pong", content?, detail?}
+ *   server → {"type":"start"|"token"|"done"|"error"|"pong", content?, detail?,
+ *             warnings?}
  */
 
 import { getAccessToken } from '@/lib/token';
@@ -11,7 +12,7 @@ import { getAccessToken } from '@/lib/token';
 export interface ChatSocketHandlers {
   onStart?: () => void;
   onToken?: (delta: string) => void;
-  onDone?: (full: string) => void;
+  onDone?: (full: string, warnings: string[]) => void;
   onError?: (detail: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -54,7 +55,12 @@ export function openChatSocket(
   };
 
   socket.onmessage = (event: MessageEvent<string>) => {
-    let payload: { type?: string; content?: string; detail?: string };
+    let payload: {
+      type?: string;
+      content?: string;
+      detail?: string;
+      warnings?: unknown;
+    };
     try {
       payload = JSON.parse(event.data) as typeof payload;
     } catch {
@@ -68,9 +74,15 @@ export function openChatSocket(
       case 'token':
         handlers.onToken?.(payload.content ?? '');
         break;
-      case 'done':
-        handlers.onDone?.(payload.content ?? '');
+      case 'done': {
+        const warnings = Array.isArray(payload.warnings)
+          ? payload.warnings.filter(
+              (item): item is string => typeof item === 'string',
+            )
+          : [];
+        handlers.onDone?.(payload.content ?? '', warnings);
         break;
+      }
       case 'error':
         handlers.onError?.(payload.detail ?? 'Ошибка чата');
         break;

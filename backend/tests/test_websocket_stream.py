@@ -165,3 +165,26 @@ async def test_provider_failure_reports_error_and_keeps_alive(
 
     assert socket.types() == ["start", "error", "pong"]
     assert "недоступен" in socket.sent[1]["detail"]
+
+
+async def test_done_reports_level_policy_warnings(db_session: AsyncSession) -> None:
+    """Готовое решение на базовом уровне приходит с warnings (S12-005)"""
+    user = await _make_user(db_session, "wswarn")
+    session = await _make_session(db_session, user)
+    code = (
+        "n = int(input())\n"
+        "total = 0\n"
+        "for i in range(1, n + 1):\n"
+        "    total += i\n"
+        "print(total)"
+    )
+    provider = StreamingProvider(deltas=[f"```python\n{code}\n```"])
+    service = ChatService(db_session, provider)
+    socket = FakeSocket([{"type": "chat", "content": "Напиши программу"}])
+
+    with pytest.raises(WebSocketDisconnect):
+        await serve_chat_socket(socket, service, session)
+
+    done = socket.sent[-1]
+    assert done["type"] == "done"
+    assert "basic_full_solution" in done["warnings"]

@@ -52,7 +52,7 @@ class WebSocketLike(Protocol):
     async def receive_text(self) -> str: ...
 
 
-async def _send(ws: WebSocketLike, payload: dict[str, str]) -> None:
+async def _send(ws: WebSocketLike, payload: dict[str, Any]) -> None:
     """Отправить JSON-сообщение клиенту"""
     await ws.send_text(json.dumps(payload, ensure_ascii=False))
 
@@ -99,7 +99,15 @@ async def serve_chat_socket(
             await _send(ws, {"type": "error", "detail": exc.detail})
             continue
 
-        await _send(ws, {"type": "done", "content": "".join(chunks)})
+        await _send(
+            ws,
+            {
+                "type": "done",
+                "content": "".join(chunks),
+                # Нарушения политики уровня (S12-005) — клиент показывает плашку
+                "warnings": list(service.last_warnings),
+            },
+        )
 
 
 def _extract_user_id(token: str) -> UUID | None:

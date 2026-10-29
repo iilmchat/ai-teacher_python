@@ -88,6 +88,8 @@ class Settings(BaseSettings):
 
     # LLM
     llm_provider: str = "deepseek"  # deepseek, lm_studio
+    #: Резервный провайдер при недоступности основного (S12-002); пусто — выключен
+    llm_fallback_provider: str = ""
     deepseek_api_key: str = "change_me_api_key"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     lm_studio_url: str = "http://localhost:1234/v1"
