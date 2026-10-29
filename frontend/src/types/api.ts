@@ -339,7 +339,6 @@ export interface ClassroomList {
 export interface ClassroomMember {
   user_id: string;
   username: string;
-  email: string;
   role: string;
   joined_at: string;
 }

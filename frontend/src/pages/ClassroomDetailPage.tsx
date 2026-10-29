@@ -241,10 +241,7 @@ export function ClassroomDetailPage() {
         <ul className="flex flex-col divide-y divide-slate-100 text-sm">
           {classroom?.members.map((member) => (
             <li key={member.user_id} className="flex items-center justify-between py-2">
-              <span>
-                {member.username}{' '}
-                <span className="text-xs text-slate-400">{member.email}</span>
-              </span>
+              <span>{member.username}</span>
               <span className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">
                   {t(`classrooms.roles.${member.role}`, { defaultValue: member.role })}

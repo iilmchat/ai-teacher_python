@@ -118,7 +118,6 @@ async def get_classroom(
             username=users[member.user_id].username
             if member.user_id in users
             else "",
-            email=users[member.user_id].email if member.user_id in users else "",
             role=member.role,
             joined_at=member.joined_at,
         )
