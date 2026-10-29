@@ -3,7 +3,7 @@
 Документ для тех, кто работает с ассистентом (LLM) и для DSH: что именно
 уходит в модель сейчас.
 
-**Версия промптов:** v1 (спринт 4–5) · **Обновлено:** 2026-10-29 (спринт 12)
+**Версия промптов:** basic v1, intermediate **v2**, advanced v1 · **Обновлено:** 2026-10-29 (спринт 13)
 
 ---
 
@@ -75,7 +75,9 @@ git; тесты — `backend/tests/test_prompts.py`.
 | `echo` | `EchoProvider` | детерминированные ответы для e2e/демо, не для продакшена |
 
 Настройки: `LLM_MAX_TOKENS` (2000), `LLM_TEMPERATURE` (0.7),
-`LLM_FALLBACK_PROVIDER` (резервный провайдер, S12-002).
+`LLM_FALLBACK_PROVIDER` (резервный провайдер, S12-002),
+`LM_STUDIO_URL` и `LM_STUDIO_MODEL` (локальная модель, например
+`qwen/qwen3-4b-2507`).
 
 - **Healthcheck:** `GET /api/v1/health` → `llm.status` (`ok`, `degraded`,
   `not_configured`), кэш 60 с, ключ не раскрывается (S12-001).
@@ -86,6 +88,12 @@ git; тесты — `backend/tests/test_prompts.py`.
   `GET /api/v1/admin/analytics` → `llm.last_hour` / `llm.last_24h` (S12-003).
 - **Политика уровня:** ответы `basic` с готовым кодом помечаются
   `warnings` (S12-005), но не блокируются.
+
+**Живой прогон 2026-10-29 (DeepSeek):** basic 0.99, intermediate 0.93,
+advanced 0.96 по рубрике; подробности — [LLM_EVAL.md](LLM_EVAL.md) §7 и
+[reports/llm-eval/2026-10-29/](reports/llm-eval/2026-10-29/REVIEW.md).
+Нарушение `intermediate/Q2` (полная программа) исправлено уточнением промпта
+и версией v2.
 
 ---
 
@@ -118,7 +126,7 @@ git; тесты — `backend/tests/test_prompts.py`.
 1. Правка — отдельный PR с префиксом `feat(prompts):` или `fix(prompts):`.
 2. Обязателен прогон `pytest tests/test_prompts.py`.
 3. Увеличить версию уровня в `prompts/versions.json` — она попадёт в метаданные
-   новых ответов, по ней разбирают инциденты.
+   новых ответов, по ней разбирают инциденты (текущая: intermediate = 2).
 4. Ручная проверка на 5 типичных вопросах каждого уровня (см. LLM_EVAL).
 5. Если меняется политика уровня — обновить [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md).
 6. Стоимость: не увеличивать `LLM_MAX_TOKENS` без согласования.

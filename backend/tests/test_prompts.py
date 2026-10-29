@@ -46,6 +46,9 @@ def test_intermediate_prompt_allows_partial_examples() -> None:
 
     assert "синтаксис" in prompt
     assert "не выдавать полное решение" in prompt or "не выдавать" in prompt
+    # Уточнение после живого прогона (intermediate v2):
+    assert "других данных" in prompt
+    assert "каркас" in prompt
 
 
 def test_advanced_prompt_requires_full_solution() -> None:
@@ -147,9 +150,12 @@ def test_create_llm_provider_deepseek() -> None:
 
 
 def test_create_llm_provider_lm_studio() -> None:
-    """Провайдер lm_studio создаётся по имени"""
+    """Провайдер lm_studio создаётся по имени и берёт модель из настроек"""
+    from app.config import settings
+
     provider = create_llm_provider("lm_studio")
     assert provider.name == "lm_studio"
+    assert provider.model == settings.lm_studio_model
 
 
 def test_prompt_versions_cover_all_levels() -> None:

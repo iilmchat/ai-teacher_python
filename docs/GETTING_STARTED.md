@@ -37,7 +37,10 @@ Copy-Item .env.example .env            # Windows
 - `DEEPSEEK_API_KEY` — ключ DeepSeek (необязательно: без него чат вернёт 503,
   а health покажет `not_configured`);
 - `LLM_FALLBACK_PROVIDER` — резервный провайдер (необязательно, например
-  `lm_studio`): при сбое основного ответит он.
+  `lm_studio`): при сбое основного ответит он;
+- `LM_STUDIO_URL` и `LM_STUDIO_MODEL` — локальный endpoint и имя модели
+  (например, `http://127.0.0.1:8034/v1` и `qwen/qwen3-4b-2507`); модель
+  должна быть загружена в LM Studio.
 
 > **Важно:** в `.env.example` порты `POSTGRES_PORT=5434` и `REDIS_PORT=6381`.
 > Канонические 5432/6379 на машине разработки часто заняты другими проектами

@@ -28,6 +28,10 @@ class ExecutionResponse(BaseModel):
     error_type: str | None = None
     execution_time: float = 0.0
     violations: list[str] = Field(default_factory=list)
+    #: Удалось ли применить лимит памяти (S13-001, S13-002)
+    memory_limit_enforced: bool = False
+    #: Вывод был обрезан по лимиту (S13-005)
+    output_truncated: bool = False
 
 
 class ExecutionRecordResponse(BaseModel):

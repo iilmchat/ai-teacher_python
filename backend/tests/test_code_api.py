@@ -192,7 +192,7 @@ async def test_history_missing_record_returns_404(
 
 
 async def test_limits_endpoint_describes_sandbox(client: AsyncClient) -> None:
-    """Описание ограничений песочницы"""
+    """Описание ограничений песочницы, включая новые лимиты S13"""
     response = await client.get("/api/v1/code/limits")
 
     assert response.status_code == 200
@@ -201,3 +201,30 @@ async def test_limits_endpoint_describes_sandbox(client: AsyncClient) -> None:
     assert "allowed_modules" in data
     assert "math" in data["allowed_modules"]
     assert "os" not in data["allowed_modules"]
+    assert data["memory_limit_mb"] == 128
+    assert data["max_output_chars"] > 0
+    assert data["max_concurrency"] >= 1
+
+
+async def test_execute_returns_503_when_sandbox_is_busy(
+    client: AsyncClient,
+    fake_executor: FakeExecutor,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Перегрузка песочницы — 503, а не 500 (S13-003)"""
+    from app.errors import ServiceUnavailableError
+
+    async def busy(code: str, stdin_text: str = "") -> ExecutionResult:
+        raise ServiceUnavailableError("Песочница перегружена")
+
+    monkeypatch.setattr(fake_executor, "execute", busy)
+    token = await _register_and_login(client, username="codebusy")
+
+    response = await client.post(
+        "/api/v1/code/execute",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 503
+    assert "перегружена" in response.json()["detail"]

@@ -44,3 +44,10 @@ class ValidationError(AppError):
 
     status_code = 422
     detail = "Некорректные входные данные"
+
+
+class ServiceUnavailableError(AppError):
+    """Сервис временно перегружен (S13-003)"""
+
+    status_code = 503
+    detail = "Сервис временно недоступен, попробуйте позже"

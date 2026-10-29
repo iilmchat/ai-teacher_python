@@ -71,6 +71,8 @@ async def execute_code(
         error_type=result.error_type,
         execution_time=round(result.execution_time, 4),
         violations=result.violations,
+        memory_limit_enforced=result.memory_limit_enforced,
+        output_truncated=result.output_truncated,
     )
 
 
@@ -147,6 +149,9 @@ async def get_limits() -> dict[str, object]:
     return {
         "timeout_seconds": settings.executor_timeout,
         "memory_limit_mb": settings.executor_memory_limit,
+        "max_output_chars": settings.executor_max_output,
+        "max_concurrency": settings.executor_max_concurrency,
+        "queue_timeout_seconds": settings.executor_queue_timeout,
         "max_code_length": 20_000,
         "allowed_modules": sorted(ALLOWED_MODULES),
     }

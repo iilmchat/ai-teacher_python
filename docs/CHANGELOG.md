@@ -10,6 +10,16 @@
 ## [Unreleased]
 
 ### Добавлено
+- Живой прогон LLM_EVAL на DeepSeek: 15 ответов, оценки basic 0.99 /
+  intermediate 0.93 / advanced 0.96; отчёт `docs/reports/llm-eval/2026-10-29/`
+- `LM_STUDIO_MODEL` — имя локальной модели; `qwen/qwen3-4b-2507` проверен
+  как fallback на `127.0.0.1:8034`
+- Лимит памяти песочницы в дочернем процессе: `RLIMIT_AS` на POSIX,
+  Job Object на Windows; `EXECUTOR_MEMORY_LIMIT` подхватывается (KI-009)
+- Ограничение одновременных запусков: `EXECUTOR_MAX_CONCURRENCY`,
+  `EXECUTOR_QUEUE_TIMEOUT`, 503 при перегрузке
+- Обрезка вывода `EXECUTOR_MAX_OUTPUT` с пометкой `output_truncated`
+- 14 тестов-атак: сеть, файлы, `__builtins__`, `getattr`, dunder
 - Healthcheck LLM в `/api/v1/health`: статус `ok` / `degraded` / `not_configured`,
   провайдер, модель, fallback; ping с кэшем 60 с, ключ не раскрывается
 - Fallback провайдеров: `LLM_FALLBACK_PROVIDER`, один повтор, 503 при отказе обоих
@@ -39,6 +49,15 @@
   провайдера через `Depends` (тестируемость)
 - `pytest`-маркеры `slow` и `migrations`; полный backend-прогон ~59 с
 - WS-сообщение `done` содержит `warnings` политики уровня
+- `/code/limits` отдаёт лимиты памяти, вывода и параллелизма; результат
+  выполнения — `memory_limit_enforced` / `output_truncated`
+
+### Исправлено
+- Лимит памяти песочницы на Windows больше не «декоративный»: Job Object
+  реально ограничивает committed memory (KI-009)
+- Промпт среднего уровня: примеры — на других данных, при просьбе «напиши
+  программу» — только каркас и шаги; версия промпта intermediate = 2
+  (по итогам живого прогона, KI-008)
 
 ### Не сделано
 - Живой прогон LLM_EVAL (KI-008 Blocked: нет `DEEPSEEK_API_KEY`, LM Studio не запущен)
