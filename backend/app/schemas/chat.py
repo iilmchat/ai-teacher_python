@@ -59,3 +59,16 @@ class ChatSessionWithMessages(ChatSessionResponse):
 
     messages: list[ChatMessageResponse] = Field(default_factory=list)
 
+
+class ChatMessageRequest(BaseModel):
+    """Запрос на отправку сообщения в чат"""
+
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+class ChatTurnResponse(BaseModel):
+    """Пара «вопрос ученика + ответ ассистента»"""
+
+    user_message: ChatMessageResponse
+    assistant_message: ChatMessageResponse
+

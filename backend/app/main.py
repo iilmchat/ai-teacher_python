@@ -6,11 +6,14 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.api.v1 import auth
+from app.api import websocket
+from app.api.v1 import auth, chat
 from app.config import settings
+from app.errors import AppError
 
 logger = structlog.get_logger(__name__)
 
@@ -42,8 +45,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    """Доменные ошибки сервисов → корректные HTTP-ответы"""
+    logger.info(
+        "domain_error",
+        path=request.url.path,
+        status=exc.status_code,
+        detail=exc.detail,
+    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(websocket.router)
 
 
 @app.get("/api/v1/health", tags=["Health"])
@@ -53,6 +71,7 @@ async def health_check() -> dict[str, Any]:
         "status": "ok",
         "version": settings.version,
         "app_name": settings.app_name,
+        "llm_provider": settings.llm_provider,
     }
 
 
