@@ -81,9 +81,10 @@ FORBIDDEN_MODULES: frozenset[str] = frozenset(
     }
 )
 
-#: Функции, вызов которых запрещён
+#: Функции, вызов которых запрещён.
+#: `input` разрешён: он читает только переданный stdin, а не терминал.
 FORBIDDEN_CALLS: frozenset[str] = frozenset(
-    {"eval", "exec", "compile", "open", "input", "__import__", "globals", "locals"}
+    {"eval", "exec", "compile", "open", "__import__", "globals", "locals"}
 )
 
 
@@ -232,10 +233,12 @@ def find_violations(code: str) -> list[str]:
     return violations
 
 
-def _run_restricted(code: str) -> dict[str, Any]:
+def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
     """Выполнить код в RestrictedPython и вернуть словарь результата.
 
     Функция вызывается в дочернем процессе, поэтому не использует БД и сеть.
+    `stdin_text` подаётся в `input()` построчно; когда строки кончаются,
+    возвращается пустая строка (чтобы код не завис).
     """
     violations = find_violations(code)
     if violations:
@@ -247,10 +250,21 @@ def _run_restricted(code: str) -> dict[str, Any]:
             "violations": violations,
         }
 
+    stdin_lines = iter(stdin_text.splitlines())
+
+    def _safe_input(prompt: str = "") -> str:
+        try:
+            return next(stdin_lines)
+        except StopIteration:
+            return ""
+
+    builtins_for_run = _build_builtins()
+    builtins_for_run["input"] = _safe_input
+
     # RP 7 инстанцирует PrintCollector сам: `_print = _print_(_getattr_)`.
     # Собранный вывод доступен после exec в globals['_print'].
     safe_globals: dict[str, Any] = {
-        "__builtins__": _build_builtins(),
+        "__builtins__": builtins_for_run,
         "__name__": "student_script",
         "_print_": PrintCollector,
         "_getattr_": safer_getattr,
@@ -319,12 +333,13 @@ def _run_restricted(code: str) -> dict[str, Any]:
 #: Каталог backend — нужен, чтобы дочерний интерпретатор импортировал `app`
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
-#: Код раннера: читает код из stdin, пишет JSON-результат в stdout
+#: Код раннера: читает JSON {code, stdin} из stdin, пишет JSON-результат в stdout
 _RUNNER = (
     "import json, sys\n"
     "from app.core.executor import _run_restricted\n"
-    "code = sys.stdin.read()\n"
-    "sys.stdout.write(json.dumps(_run_restricted(code), ensure_ascii=False))\n"
+    "payload = json.loads(sys.stdin.read())\n"
+    "result = _run_restricted(payload['code'], payload.get('stdin', ''))\n"
+    "sys.stdout.write(json.dumps(result, ensure_ascii=False))\n"
 )
 
 
@@ -334,19 +349,20 @@ class SandboxedExecutor:
     def __init__(self, timeout: float = 5.0) -> None:
         self.timeout = timeout
 
-    def _execute_in_process(self, code: str) -> ExecutionResult:
+    def _execute_in_process(self, code: str, stdin_text: str = "") -> ExecutionResult:
         """Запустить код в отдельном интерпретаторе и дождаться результата"""
         env = {
             **os.environ,
             "PYTHONIOENCODING": "utf-8",
             "PYTHONPATH": str(BACKEND_DIR),
         }
+        payload = json.dumps({"code": code, "stdin": stdin_text}, ensure_ascii=False)
         started = time.perf_counter()
 
         try:
             completed = subprocess.run(  # noqa: S603 — фиксированная команда
                 [sys.executable, "-c", _RUNNER],
-                input=code.encode("utf-8"),
+                input=payload.encode("utf-8"),
                 capture_output=True,
                 timeout=self.timeout,
                 cwd=str(BACKEND_DIR),
@@ -384,6 +400,6 @@ class SandboxedExecutor:
             violations=list(raw.get("violations") or []),
         )
 
-    async def execute(self, code: str) -> ExecutionResult:
+    async def execute(self, code: str, stdin_text: str = "") -> ExecutionResult:
         """Выполнить код в песочнице (блокирующая работа — в отдельном потоке)"""
-        return await asyncio.to_thread(self._execute_in_process, code)
+        return await asyncio.to_thread(self._execute_in_process, code, stdin_text)

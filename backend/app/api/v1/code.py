@@ -51,7 +51,7 @@ async def execute_code(
     executor: ExecutorDep,
 ) -> ExecutionResponse:
     """Выполнить код ученика в песочнице и сохранить результат"""
-    result = await executor.execute(payload.code)
+    result = await executor.execute(payload.code, payload.stdin or "")
 
     await CodeExecutionRepository(db).create(
         CodeExecution(

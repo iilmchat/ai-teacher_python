@@ -15,6 +15,8 @@ class CodeRequest(BaseModel):
     """Код на выполнение/анализ"""
 
     code: str = Field(..., min_length=1, max_length=MAX_CODE_LENGTH)
+    #: Данные для input() — по строке на вызов
+    stdin: str | None = Field(default=None, max_length=10_000)
 
 
 class ExecutionResponse(BaseModel):

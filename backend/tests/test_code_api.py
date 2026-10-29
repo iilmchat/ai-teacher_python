@@ -26,7 +26,9 @@ class FakeExecutor(SandboxedExecutor):
         self.result = result
         self.calls: list[str] = []
 
-    async def execute(self, code: str) -> ExecutionResult:  # type: ignore[override]
+    async def execute(  # type: ignore[override]
+        self, code: str, stdin_text: str = ""
+    ) -> ExecutionResult:
         self.calls.append(code)
         return self.result
 

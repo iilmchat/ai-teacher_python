@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import websocket
-from app.api.v1 import auth, chat, code, users
+from app.api.v1 import auth, chat, code, tasks, users
 from app.config import settings
 from app.errors import AppError
 
@@ -63,6 +63,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(code.router, prefix="/api/v1")
+app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 

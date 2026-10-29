@@ -45,12 +45,15 @@ async def register(user_data: UserCreate, db: DbSession) -> User:
             detail="Username already taken",
         )
 
+    # Роль и уровень при регистрации не принимаются от клиента:
+    # иначе любой мог бы зарегистрироваться преподавателем/админом.
+    # Повышение роли — только через PATCH /users/{id}/role (админ).
     user = User(
         email=user_data.email,
         username=user_data.username,
         hashed_password=hash_password(user_data.password),
-        role=user_data.role or UserRole.STUDENT,
-        level=user_data.level or UserLevel.BASIC,
+        role=UserRole.STUDENT,
+        level=UserLevel.BASIC,
     )
     return await user_repo.create(user)
 

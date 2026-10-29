@@ -7,6 +7,12 @@
 
 from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.code import CodeExecution
+from app.models.task import (
+    Task,
+    TaskDifficulty,
+    TaskStatus,
+    UserTaskProgress,
+)
 from app.models.user import User, UserLevel, UserRole
 
 __all__ = [
@@ -14,7 +20,11 @@ __all__ = [
     "ChatSession",
     "CodeExecution",
     "MessageRole",
+    "Task",
+    "TaskDifficulty",
+    "TaskStatus",
     "User",
     "UserLevel",
     "UserRole",
+    "UserTaskProgress",
 ]
