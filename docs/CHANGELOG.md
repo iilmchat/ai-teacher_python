@@ -11,8 +11,12 @@
 
 ### Добавлено
 - Проект инициализирован
-- Создана базовая структура проекта
+- Создана базовая структура проекта (backend, frontend, docs)
 - Создана документация (Design.md, TODO.md, RULES.md)
+- Настроен FastAPI с health check endpoint
+- Создана конфигурация Docker Compose
+- Настроен CI/CD через GitHub Actions
+- Созданы базовые тесты для health check
 
 ---
 
