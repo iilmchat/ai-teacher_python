@@ -52,6 +52,8 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change_me_secret_key}
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
       - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-}
+      - LM_STUDIO_URL=${LM_STUDIO_URL:-http://localhost:1234/v1}
+      - LM_STUDIO_MODEL=${LM_STUDIO_MODEL:-local-model}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
     ports:
       - "127.0.0.1:8000:8000"

@@ -10,12 +10,13 @@
 4. Собственный `__import__` с белым списком модулей.
 5. Выполнение в отдельном процессе интерпретатора Python: по таймауту процесс
    убивается, поэтому `while True` не «съедает» воркер API.
+6. Лимит памяти ставится в дочернем процессе: `RLIMIT_AS` на POSIX,
+   Job Object на Windows (S13-001, S13-002). Вывод обрезается по лимиту
+   (S13-005), число одновременных запусков ограничено (S13-003).
 
 Почему subprocess, а не multiprocessing: на Windows spawn перезапускает
 `__main__`, что конфликтует с uvicorn («Safe importing of main module»).
 Отдельный интерпретатор изолирован полностью и не зависит от `__main__`.
-
-Ограничение: лимит памяти (RSS) на Windows не enforced — см. KNOWN_ISSUES.
 """
 
 import ast
@@ -27,6 +28,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,6 +41,10 @@ from RestrictedPython.Guards import (
     guarded_unpack_sequence,
     safer_getattr,
 )
+
+from app.config import settings
+from app.core.sandbox_limits import apply_memory_limit, truncate_output
+from app.errors import ServiceUnavailableError
 
 #: Модули, доступные ученику в песочнице
 ALLOWED_MODULES: frozenset[str] = frozenset(
@@ -98,6 +104,10 @@ class ExecutionResult:
     execution_time: float = 0.0
     error_type: str | None = None
     violations: list[str] = field(default_factory=list)
+    #: Удалось ли применить лимит памяти (S13-001, S13-002)
+    memory_limit_enforced: bool = False
+    #: Был ли вывод обрезан по лимиту (S13-005)
+    output_truncated: bool = False
 
 
 class _OutputCollector:
@@ -233,12 +243,23 @@ def find_violations(code: str) -> list[str]:
     return violations
 
 
-def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
+def _run_restricted(
+    code: str,
+    stdin_text: str = "",
+    *,
+    memory_limit_mb: int | None = None,
+    max_output_chars: int | None = None,
+    apply_limits: bool = False,
+) -> dict[str, Any]:
     """Выполнить код в RestrictedPython и вернуть словарь результата.
 
     Функция вызывается в дочернем процессе, поэтому не использует БД и сеть.
     `stdin_text` подаётся в `input()` построчно; когда строки кончаются,
     возвращается пустая строка (чтобы код не завис).
+
+    `apply_limits=True` ставит лимит памяти на текущий процесс (только в
+    дочернем интерпретаторе; в тестах `_run_restricted` вызывается напрямую,
+    чтобы не ограничивать сам pytest).
     """
     violations = find_violations(code)
     if violations:
@@ -249,6 +270,11 @@ def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
             "error_type": "SecurityError",
             "violations": violations,
         }
+
+    memory_enforced = False
+    limits_warning: str | None = None
+    if apply_limits and memory_limit_mb:
+        memory_enforced, limits_warning = apply_memory_limit(memory_limit_mb)
 
     stdin_lines = iter(stdin_text.splitlines())
 
@@ -296,6 +322,8 @@ def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
             "error": f"{exc.msg} (строка {exc.lineno})",
             "error_type": "SyntaxError",
             "violations": violations,
+            "memory_limit_enforced": memory_enforced,
+            "limits_warning": limits_warning,
         }
     except Exception as exc:  # noqa: BLE001 — RestrictedPython может бросить своё
         return {
@@ -304,6 +332,8 @@ def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
             "error": str(exc),
             "error_type": type(exc).__name__,
             "violations": violations,
+            "memory_limit_enforced": memory_enforced,
+            "limits_warning": limits_warning,
         }
 
     buffer = io.StringIO()
@@ -311,43 +341,113 @@ def _run_restricted(code: str, stdin_text: str = "") -> dict[str, Any]:
         with contextlib.redirect_stdout(buffer):
             exec(byte_code, safe_globals)  # noqa: S102 — код ограничен RestrictedPython
     except Exception as exc:  # noqa: BLE001 — любая ошибка ученика
+        output, truncated = truncate_output(
+            collected_output() + buffer.getvalue(), max_output_chars
+        )
         return {
             "success": False,
-            "output": collected_output() + buffer.getvalue(),
+            "output": output,
             "error": f"{type(exc).__name__}: {exc}",
             "error_type": type(exc).__name__,
             "execution_time": time.perf_counter() - started,
             "violations": violations,
+            "memory_limit_enforced": memory_enforced,
+            "output_truncated": truncated,
+            "limits_warning": limits_warning,
         }
 
+    output, truncated = truncate_output(
+        collected_output() + buffer.getvalue(), max_output_chars
+    )
     return {
         "success": True,
-        "output": collected_output() + buffer.getvalue(),
+        "output": output,
         "error": None,
         "error_type": None,
         "execution_time": time.perf_counter() - started,
         "violations": violations,
+        "memory_limit_enforced": memory_enforced,
+        "output_truncated": truncated,
+        "limits_warning": limits_warning,
     }
 
 
 #: Каталог backend — нужен, чтобы дочерний интерпретатор импортировал `app`
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 
-#: Код раннера: читает JSON {code, stdin} из stdin, пишет JSON-результат в stdout
+#: Код раннера: читает JSON {code, stdin, memory_limit_mb, max_output_chars}
+#: из stdin, пишет JSON-результат в stdout
 _RUNNER = (
     "import json, sys\n"
     "from app.core.executor import _run_restricted\n"
     "payload = json.loads(sys.stdin.read())\n"
-    "result = _run_restricted(payload['code'], payload.get('stdin', ''))\n"
+    "result = _run_restricted(\n"
+    "    payload['code'], payload.get('stdin', ''),\n"
+    "    memory_limit_mb=payload.get('memory_limit_mb'),\n"
+    "    max_output_chars=payload.get('max_output_chars'),\n"
+    "    apply_limits=True,\n"
+    ")\n"
     "sys.stdout.write(json.dumps(result, ensure_ascii=False))\n"
 )
+
+
+#: Общий на процесс ограничитель одновременных запусков (S13-003).
+#: Semaphore из `asyncio` нельзя переиспользовать между event loop'ами
+#: (pytest создаёт новый loop на тест), поэтому используем threading.
+_executor_slots: tuple[int, threading.BoundedSemaphore] | None = None
+_slots_lock = threading.Lock()
+
+
+def _get_executor_slots(limit: int) -> threading.BoundedSemaphore:
+    """Вернуть общий семафор на `limit` одновременных запусков"""
+    global _executor_slots
+    normalized = max(1, limit)
+    with _slots_lock:
+        if _executor_slots is None or _executor_slots[0] != normalized:
+            _executor_slots = (normalized, threading.BoundedSemaphore(normalized))
+        return _executor_slots[1]
+
+
+def reset_executor_slots() -> None:
+    """Сбросить семафор (тесты)"""
+    global _executor_slots
+    with _slots_lock:
+        _executor_slots = None
 
 
 class SandboxedExecutor:
     """Песочница для кода ученика"""
 
-    def __init__(self, timeout: float = 5.0) -> None:
+    def __init__(
+        self,
+        timeout: float = 5.0,
+        memory_limit_mb: int | None = None,
+        max_output_chars: int | None = None,
+        max_concurrency: int | None = None,
+        queue_timeout: float | None = None,
+    ) -> None:
         self.timeout = timeout
+        self.memory_limit_mb = (
+            settings.executor_memory_limit
+            if memory_limit_mb is None
+            else memory_limit_mb
+        )
+        self.max_output_chars = (
+            settings.executor_max_output
+            if max_output_chars is None
+            else max_output_chars
+        )
+        self.max_concurrency = max(
+            1,
+            settings.executor_max_concurrency
+            if max_concurrency is None
+            else max_concurrency,
+        )
+        self.queue_timeout = (
+            settings.executor_queue_timeout
+            if queue_timeout is None
+            else queue_timeout
+        )
 
     def _execute_in_process(self, code: str, stdin_text: str = "") -> ExecutionResult:
         """Запустить код в отдельном интерпретаторе и дождаться результата"""
@@ -356,7 +456,15 @@ class SandboxedExecutor:
             "PYTHONIOENCODING": "utf-8",
             "PYTHONPATH": str(BACKEND_DIR),
         }
-        payload = json.dumps({"code": code, "stdin": stdin_text}, ensure_ascii=False)
+        payload = json.dumps(
+            {
+                "code": code,
+                "stdin": stdin_text,
+                "memory_limit_mb": self.memory_limit_mb,
+                "max_output_chars": self.max_output_chars,
+            },
+            ensure_ascii=False,
+        )
         started = time.perf_counter()
 
         try:
@@ -398,8 +506,24 @@ class SandboxedExecutor:
             execution_time=float(raw.get("execution_time") or elapsed),
             error_type=raw.get("error_type"),
             violations=list(raw.get("violations") or []),
+            memory_limit_enforced=bool(raw.get("memory_limit_enforced")),
+            output_truncated=bool(raw.get("output_truncated")),
         )
 
     async def execute(self, code: str, stdin_text: str = "") -> ExecutionResult:
-        """Выполнить код в песочнице (блокирующая работа — в отдельном потоке)"""
-        return await asyncio.to_thread(self._execute_in_process, code, stdin_text)
+        """Выполнить код в песочнице (блокирующая работа — в отдельном потоке).
+
+        Одновременных запусков не больше `max_concurrency`; если слот не
+        освободился за `queue_timeout`, возвращается 503 (S13-003).
+        """
+        slots = _get_executor_slots(self.max_concurrency)
+        acquired = await asyncio.to_thread(slots.acquire, True, self.queue_timeout)
+        if not acquired:
+            raise ServiceUnavailableError(
+                "Песочница перегружена: слишком много одновременных запусков. "
+                "Попробуйте через несколько секунд."
+            )
+        try:
+            return await asyncio.to_thread(self._execute_in_process, code, stdin_text)
+        finally:
+            slots.release()

@@ -93,12 +93,20 @@ class Settings(BaseSettings):
     deepseek_api_key: str = "change_me_api_key"
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     lm_studio_url: str = "http://localhost:1234/v1"
+    #: Модель локального сервера (LM Studio отдаёт её в /v1/models)
+    lm_studio_model: str = "local-model"
     llm_max_tokens: int = 2000
     llm_temperature: float = 0.7
 
-    # Code Execution
+    # Code Execution (S13)
     executor_timeout: int = 5  # секунд
     executor_memory_limit: int = 128  # MB
+    #: Максимум символов stdout в ответе (S13-005)
+    executor_max_output: int = 100_000
+    #: Сколько запусков песочницы выполняется одновременно (S13-003)
+    executor_max_concurrency: int = 4
+    #: Сколько секунд ждать свободный слот, прежде чем вернуть 503
+    executor_queue_timeout: float = 5.0
 
     # Rate limiting (S11-003)
     #: В тестах отключается, чтобы лимиты не влияли на прогон
