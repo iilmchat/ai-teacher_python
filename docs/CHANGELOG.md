@@ -48,6 +48,12 @@
   разбивка по сложности)
 - Тесты: 126 (health, auth, chat, prompts, levels, websocket, executor, linter,
   code API, tasks, runner)
+- Frontend: React 19 + Vite + TypeScript strict + Tailwind 4
+- API-клиент с авто-refresh токена и типизированными ошибками
+- Zustand-стор аутентификации, страницы входа и регистрации, профиль с уровнем
+- Локализация ru/en, layout с навигацией и защищённые маршруты
+- Docker-образ фронтенда (nginx: SPA + прокси `/api` и WebSocket)
+- Тесты фронтенда: 20 (Vitest + Testing Library)
 
 ### Безопасность
 - Регистрация больше не принимает `role`: эскалация до admin/teacher закрыта (KI-011)

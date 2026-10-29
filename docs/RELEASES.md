@@ -274,6 +274,47 @@
 
 ---
 
+## Спринт 8: Frontend Base
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён
+
+### Задачи
+- [x] S8-001: React 19 + Vite + TypeScript strict + Tailwind 4 + ESLint/Prettier
+- [x] S8-002: Структура `src/`, алиасы `@/*`, типы API
+- [x] S8-003: Routing (react-router 7), layout, защищённые маршруты
+- [x] S8-004: API-клиент с Bearer-токеном, авто-refresh и `ApiError`
+- [x] S8-005: Zustand-стор аутентификации + localStorage
+- [x] S8-006: Страницы входа и регистрации (регистрация → авто-вход)
+- [x] S8-007: UI-компоненты (Button, Input, Card, Alert, Spinner)
+- [x] S8-008: i18n (ru/en)
+- [x] S8-009: Vitest + Testing Library (20 тестов)
+- [x] S8-010: Dockerfile (node → nginx) + nginx.conf (SPA, /api, WebSocket)
+
+### Что сделано
+- Каркас `frontend/`: Vite, TypeScript project references, Tailwind 4 через плагин
+- `lib/api.ts`: типизированные запросы, склейка ошибок Pydantic, авто-refresh
+  по 401 с однократным повтором, событие `auth:unauthorized`
+- `store/auth.ts`: вход, регистрация, выход, смена уровня, кэш профиля
+- `AppLayout` с навигацией; `ProtectedRoute` редиректит на `/login` с возвратом
+- Локализация ru/en, выбор языка сохраняется
+- Docker-образ фронтенда с nginx: SPA-fallback, прокси `/api` и WebSocket
+
+### Проблемы
+- KI-012: нет e2e-тестов и проверки с живым backend
+- Сторы чата и задач появятся в спринте 9 вместе со страницами
+
+### Метрики
+- Тесты: **20 passed** (`pnpm test`)
+- `pnpm typecheck`: 0 ошибок · `pnpm lint`: 0 ошибок
+- `pnpm build`: 105.49 kB gzip JS (лимит 200 kB)
+- Smoke: `vite preview` отдаёт 200, SPA-fallback `/login` → 200
+
+### Следующие шаги
+- Спринт 9: чат со стримингом, редактор кода, задачи
+
+---
+
 ## Шаблон отчёта по спринту
 
 ```

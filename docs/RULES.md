@@ -468,6 +468,24 @@ tests/
   (базовый запрещает готовый код, продвинутый требует полное решение).
 - Если файла промпта нет — `resolve_level` откатывает на `basic`, чат не падает.
 
+### 11.10. Frontend (pnpm 12, Vite 6, TS)
+
+Ловушки, проверенные на практике:
+
+1. **pnpm 12 блокирует build-скрипты.** `pnpm install` падает с
+   `ERR_PNPM_IGNORED_BUILDS`. Настройки живут в `frontend/pnpm-workspace.yaml`
+   (`onlyBuiltDependencies: [esbuild]`); разово — `pnpm install --allow-build=esbuild`.
+2. **`defineConfig` для тестов.** Секция `test` типизируется только из
+   `vitest/config`, иначе `tsc -b` падает на «'test' does not exist».
+3. **Project references.** `pnpm build` = `tsc -b && vite build`;
+   `vite.config.ts` проверяется отдельным `tsconfig.node.json` (нужен `@types/node`).
+4. **Регистр директорий.** Windows не различает `Layout` и `layout`, Linux — да.
+   Все каталоги `src/components/*` пишем в нижнем регистре (`components/layout`).
+5. **Прокси в dev.** Vite проксирует `/api` → `http://127.0.0.1:8000`
+   (`127.0.0.1`, не `localhost` — см. §11.1); CORS в dev не нужен.
+6. **`import.meta.env`** требует `src/vite-env.d.ts` с объявлением `ImportMetaEnv`.
+7. **Алиасы путей** задаются дважды: `tsconfig.app.json#paths` и `vite.config.ts#resolve.alias`.
+
 ---
 
 ## 12. Отчёты по шагам спринта
