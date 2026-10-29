@@ -117,29 +117,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
+      # pnpm 12 читает настройки из pnpm-workspace.yaml (RULES §11.10)
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 12
 
       - name: Install dependencies
         working-directory: frontend
-        run: pnpm install
+        run: pnpm install --frozen-lockfile --allow-build=esbuild
 
       - name: Type check
         working-directory: frontend
         run: pnpm typecheck
-        continue-on-error: true
+
+      - name: Lint
+        working-directory: frontend
+        run: pnpm lint
+
+      - name: Unit tests
+        working-directory: frontend
+        run: pnpm test
 
       - name: Build
         working-directory: frontend
         run: pnpm build
-        continue-on-error: true
 
   docker:
     name: Docker Build

@@ -47,6 +47,20 @@ export function AppLayout() {
                 {t(item.labelKey)}
               </NavLink>
             ))}
+            {user?.role === 'admin' && (
+              <NavLink
+                to="/admin"
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
+              >
+                {t('admin.title')}
+              </NavLink>
+            )}
           </nav>
 
           <div className="flex items-center gap-3">

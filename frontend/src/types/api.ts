@@ -157,3 +157,64 @@ export interface HealthResponse {
   app_name: string;
   llm_provider: string;
 }
+
+export interface AdminUserItem {
+  id: string;
+  email: string;
+  username: string;
+  role: UserRole;
+  level: UserLevel;
+  created_at: string;
+  last_active: string;
+}
+
+export interface AdminUserListResponse {
+  total: number;
+  items: AdminUserItem[];
+}
+
+export interface AdminTaskItem {
+  id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  category: string;
+  is_active: boolean;
+  test_cases_count: number;
+  hints_count: number;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface AdminTaskListResponse {
+  total: number;
+  items: AdminTaskItem[];
+}
+
+export interface AnalyticsResponse {
+  users: {
+    total: number;
+    by_role: Record<string, number>;
+    active_24h: number;
+    active_7d: number;
+  };
+  tasks: {
+    total: number;
+    active: number;
+    easy: number;
+    medium: number;
+    hard: number;
+  };
+  learning: {
+    attempts: number;
+    completed: number;
+    started: number;
+    average_attempts: number;
+  };
+  activity: {
+    sessions: number;
+    messages: number;
+    executions: number;
+    failed_executions: number;
+  };
+  generated_at: string;
+}
