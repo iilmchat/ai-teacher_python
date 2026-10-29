@@ -5,7 +5,8 @@
 
 **Версия:** v0.1.0  
 **Последнее обновление:** 2026-10-29  
-**Текущий спринт:** Спринт 1
+**Текущий спринт:** Спринт 4 (Chat Service)  
+**Готово:** Спринты 1–3 (инфраструктура, ядро backend, аутентификация)
 
 ---
 
@@ -28,54 +29,55 @@
 
 **Цель:** Создать базовую структуру проекта, настроить окружение и CI/CD.
 
-### S1-001: Создание структуры директорий
-- [ ] Создать корневую структуру проекта
-- [ ] Создать директории backend/app/*, frontend/src/*, docs/*
-- [ ] Создать пустые __init__.py файлы
-- [ ] Создать .gitignore для Python и Node.js
-- [ ] **Зависит от:** нет
-- [ ] **Оценка:** 30 мин
+### S1-001: Создание структуры директорий — ✅
+- [x] Создать корневую структуру проекта
+- [x] Создать директории backend/app/*, frontend/src/*, docs/*
+- [x] Создать пустые __init__.py файлы
+- [x] Создать .gitignore для Python и Node.js
+- [x] **Зависит от:** нет
+- [x] **Оценка:** 30 мин
 
-### S1-002: Настройка Python окружения
-- [ ] Создать pyproject.toml с зависимостями (FastAPI, SQLAlchemy, Pydantic, etc.)
-- [ ] Создать requirements.txt для Docker
-- [ ] Настроить ruff и mypy конфигурацию
-- [ ] Создать .python-version для pyenv
-- [ ] **Зависит от:** S1-001
-- [ ] **Оценка:** 30 мин
+### S1-002: Настройка Python окружения — ✅
+- [x] Создать pyproject.toml с зависимостями (FastAPI, SQLAlchemy, Pydantic, etc.)
+- [x] Создать requirements.txt для Docker
+- [x] Настроить ruff и mypy конфигурацию
+- [ ] Создать .python-version для pyenv (не требуется: venv в backend/)
+- [x] **Зависит от:** S1-001
+- [x] **Оценка:** 30 мин
 
-### S1-003: Docker Compose конфигурация
-- [ ] Создать docker-compose.yml (PostgreSQL, Redis, backend, frontend)
-- [ ] Создать .env.example с переменными окружения
-- [ ] Создать Dockerfile для backend
-- [ ] Создать Dockerfile для frontend
-- [ ] Протестировать docker compose up
-- [ ] **Зависит от:** S1-002
-- [ ] **Оценка:** 1 час
+### S1-003: Docker Compose конфигурация — ✅
+- [x] Создать docker-compose.yml (PostgreSQL, Redis, backend, frontend)
+- [x] Создать .env.example с переменными окружения
+- [x] Создать Dockerfile для backend
+- [ ] Создать Dockerfile для frontend (отложено до спринта 8)
+- [x] Протестировать docker compose up (postgres + redis healthy)
+- [x] **Зависит от:** S1-002
+- [x] **Оценка:** 1 час
 
-### S1-004: Git и CI/CD
-- [ ] Инициализировать git репозиторий
-- [ ] Создать ветку main
-- [ ] Создать .github/workflows/ci.yml (lint, test, build)
-- [ ] Создать .github/workflows/deploy.yml (опционально)
-- [ ] Создать первый коммит
-- [ ] **Зависит от:** S1-001, S1-002, S1-003
-- [ ] **Оценка:** 1 час
+### S1-004: Git и CI/CD — ✅
+- [x] Инициализировать git репозиторий
+- [x] Создать ветку main
+- [x] Создать .github/workflows/ci.yml (lint, test, build)
+- [ ] Создать .github/workflows/deploy.yml (опционально, отложено)
+- [x] Создать первый коммит
+- [x] **Зависит от:** S1-001, S1-002, S1-003
+- [x] **Оценка:** 1 час
 
-### S1-005: Документация
-- [ ] Создать README.md с описанием проекта
-- [ ] Создать docs/RULES.md (адаптировать из ai-chess-annotator)
-- [ ] Создать docs/KNOWN_ISSUES.md (пустой шаблон)
-- [ ] Создать docs/CHANGELOG.md (инициализация)
-- [ ] **Зависит от:** S1-001
-- [ ] **Оценка:** 30 мин
+### S1-005: Документация — ✅
+- [x] Создать README.md с описанием проекта
+- [x] Создать docs/RULES.md (адаптировать из ai-chess-annotator)
+- [x] Создать docs/KNOWN_ISSUES.md (пустой шаблон)
+- [x] Создать docs/CHANGELOG.md (инициализация)
+- [x] **Зависит от:** S1-001
+- [x] **Оценка:** 30 мин
 
-### S1-006: Pre-commit hooks
+### S1-006: Pre-commit hooks — ⏳ перенесено
 - [ ] Настроить Husky или pre-commit
 - [ ] Добавить хуки: ruff, mypy, prettier
 - [ ] Добавить проверку секретов (detect-secrets)
 - [ ] **Зависит от:** S1-002
 - [ ] **Оценка:** 30 мин
+- **Статус:** перенесено; проверки выполняются вручную по чек-листу RULES §10 и в CI
 
 ---
 
@@ -83,66 +85,70 @@
 
 **Цель:** Создать базовый FastAPI проект с подключением к PostgreSQL и Redis.
 
-### S2-001: FastAPI приложение
-- [ ] Создать app/main.py с FastAPI приложением
-- [ ] Создать app/config.py с настройками (pydantic-settings)
-- [ ] Создать app/dependencies.py для DI
-- [ ] Добавить healthcheck эндпоинт
-- [ ] Добавить CORS middleware
-- [ ] **Зависит от:** S1-002
-- [ ] **Оценка:** 1 час
+### S2-001: FastAPI приложение — ✅
+- [x] Создать app/main.py с FastAPI приложением
+- [x] Создать app/config.py с настройками (pydantic-settings)
+- [x] Создать app/dependencies.py для DI
+- [x] Добавить healthcheck эндпоинт
+- [x] Добавить CORS middleware
+- [x] **Зависит от:** S1-002
+- [x] **Оценка:** 1 час
 
-### S2-002: PostgreSQL + SQLAlchemy
-- [ ] Создать app/db/database.py (async engine)
-- [ ] Создать app/db/session.py (async session maker)
-- [ ] Создать базовую модель с UUID и timestamps
-- [ ] Настроить пул соединений
-- [ ] **Зависит от:** S2-001
-- [ ] **Оценка:** 1.5 часа
+### S2-002: PostgreSQL + SQLAlchemy — ✅
+- [x] Создать app/db/database.py (async engine)
+- [x] Создать app/db/session.py (async session maker)
+- [x] Создать базовую модель с UUID и timestamps
+- [x] Настроить пул соединений
+- [x] **Зависит от:** S2-001
+- [x] **Оценка:** 1.5 часа
+- **Примечание:** session maker находится в `app/db/database.py`
 
-### S2-003: Redis подключение
+### S2-003: Redis подключение — ⚠️ частично
 - [ ] Создать app/db/redis.py (async redis client)
 - [ ] Добавить healthcheck для Redis
 - [ ] Создать утилиты для кэширования
-- [ ] **Зависит от:** S2-001
-- [ ] **Оценка:** 1 час
+- [x] **Зависит от:** S2-001
+- [x] **Оценка:** 1 час
+- **Статус:** настроены URL и порт (6381), клиент и healthcheck перенесены в спринт 4
 
-### S2-004: Alembic миграции
-- [ ] Инициализировать Alembic
-- [ ] Создать начальную миграцию (пустую)
-- [ ] Протестировать upgrade/downgrade
-- [ ] **Зависит от:** S2-002
-- [ ] **Оценка:** 1 час
+### S2-004: Alembic миграции — ✅
+- [x] Инициализировать Alembic
+- [x] Создать начальную миграцию (пустую)
+- [x] Протестировать upgrade/downgrade
+- [x] **Зависит от:** S2-002
+- [x] **Оценка:** 1 час
+- **Проверено:** `upgrade head` → `downgrade base` → `upgrade head` → `alembic check` (0 расхождений)
 
-### S2-005: Модели данных (User, ChatSession, ChatMessage)
-- [ ] Создать app/models/user.py
-- [ ] Создать app/models/chat.py
-- [ ] Создать миграцию для моделей
-- [ ] Добавить индексы
-- [ ] **Зависит от:** S2-002, S2-004
-- [ ] **Оценка:** 2 часа
+### S2-005: Модели данных (User, ChatSession, ChatMessage) — ✅
+- [x] Создать app/models/user.py
+- [x] Создать app/models/chat.py
+- [x] Создать миграцию для моделей
+- [x] Добавить индексы
+- [x] **Зависит от:** S2-002, S2-004
+- [x] **Оценка:** 2 часа
+- **Исправлено:** enum через `values_callable` (KI-004), `metadata` → `session_metadata`
 
-### S2-006: Pydantic схемы
-- [ ] Создать app/schemas/user.py
-- [ ] Создать app/schemas/chat.py
-- [ ] Добавить валидацию
-- [ ] **Зависит от:** S2-005
-- [ ] **Оценка:** 1 час
+### S2-006: Pydantic схемы — ✅
+- [x] Создать app/schemas/user.py
+- [x] Создать app/schemas/chat.py
+- [x] Добавить валидацию (email, длина пароля ≤ 72 байт)
+- [x] **Зависит от:** S2-005
+- [x] **Оценка:** 1 час
 
-### S2-007: Репозитории
-- [ ] Создать app/db/repositories/base.py (BaseRepository)
-- [ ] Создать app/db/repositories/user.py
-- [ ] Создать app/db/repositories/chat.py
-- [ ] **Зависит от:** S2-005, S2-006
-- [ ] **Оценка:** 1.5 часа
+### S2-007: Репозитории — ✅
+- [x] Создать app/db/repositories/base.py (BaseRepository)
+- [x] Создать app/db/repositories/user.py
+- [x] Создать app/db/repositories/chat.py
+- [x] **Зависит от:** S2-005, S2-006
+- [x] **Оценка:** 1.5 часа
 
-### S2-008: Тесты Backend Core
-- [ ] Создать tests/conftest.py (fixtures)
-- [ ] Создать tests/test_health.py
-- [ ] Создать tests/test_db.py
-- [ ] Настроить pytest-asyncio
-- [ ] **Зависит от:** S2-001, S2-002, S2-003
-- [ ] **Оценка:** 1 час
+### S2-008: Тесты Backend Core — ✅
+- [x] Создать tests/conftest.py (fixtures на реальном PostgreSQL)
+- [x] Создать tests/test_health.py
+- [ ] Создать tests/test_db.py (покрыто интеграционными тестами auth)
+- [x] Настроить pytest-asyncio
+- [x] **Зависит от:** S2-001, S2-002, S2-003
+- [x] **Оценка:** 1 час
 
 ---
 
@@ -150,47 +156,48 @@
 
 **Цель:** Реализовать JWT аутентификацию с ролями.
 
-### S3-001: Security модуль
-- [ ] Создать app/core/security.py
-- [ ] Реализовать хэширование паролей (bcrypt)
-- [ ] Реализовать JWT токены (access + refresh)
-- [ ] Реализовать валидацию токенов
-- [ ] **Зависит от:** S2-001
-- [ ] **Оценка:** 1.5 часа
+### S3-001: Security модуль — ✅
+- [x] Создать app/core/security.py
+- [x] Реализовать хэширование паролей (bcrypt — вместо passlib, KI-005)
+- [x] Реализовать JWT токены (access + refresh)
+- [x] Реализовать валидацию токенов
+- [x] **Зависит от:** S2-001
+- [x] **Оценка:** 1.5 часа
 
-### S3-002: Auth API endpoints
-- [ ] Создать app/api/v1/auth.py
-- [ ] POST /api/v1/auth/register
-- [ ] POST /api/v1/auth/login
-- [ ] POST /api/v1/auth/logout
-- [ ] POST /api/v1/auth/refresh
-- [ ] GET /api/v1/auth/me
-- [ ] **Зависит от:** S3-001, S2-006
-- [ ] **Оценка:** 2 часа
+### S3-002: Auth API endpoints — ✅
+- [x] Создать app/api/v1/auth.py
+- [x] POST /api/v1/auth/register
+- [x] POST /api/v1/auth/login (по username или email)
+- [x] POST /api/v1/auth/logout
+- [x] POST /api/v1/auth/refresh
+- [x] GET /api/v1/auth/me
+- [x] PATCH /api/v1/auth/me
+- [x] **Зависит от:** S3-001, S2-006
+- [x] **Оценка:** 2 часа
 
-### S3-003: Role-Based Access Control (RBAC)
-- [ ] Добавить роли в модель User (student, teacher, admin)
-- [ ] Создать декоратор require_role
-- [ ] Создать middleware для проверки токена
-- [ ] Добавить проверки в endpoints
-- [ ] **Зависит от:** S3-001, S2-005
-- [ ] **Оценка:** 1.5 часа
+### S3-003: Role-Based Access Control (RBAC) — ✅
+- [x] Добавить роли в модель User (student, teacher, admin)
+- [x] Создать фабрику зависимостей require_role
+- [x] Создать middleware для проверки токена (HTTPBearer)
+- [ ] Добавить проверки в endpoints (появится вместе с админ-эндпоинтами, спринт 10)
+- [x] **Зависит от:** S3-001, S2-005
+- [x] **Оценка:** 1.5 часа
 
-### S3-004: Rate Limiting
-- [ ] Создать app/core/rate_limiter.py
-- [ ] Настроить лимиты: login (5/мин), общий (300/мин)
-- [ ] Интегрировать с Redis
-- [ ] Добавить middleware
-- [ ] **Зависит от:** S2-003
-- [ ] **Оценка:** 1 час
+### S3-004: Rate Limiting — ⚠️ частично
+- [x] Создать app/core/rate_limiter.py
+- [x] Настроить лимиты: login (5/мин), общий (300/мин)
+- [x] Интегрировать с Redis (использует redis.asyncio)
+- [ ] Добавить middleware в приложение (перенесено в спринт 4 — нужен Redis-клиент в lifespan)
+- [x] **Зависит от:** S2-003
+- [x] **Оценка:** 1 час
 
-### S3-005: Тесты Authentication
-- [ ] tests/test_auth_register.py
-- [ ] tests/test_auth_login.py
-- [ ] tests/test_auth_rbac.py
-- [ ] tests/test_rate_limiter.py
-- [ ] **Зависит от:** S3-002, S3-003, S3-004
-- [ ] **Оценка:** 1.5 часа
+### S3-005: Тесты Authentication — ✅
+- [x] tests/test_auth.py (14 тестов вместо 4 файлов)
+- [x] Проверка регистрации, дублей, валидации
+- [x] Проверка login/logout/refresh/me
+- [ ] tests/test_rate_limiter.py (перенесено вместе с подключением middleware)
+- [x] **Зависит от:** S3-002, S3-003, S3-004
+- [x] **Оценка:** 1.5 часа
 
 ---
 

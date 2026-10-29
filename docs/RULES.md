@@ -335,8 +335,9 @@ tests/
 
 ## 10. Чек-лист перед коммитом
 
-- [ ] `ruff check .` — 0 ошибок.
-- [ ] `mypy app` — 0 ошибок.
+- [ ] `ruff check backend/` — 0 ошибок.
+- [ ] `mypy app --config-file ../pyproject.toml` (из `backend/`) — 0 ошибок.
+- [ ] `alembic upgrade head` + `alembic check` — схема БД совпадает с моделями.
 - [ ] `pytest -q` — все passed.
 - [ ] `pnpm --dir frontend typecheck` — 0 ошибок (если трогал frontend).
 - [ ] `pnpm --dir frontend build` — собирается (если трогал frontend).
@@ -365,12 +366,73 @@ tests/
 
 - Канон: Postgres `5432`, Redis `6379`, API `8000`, Frontend `3000`.
 - `.env` — локальный, в git не попадает; `.env.example` хранит канон.
+- **Факт на текущей машине (KI-001):** `5432` занят контейнером `ticket-postgres`,
+  `6379` — `workflow-builder-redis`. Поэтому проект использует
+  Postgres `5434` и Redis `6381`.
+- Чужой контейнер **не останавливаем**. Внешние порты берём из ENV:
+  `POSTGRES_PORT`, `REDIS_PORT` — они подставляются в `docker-compose.yml`
+  и читаются `Settings` (дефолты в `app/config.py` тоже `5434`/`6381`).
+- Внутри compose-сети сервисы общаются по внутренним портам (`postgres:5432`,
+  `redis:6379`) — их менять не нужно.
+- Урок KI-001: если контейнер не смог опубликовать порт, подключение уходит
+  на **чужой** сервис и падает с непонятной ошибкой аутентификации. Всегда
+  проверяйте `docker compose ps` — в колонке PORTS должен быть `0.0.0.0:PORT->`
+  или `127.0.0.1:PORT->`, а не голый `<port>/tcp`.
 
 ### 11.3. Python
 
-- Python 3.12 обязателен.
+- Python 3.12 обязателен; на текущей машине установлен 3.11.8 — тесты и сервис
+  работают, но CI гоняет 3.12.
 - Poetry или pip + venv.
 - Версии библиотек фиксируются в `requirements.txt`.
+
+### 11.4. Конфигурация: `.env` в корне проекта
+
+- `app/config.py` читает `.env` по абсолютному пути
+  (`Path(__file__).resolve().parents[2]`), а не относительно CWD. Иначе при
+  запуске `alembic`/`pytest` из `backend/` настройки тихо подменяются
+  дефолтами — так порт 5434 превращался в 5432 и запросы уходили в чужую БД.
+- `allowed_origins` в `.env` задаётся CSV (`a,b`) — парсер в
+  `Settings.parse_allowed_origins` поддерживает и JSON-массив.
+- Конфиг `mypy` живёт в корневом `pyproject.toml`; mypy из `backend/`
+  запускается с `--config-file ../pyproject.toml`, иначе строгие правила
+  не применяются и ошибки типизации не ловятся.
+
+### 11.5. База данных и миграции
+
+Ловушки, на которые уже наступали:
+
+1. **Образ Postgres.** `postgres:17-alpine` не содержит `pgvector` →
+   `extension "vector" is not available`. Нужен `pgvector/pgvector:pg17` (KI-003).
+2. **`server_default` для JSONB.** `server_default=sa.text("{}")` невалиден:
+   нужен `sa.text("'{}'::jsonb")` (и `'[]'::jsonb` для массивов).
+3. **Enum хранит имена, а не значения.** `Enum(Role)` пишет `STUDENT`, тогда как
+   тип создан со значениями `student`. Обязательно
+   `values_callable=lambda enum_cls: [e.value for e in enum_cls]` (KI-004).
+4. **`metadata` — занятое имя** в `DeclarativeBase`. Колонку `metadata`
+   объявляем как `session_metadata` с `mapped_column("metadata", ...)`.
+5. **`create_all` не заменяет миграции.** Тесты создают схему из моделей и потому
+   не видят расхождений с Alembic. Перед коммитом — `alembic check` (KI-002).
+6. После любой правки миграции: `alembic upgrade head`, `alembic check`,
+   `alembic downgrade base && alembic upgrade head`.
+
+### 11.6. Пароли и bcrypt
+
+- `passlib 1.7.4` несовместим с `bcrypt 5.x` (`ValueError` на 72+ байтах,
+  `no attribute '__about__'`). Используем `bcrypt` напрямую (KI-005).
+- bcrypt не принимает пароль длиннее 72 байт: ограничение продублировано
+  в `UserCreate.password` (`max_length=72`), чтобы клиент получал 422, а не 500.
+
+### 11.7. Тесты на Windows
+
+- Тесты работают на реальном PostgreSQL (SQLite не поддерживает JSONB/VECTOR).
+- Создание тестовой БД — синхронная session-scoped фикстура (`psycopg2`):
+  async-фикстуры другого scope привязываются к чужому event loop и ломают asyncpg.
+- Клиент в тестах — `httpx.AsyncClient` + `ASGITransport`; `TestClient` нельзя
+  совмещать с async-фикстурой БД.
+- Каждый тест выполняется в транзакции с откатом
+  (`join_transaction_mode="create_savepoint"`), поэтому коммиты внутри
+  репозиториев не «протекают» между тестами.
 
 ---
 

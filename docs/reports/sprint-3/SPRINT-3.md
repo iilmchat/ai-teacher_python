@@ -1,153 +1,133 @@
 # Sprint 3: Authentication — Отчёт
 
-**Период:** 2026-10-29  
+**Период:** 2026-10-29
 **Статус:** ✅ Завершён
 
 ---
 
 ## 1. Файлы (+/-)
 
-### Созданные файлы:
+### Созданные
 ```
-+ backend/app/core/security.py
-+ backend/app/core/rate_limiter.py
-+ backend/app/api/v1/auth.py
-+ backend/tests/test_auth.py
-+ backend/app/main.py (обновлён)
++ backend/app/core/security.py          — bcrypt, JWT, get_current_user, require_role
++ backend/app/core/rate_limiter.py      — middleware rate limiting на Redis
++ backend/app/api/v1/auth.py            — 6 эндпоинтов аутентификации
++ backend/tests/test_auth.py            — 14 тестов
 ```
 
-**Всего:** 5 файлов
+### Изменённые
+```
+~ backend/app/main.py                   — подключён auth-роутер, structlog вместо print
+~ backend/app/config.py                 — .env по абсолютному пути, порты 5434/6381
+~ backend/app/models/__init__.py        — явные импорты моделей (иначе metadata пустая)
+~ backend/app/models/user.py            — values_callable, индексы как в миграции
+~ backend/app/models/chat.py            — values_callable, metadata → session_metadata
+~ backend/app/schemas/user.py           — password max_length=72, типы settings
+~ backend/app/db/repositories/base.py   — типизация, list() вместо Sequence
+~ backend/app/db/repositories/chat.py   — типизация code_blocks
+~ backend/tests/conftest.py             — PostgreSQL + транзакционный откат
+~ backend/tests/test_health.py          — асинхронные тесты
+~ backend/alembic/env.py                — URL из Settings
+~ backend/alembic/versions/20261029_0001_initial.py — pgvector, JSONB defaults
+~ backend/requirements.txt              — bcrypt вместо passlib, psycopg2-binary
+~ docker-compose.yml                    — pgvector-образ, параметризованные порты
+~ .env / .env.example                   — порты 5434/6381
+~ pyproject.toml                        — B008 в ignore, mypy overrides, pytest loop scope
+~ .github/workflows/ci.yml              — pgvector-сервис, alembic check, порты
+```
 
 ---
 
 ## 2. Покрытие
 
-### Тесты
-- **Файлы:** `backend/tests/test_auth.py`
-- **Тесты:** 10 тестов
-  - test_register_user
-  - test_register_duplicate_email
-  - test_register_duplicate_username
-  - test_login_success
-  - test_login_with_email
-  - test_login_wrong_password
-  - test_get_me
-  - test_refresh_token
-  - test_protected_route_without_token
+| Файл | Тестов |
+|------|--------|
+| `tests/test_auth.py` | 14 |
+| `tests/test_health.py` | 3 |
+| **Итого** | **17** |
 
-### Покрытие кода
-- Целевое: ≥ 80%
-- Фактическое: 0% (требует запуска тестов)
+Проверяемые сценарии: регистрация, дубли email/username, невалидный email,
+короткий пароль, вход по username и по email, неверный пароль, неизвестный
+пользователь, `GET /me`, обновление токена, отказ при access-token в refresh,
+доступ без токена, `PATCH /me`.
 
 ---
 
 ## 3. Результаты
 
-### Функционал
-- ✅ JWT authentication (access + refresh tokens)
-- ✅ Password hashing с bcrypt
-- ✅ User registration с валидацией
-- ✅ Login с username или email
-- ✅ Token refresh
-- ✅ Logout
-- ✅ Get current user
-- ✅ Update current user
-- ✅ Role-Based Access Control (RBAC)
-- ✅ Rate limiting middleware
-
-### Endpoints
-- POST /api/v1/auth/register — регистрация
-- POST /api/v1/auth/login — вход
-- POST /api/v1/auth/refresh — обновление токена
-- POST /api/v1/auth/logout — выход
-- GET /api/v1/auth/me — информация о пользователе
-- PATCH /api/v1/auth/me — обновление профиля
+| Проверка | Команда | Результат |
+|----------|---------|-----------|
+| Линтер | `ruff check app tests` | `All checks passed!` |
+| Типы | `mypy app --config-file ../pyproject.toml` | `Success: no issues found in 23 source files` |
+| Тесты | `pytest -q` | `17 passed in 10.05s` |
+| Миграции | `alembic upgrade head` | `Running upgrade -> 001, initial tables` |
+| Схема | `alembic check` | расхождений нет |
+| Containers | `docker compose ps` | postgres `127.0.0.1:5434->5432`, redis `127.0.0.1:6381->6379`, оба healthy |
 
 ---
 
-## 4. Smoke Test
+## 4. Smoke
 
-### Ручной сценарий проверки:
+Ручной сценарий на запущенном сервере (`uvicorn app.main:app --port 8000`):
 
-1. **Регистрация пользователя:**
-   ```bash
-   curl -X POST http://localhost:8000/api/v1/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email":"test@example.com","username":"testuser","password":"password123"}'
-   ```
-   ⚠️ Требуется запуск backend
-
-2. **Вход:**
-   ```bash
-   curl -X POST http://localhost:8000/api/v1/auth/login \
-     -d "username=testuser&password=password123"
-   ```
-   ⚠️ Требуется запуск backend
-
-3. **Получение информации о пользователе:**
-   ```bash
-   curl -X GET http://localhost:8000/api/v1/auth/me \
-     -H "Authorization: Bearer <token>"
-   ```
-   ⚠️ Требуется запуск backend
+```
+POST /api/v1/auth/register → 201
+POST /api/v1/auth/login    → 200 (access_token + refresh_token)
+GET  /api/v1/auth/me       → 200
+{
+  "email": "smoke2@example.com",
+  "username": "smokeuser2",
+  "role": "student",
+  "level": "basic",
+  "settings": {}
+}
+GET /api/v1/health → {"status":"ok","version":"0.1.0",...}
+```
 
 ---
 
 ## 5. Что не так
 
-### Известные ограничения:
-1. ⚠️ Docker не запущен — порт 6379 занят
-2. ⚠️ Тесты не запущены — требуется настройка БД
-3. ⚠️ Rate limiting не интегрирован в main.py (требует Redis)
-
-### Риски:
-- Redis должен быть доступен для rate limiting
-- JWT токены не инвалидидируются при logout (stateless)
+1. **Rate limiting не подключён к приложению.** Модуль готов
+   (`create_rate_limit_middleware`), но `main.py` его не регистрирует — нужен
+   lifecycle-хук для Redis-клиента. Перенесено в спринт 4.
+2. **Logout не инвалидирует токены.** JWT stateless: клиент удаляет токены сам;
+   серверный denylist в Redis появится вместе с rate limiting.
+3. **KI-001 (порты 5434/6381)** — обходной путь, не закрыто.
+4. **KI-002** — нет теста, сверяющего модели с миграциями (только `alembic check`
+   в CI).
+5. Python на машине 3.11.8 вместо 3.12 (CI гоняет 3.12).
 
 ---
 
 ## 6. Новые KI
 
-**Нет новых KI**
+| ID | Статус | Severity | Суть |
+|----|--------|----------|------|
+| KI-001 | Open | Med | Порты 5432/6379 заняты чужими контейнерами |
+| KI-002 | Open | Low | Нет автотеста на расхождение моделей и миграций |
+| KI-003 | Resolved | High | Образ без pgvector |
+| KI-004 | Resolved | High | Enum хранил имена вместо значений |
+| KI-005 | Resolved | High | passlib несовместим с bcrypt 5.x |
 
 ---
 
 ## 7. Обоснование
 
-### Архитектурные решения:
-
-1. **JWT токены** — stateless аутентификация, масштабируемость
-2. **Access + Refresh** — баланс между безопасностью и UX
-   - Access token: 30 минут
-   - Refresh token: 7 дней
-3. **bcrypt** — надёжное хэширование паролей
-4. **OAuth2PasswordRequestForm** — стандарт FastAPI для совместимости
-5. **RBAC** — проверка ролей на уровне endpoints
-6. **Rate limiting** — защита от brute force атак
-7. **Login с username или email** — удобство для пользователей
-
-### Структура security:
-- `hash_password()` — хэширование пароля
-- `verify_password()` — проверка пароля
-- `create_access_token()` — создание access token
-- `create_refresh_token()` — создание refresh token
-- `decode_token()` — декодирование токена
-- `get_current_user()` — получение текущего пользователя
-- `require_role()` — декоратор для проверки роли
+- **bcrypt напрямую вместо passlib.** passlib 1.7.4 несовместим с bcrypt 5.x
+  (KI-005). Прямой bcrypt — одна зависимость вместо двух и предсказуемое
+  поведение.
+- **`values_callable` для enum.** Значения в БД (`student`) читаемее имён
+  (`STUDENT`) и совпадают с API-контрактом (KI-004).
+- **Разделение токенов по типу.** `type` в payload исключает использование
+  access-токена как refresh (покрыто тестом).
+- **Тесты на реальном PostgreSQL.** SQLite не умеет JSONB и VECTOR; тестовая БД
+  в транзакции с откатом даёт изоляцию без потери производительности.
+- **Вход по username или email.** Снижает число обращений в поддержку,
+  реализуется без изменения схемы БД.
+- **`_user_id_from_payload` вынесен в функцию.** Убирает дублирование логики
+  разбора `sub` между refresh и `get_current_user`.
 
 ---
 
-## Следующие шаги
-
-### Sprint 4: Chat Service
-1. Освободить порт 6379 и запустить Redis
-2. Запустить тесты: `pytest -v`
-3. Интегрировать LLM (DeepSeek/LM Studio)
-4. Реализовать ChatService
-5. Создать WebSocket endpoints
-6. Добавить поддержку трёх уровней
-
----
-
-**Дата:** 2026-10-29  
-**Автор:** AI Teacher Team
+**Дата:** 2026-10-29
