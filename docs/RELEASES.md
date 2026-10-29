@@ -192,6 +192,46 @@
 
 ---
 
+## Спринт 6: Code Execution
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён (memory limit не реализован — KI-009)
+
+### Задачи
+- [x] S6-001: Sandboxed Executor (RestrictedPython + отдельный процесс)
+- [x] S6-002: Safe builtins и белый список модулей
+- [x] S6-003: Перехват вывода и исключений
+- [x] S6-004: Модель `CodeExecution` + миграция `002`
+- [x] S6-005: Code API (execute, lint, analyze, history, limits)
+- [x] S6-006: AST-линтер без внешних зависимостей
+- [x] S6-007: Тесты (34 новых)
+
+### Что сделано
+- `app/core/executor.py`: статический анализ AST, `compile_restricted`,
+  безопасные builtins, свой `__import__`, `_inplacevar_`, `PrintCollector`;
+  выполнение в отдельном интерпретаторе с убийством по таймауту
+- `app/core/linter.py`: ошибки безопасности (S001–S003), предупреждения
+  (bare except, `== None`, длинная строка), подсказки (docstring) и метрики кода
+- `app/models/code.py` + миграция `002` (`code_executions`) + репозиторий
+- `app/api/v1/code.py`: `POST /code/execute`, `/code/lint`, `/code/analyze`,
+  `GET /code/history`, `/code/history/{id}`, `/code/limits`
+- Тесты: `test_executor.py` (12), `test_linter.py` (13), `test_code_api.py` (9)
+
+### Проблемы
+- KI-009: лимит памяти не применяется на Windows
+- KI-008: реальные вызовы LLM всё ещё не проверены
+
+### Метрики
+- Тесты: **101 passed**
+- Ruff: 0 ошибок · MyPy (strict): 0 ошибок
+- Smoke: `sum(range(5))` → `10`; `import os` → `SecurityError`;
+  линтер ловит `x == None`
+
+### Следующие шаги
+- Спринт 7: система задач и прогресс обучения
+
+---
+
 ## Шаблон отчёта по спринту
 
 ```

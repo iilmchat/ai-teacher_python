@@ -35,7 +35,13 @@
 - Наследование уровня сессией от профиля + fallback на базовый уровень
 - Админские эндпоинты профиля: `GET /users/{id}`, `PATCH /users/{id}/role`
 - Доменные ошибки `AppError` с единым HTTP-обработчиком
-- Тесты: 67 (health + auth + chat + prompts + websocket + levels)
+- Песочница выполнения кода: RestrictedPython, белый список модулей,
+  выполнение в отдельном процессе с убийством по таймауту
+- AST-линтер: ошибки безопасности, предупреждения стиля, docstring-подсказки
+- Code API: `POST /code/execute`, `/code/lint`, `/code/analyze`,
+  `GET /code/history`, `/code/limits`
+- Модель `CodeExecution` и миграция `002`
+- Тесты: 101 (health, auth, chat, prompts, levels, websocket, executor, linter, code API)
 
 ### Изменено
 - Внешние порты вынесены в ENV: Postgres `5434`, Redis `6381` (KI-001)
