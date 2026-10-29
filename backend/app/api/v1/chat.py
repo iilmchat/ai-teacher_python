@@ -98,9 +98,18 @@ async def get_session(
     current_user: CurrentUser,
     service: ChatServiceDep,
 ) -> ChatSessionWithMessages:
-    """Сессия с полной историей сообщений"""
+    """Сессия с полной историей сообщений (включая метаданные ответов)"""
     session = await service.get_session(session_id, current_user, with_messages=True)
-    return ChatSessionWithMessages.model_validate(session)
+    return ChatSessionWithMessages(
+        id=session.id,
+        user_id=session.user_id,
+        level=session.level,
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+        messages=[
+            ChatMessageResponse.from_message(message) for message in session.messages
+        ],
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -130,6 +139,6 @@ async def send_message(
         session, payload.content
     )
     return ChatTurnResponse(
-        user_message=ChatMessageResponse.model_validate(user_message),
-        assistant_message=ChatMessageResponse.model_validate(assistant_message),
+        user_message=ChatMessageResponse.from_message(user_message),
+        assistant_message=ChatMessageResponse.from_message(assistant_message),
     )

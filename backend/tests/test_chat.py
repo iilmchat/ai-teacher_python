@@ -320,3 +320,87 @@ async def test_chat_requires_auth(client: AsyncClient, fake_provider: FakeProvid
     response = await client.get("/api/v1/chat/sessions")
 
     assert response.status_code in (401, 403)
+
+
+async def test_assistant_message_has_prompt_metadata(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """В метаданных ответа — провайдер, модель и версия промпта (S12-006)"""
+    token = await _register_and_login(client)
+    session = await _create_session(client, token)
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Как работает цикл while?"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    assistant = response.json()["assistant_message"]
+    assert assistant["metadata"]["provider"] == "fake"
+    assert assistant["metadata"]["prompt_version"] == 1
+    assert "model" in assistant["metadata"]
+    assert assistant["warnings"] == []
+    assert response.json()["user_message"]["metadata"] == {}
+
+
+async def test_basic_full_solution_is_flagged(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Готовое решение на базовом уровне помечается предупреждением (S12-005)"""
+    fake_provider.reply = (
+        "Вот решение:\n\n```python\nn = int(input())\n"
+        "total = sum(range(n + 1))\nprint(total)\n```"
+    )
+    token = await _register_and_login(client)
+    session = await _create_session(client, token)
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Напиши программу"},
+        headers=_auth(token),
+    )
+
+    assistant = response.json()["assistant_message"]
+    assert "basic_full_solution" in assistant["warnings"]
+    assert assistant["metadata"]["warnings"] == assistant["warnings"]
+
+
+async def test_advanced_level_is_not_flagged(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Продвинутому уровню готовый код разрешён"""
+    fake_provider.reply = "```python\nn = int(input())\nprint(n)\n```"
+    token = await _register_and_login(client)
+    session = await _create_session(client, token, level="advanced")
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Напиши программу"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["assistant_message"]["warnings"] == []
+
+
+async def test_session_history_returns_metadata(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """GET сессии отдаёт метаданные каждого ответа (для разбора инцидентов)"""
+    token = await _register_and_login(client)
+    session = await _create_session(client, token)
+    await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Вопрос"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(
+        f"/api/v1/chat/sessions/{session['id']}", headers=_auth(token)
+    )
+
+    assistant = response.json()["messages"][-1]
+    assert assistant["role"] == "assistant"
+    assert assistant["metadata"]["provider"] == "fake"
+    assert "prompt_version" in assistant["metadata"]

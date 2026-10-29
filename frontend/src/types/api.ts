@@ -52,6 +52,10 @@ export interface ChatMessage {
   content: string;
   code_blocks: unknown[];
   created_at: string;
+  /** Провайдер, модель и версия промпта ответа (S12-006) */
+  metadata?: Record<string, unknown>;
+  /** Коды нарушений политики уровня (S12-005) */
+  warnings?: string[];
 }
 
 export interface ChatSessionWithMessages extends ChatSession {
@@ -156,6 +160,14 @@ export interface HealthResponse {
   version: string;
   app_name: string;
   llm_provider: string;
+  llm: {
+    provider: string;
+    model: string | null;
+    configured: boolean;
+    reachable: boolean;
+    status: 'ok' | 'degraded' | 'not_configured';
+    fallback: string | null;
+  };
 }
 
 export interface AdminUserItem {
@@ -190,6 +202,19 @@ export interface AdminTaskListResponse {
   items: AdminTaskItem[];
 }
 
+export interface AnalyticsLLMWindow {
+  window_hours: number;
+  requests: number;
+  errors: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+  avg_first_token_ms: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  by_provider: Record<string, Record<string, number>>;
+}
+
 export interface AnalyticsResponse {
   users: {
     total: number;
@@ -215,6 +240,13 @@ export interface AnalyticsResponse {
     messages: number;
     executions: number;
     failed_executions: number;
+  };
+  /** Метрики LLM из памяти процесса (S12-003) */
+  llm: {
+    last_hour: AnalyticsLLMWindow;
+    last_24h: AnalyticsLLMWindow;
+    fallback_used: number;
+    recorded_at: string;
   };
   generated_at: string;
 }

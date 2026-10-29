@@ -57,7 +57,7 @@
 | PATCH | `/auth/me` | `{email?, username?, level?, settings?}` | 200 `User` |
 
 Ошибки: 400 (дубликат email/username), 401 (неверные данные), 422 (валидация),
-429 (лимит — после подключения KI-007).
+429 (лимит — после подключения KI-007; реализовано в S11-003).
 
 ### 3.2 Пользователи
 
@@ -87,11 +87,20 @@ WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
 ```
 client → {"type":"chat","content":"..."} | {"type":"ping"}
 server → {"type":"start"} | {"type":"token","content":"…"} |
-         {"type":"done","content":"полный текст"} |
+         {"type":"done","content":"полный текст","warnings":[...]} |
          {"type":"error","detail":"…"} | {"type":"pong"}
 ```
 
+`ChatMessage`: `{id, session_id, role, content, code_blocks, created_at,
+metadata, warnings}`.
+
+- `metadata.prompt_version` — версия промпта уровня (S12-006);
+- `metadata.provider` / `metadata.model` — фактический провайдер ответа;
+- `warnings` — коды нарушений политики уровня (S12-005), например
+  `basic_full_solution`; ответ при этом не блокируется.
+
 Права: своя сессия — 200; чужая — 403; несуществующая — 404.
+Недоступность LLM: 503 `{detail}` (S12-002).
 
 ### 3.4 Код
 
@@ -130,17 +139,26 @@ server → {"type":"start"} | {"type":"token","content":"…"} |
 | PATCH | `/admin/users/{id}` | `{role?, level?}` | `AdminUserItem` |
 | DELETE | `/admin/users/{id}` | — | `{deleted: true}` |
 | GET | `/admin/tasks` | `skip`, `limit` | `{total, items[]}` |
-| GET | `/admin/analytics` | — | `{users, tasks, learning, activity, generated_at}` |
+| GET | `/admin/analytics` | — | `{users, tasks, learning, activity, llm, generated_at}` |
+
+`llm`: `{last_hour, last_24h, fallback_used, recorded_at}`; каждое окно —
+`{window_hours, requests, errors, avg_latency_ms, p95_latency_ms,
+avg_first_token_ms, prompt_tokens, completion_tokens, total_tokens,
+by_provider}` (S12-003, метрики в памяти процесса).
 
 Ограничения: 400 — понижение/удаление себя; 403 — не админ; 404 — нет пользователя.
 
 ### 3.7 Служебное
 
-`GET /health` → `{status, version, app_name, llm_provider}`
+`GET /health` → `{status, version, app_name, llm_provider, llm}`
+
+`llm`: `{provider, model, configured, reachable, status, fallback}`, где
+`status ∈ {ok, degraded, not_configured}` (S12-001). Проверка кэшируется на
+60 секунд, ключ не раскрывается.
 
 ---
 
-## 4. Схема БД (миграции 001–003)
+## 4. Схема БД (миграции 001–004)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
@@ -149,8 +167,9 @@ users(id, email*, username*, hashed_password, role, level,
 
 chat_sessions(id, user_id→users, level, created_at, updated_at, metadata JSONB)
 chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
-              embedding VECTOR(1536), created_at)
+              metadata JSONB, embedding VECTOR(1536), created_at)
    role ∈ {user, assistant, system}
+   metadata: {provider, model, prompt_version, warnings?}
 
 code_executions(id, user_id→users, code, output, error, success, execution_time,
                 created_at)
@@ -219,7 +238,18 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 
 Не входит в приёмку (осознанно): e2e (KI-012), rate limiting в рантайме
 (KI-007), живые ответы LLM (KI-008), память песочницы (KI-009), офлайн-Monaco
-(KI-013).
+(KI-013). `KI-007` и `KI-012` закрыты в S11; `KI-008`, `KI-009`, `KI-013`
+остаются.
+
+### Дополнение v0.2.0 (спринты 11–12)
+
+- [x] E2E 12/12, rate limiting (429 + `Retry-After`), тесты миграций и WS
+- [x] `/health` различает `ok` / `degraded` / `not_configured`, ключ не раскрыт
+- [x] Fallback провайдеров; оба недоступны → 503, а не пустой ответ
+- [x] Метрики LLM (латентность, первый токен, токены, ошибки) в админке
+- [x] Ответ `basic` с готовым кодом помечается `warnings`
+- [x] `prompt_version` / `provider` в метаданных ответа и истории
+- [ ] Живой прогон LLM_EVAL — KI-008 Blocked (нет ключа/LM Studio)
 
 ---
 

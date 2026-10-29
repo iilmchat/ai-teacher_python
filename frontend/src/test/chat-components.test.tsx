@@ -76,6 +76,21 @@ describe('MessageList', () => {
 
     expect(screen.getByText('Печатаю…')).toBeInTheDocument();
   });
+
+  it('помечает ответ с нарушением политики уровня', () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            ...message('assistant', 'Вот решение', 'm3'),
+            warnings: ['basic_full_solution'],
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent(/готовое решение/);
+  });
 });
 
 describe('MessageInput', () => {

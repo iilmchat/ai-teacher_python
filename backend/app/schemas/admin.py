@@ -89,6 +89,30 @@ class AnalyticsActivity(BaseModel):
     failed_executions: int
 
 
+class AnalyticsLLMWindow(BaseModel):
+    """Агрегаты LLM за окно времени (S12-003)"""
+
+    window_hours: int
+    requests: int
+    errors: int
+    avg_latency_ms: float
+    p95_latency_ms: int
+    avg_first_token_ms: float
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    by_provider: dict[str, dict[str, float | int]]
+
+
+class AnalyticsLLM(BaseModel):
+    """Метрики LLM: час, сутки и число срабатываний fallback"""
+
+    last_hour: AnalyticsLLMWindow
+    last_24h: AnalyticsLLMWindow
+    fallback_used: int
+    recorded_at: str
+
+
 class AnalyticsResponse(BaseModel):
     """Сводка для дашборда"""
 
@@ -96,6 +120,7 @@ class AnalyticsResponse(BaseModel):
     tasks: AnalyticsTasks
     learning: AnalyticsLearning
     activity: AnalyticsActivity
+    llm: AnalyticsLLM
     generated_at: str
 
 

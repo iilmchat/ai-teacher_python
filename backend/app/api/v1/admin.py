@@ -24,12 +24,14 @@ from app.schemas.admin import (
     AdminUserUpdate,
     AnalyticsActivity,
     AnalyticsLearning,
+    AnalyticsLLM,
     AnalyticsResponse,
     AnalyticsTasks,
     AnalyticsUsers,
     DeleteResponse,
 )
 from app.services.analytics_service import AnalyticsService
+from app.services.llm.metrics import llm_metrics
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -149,12 +151,13 @@ async def list_tasks(
 
 @router.get("/analytics", response_model=AnalyticsResponse)
 async def get_analytics(_: AdminUser, db: DbSession) -> AnalyticsResponse:
-    """Сводная аналитика для дашборда"""
+    """Сводная аналитика для дашборда (БД + метрики LLM из памяти процесса)"""
     raw = await AnalyticsService(db).summary()
     return AnalyticsResponse(
         users=AnalyticsUsers(**raw["users"]),  # type: ignore[arg-type]
         tasks=AnalyticsTasks(**raw["tasks"]),  # type: ignore[arg-type]
         learning=AnalyticsLearning(**raw["learning"]),  # type: ignore[arg-type]
         activity=AnalyticsActivity(**raw["activity"]),  # type: ignore[arg-type]
+        llm=AnalyticsLLM.model_validate(llm_metrics.snapshot()),
         generated_at=str(raw["generated_at"]),
     )

@@ -16,7 +16,9 @@ from app.services.llm.prompt_builder import (
     PromptError,
     available_levels,
     build_messages,
+    load_prompt_versions,
     load_system_prompt,
+    prompt_version,
 )
 
 
@@ -148,3 +150,41 @@ def test_create_llm_provider_lm_studio() -> None:
     """Провайдер lm_studio создаётся по имени"""
     provider = create_llm_provider("lm_studio")
     assert provider.name == "lm_studio"
+
+
+def test_prompt_versions_cover_all_levels() -> None:
+    """versions.json содержит версию для каждого уровня"""
+    versions = load_prompt_versions()
+
+    assert set(versions) == {level.value for level in UserLevel}
+    assert all(isinstance(value, int) and value >= 1 for value in versions.values())
+
+
+def test_prompt_version_matches_file() -> None:
+    """Версия из файла доступна через API prompt_builder"""
+    versions = load_prompt_versions()
+
+    assert prompt_version(UserLevel.BASIC) == versions["basic"]
+    assert prompt_version("advanced") == versions["advanced"]
+
+
+def test_prompt_version_defaults_to_one_for_unknown_level() -> None:
+    """Для неизвестного уровня не падаем, а считаем версию первой"""
+    assert prompt_version("unknown") == 1
+
+
+def test_create_llm_provider_with_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Настроенный fallback оборачивает основной провайдер"""
+    from app.config import settings
+    from app.services.llm.fallback import FallbackProvider
+
+    monkeypatch.setattr(settings, "llm_provider", "echo")
+    monkeypatch.setattr(settings, "llm_fallback_provider", "lm_studio")
+
+    provider = create_llm_provider()
+
+    assert isinstance(provider, FallbackProvider)
+    assert provider.name == "echo"
+    assert provider.fallback_name == "lm_studio"

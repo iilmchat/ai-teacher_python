@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.models.chat import MessageRole
+from app.models.chat import ChatMessage, MessageRole
 from app.models.user import UserLevel
 
 
@@ -51,14 +51,39 @@ class ChatMessageCreate(ChatMessageBase):
 
 
 class ChatMessageResponse(ChatMessageBase):
-    """Схема ответа с сообщением"""
+    """Схема ответа с сообщением.
+
+    `metadata` содержит провайдера, модель и версию промпта ответа
+    (S12-006); `warnings` — коды нарушений политики уровня (S12-005).
+    """
 
     id: UUID
     session_id: UUID
     role: MessageRole
     created_at: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
-    model_config = {"from_attributes": True}
+    @classmethod
+    def from_message(cls, message: ChatMessage) -> "ChatMessageResponse":
+        """Собрать ответ API из ORM-модели (колонка `metadata` — JSONB)"""
+        metadata = dict(message.message_metadata or {})
+        raw_warnings = metadata.get("warnings", [])
+        warnings = (
+            [str(code) for code in raw_warnings]
+            if isinstance(raw_warnings, list)
+            else []
+        )
+        return cls(
+            id=message.id,
+            session_id=message.session_id,
+            role=message.role,
+            content=message.content,
+            code_blocks=list(message.code_blocks or []),
+            created_at=message.created_at,
+            metadata=metadata,
+            warnings=warnings,
+        )
 
 
 class ChatSessionWithMessages(ChatSessionResponse):

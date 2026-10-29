@@ -66,6 +66,7 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
         role: MessageRole,
         content: str,
         code_blocks: list[Any] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ChatMessage:
         """Создать сообщение"""
         message = ChatMessage(
@@ -73,5 +74,6 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
             role=role,
             content=content,
             code_blocks=code_blocks or [],
+            message_metadata=metadata or {},
         )
         return await self.create(message)

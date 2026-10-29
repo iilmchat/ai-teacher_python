@@ -39,6 +39,11 @@ export function MessageList({ messages, draft = '', streaming = false }: Message
           }`}
         >
           <RichText text={message.content} />
+          {message.role === 'assistant' && (message.warnings?.length ?? 0) > 0 && (
+            <p className="mt-2 rounded bg-amber-100 px-2 py-1 text-xs text-amber-800" role="status">
+              {t('chat.policyWarning')}
+            </p>
+          )}
         </article>
       ))}
 

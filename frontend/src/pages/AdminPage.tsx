@@ -101,21 +101,48 @@ export function AdminPage() {
       {loading && !analytics && <Spinner />}
 
       {analytics && (
-        <Card title={t('admin.overview')}>
-          <div className="grid gap-3 sm:grid-cols-4">
-            <Metric label={t('admin.usersTotal')} value={analytics.users.total} />
-            <Metric label={t('admin.active24h')} value={analytics.users.active_24h} />
-            <Metric label={t('admin.tasksTotal')} value={analytics.tasks.total} />
-            <Metric label={t('admin.completed')} value={analytics.learning.completed} />
-            <Metric label={t('admin.attempts')} value={analytics.learning.attempts} />
-            <Metric label={t('admin.avgAttempts')} value={analytics.learning.average_attempts} />
-            <Metric label={t('admin.messages')} value={analytics.activity.messages} />
-            <Metric label={t('admin.executions')} value={analytics.activity.executions} />
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            {t('admin.generatedAt')}: {new Date(analytics.generated_at).toLocaleString('ru-RU')}
-          </p>
-        </Card>
+        <>
+          <Card title={t('admin.overview')}>
+            <div className="grid gap-3 sm:grid-cols-4">
+              <Metric label={t('admin.usersTotal')} value={analytics.users.total} />
+              <Metric label={t('admin.active24h')} value={analytics.users.active_24h} />
+              <Metric label={t('admin.tasksTotal')} value={analytics.tasks.total} />
+              <Metric label={t('admin.completed')} value={analytics.learning.completed} />
+              <Metric label={t('admin.attempts')} value={analytics.learning.attempts} />
+              <Metric label={t('admin.avgAttempts')} value={analytics.learning.average_attempts} />
+              <Metric label={t('admin.messages')} value={analytics.activity.messages} />
+              <Metric label={t('admin.executions')} value={analytics.activity.executions} />
+            </div>
+            <p className="mt-3 text-xs text-slate-400">
+              {t('admin.generatedAt')}: {new Date(analytics.generated_at).toLocaleString('ru-RU')}
+            </p>
+          </Card>
+
+          <Card title={t('admin.llmTitle')}>
+            {analytics.llm.last_24h.requests === 0 ? (
+              <p className="text-sm text-slate-500">{t('admin.llmEmpty')}</p>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Metric
+                  label={t('admin.llmProvider')}
+                  value={Object.keys(analytics.llm.last_24h.by_provider).join(', ') || '—'}
+                />
+                <Metric label={t('admin.llmRequests')} value={analytics.llm.last_24h.requests} />
+                <Metric label={t('admin.llmErrors')} value={analytics.llm.last_24h.errors} />
+                <Metric
+                  label={t('admin.llmLatency')}
+                  value={`${analytics.llm.last_24h.avg_latency_ms} ms`}
+                />
+                <Metric
+                  label={t('admin.llmFirstToken')}
+                  value={`${analytics.llm.last_24h.avg_first_token_ms} ms`}
+                />
+                <Metric label={t('admin.llmTokens')} value={analytics.llm.last_24h.total_tokens} />
+                <Metric label={t('admin.llmFallback')} value={analytics.llm.fallback_used} />
+              </div>
+            )}
+          </Card>
+        </>
       )}
 
       <Card title={t('admin.usersTitle')}>

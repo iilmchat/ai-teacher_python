@@ -22,6 +22,7 @@ class EchoProvider(LLMProvider):
     """Провайдер-заглушка с предсказуемым ответом"""
 
     name = "echo"
+    model = "echo"
 
     def _detect_level(self, messages: list[LLMMessage]) -> str:
         system = next((m.content for m in messages if m.role == "system"), "").lower()

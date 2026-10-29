@@ -34,7 +34,10 @@ Copy-Item .env.example .env            # Windows
 
 - `SECRET_KEY` — любая длинная случайная строка (для JWT);
 - `POSTGRES_PASSWORD` — пароль БД;
-- `DEEPSEEK_API_KEY` — ключ DeepSeek (необязательно: без него чат вернёт 503).
+- `DEEPSEEK_API_KEY` — ключ DeepSeek (необязательно: без него чат вернёт 503,
+  а health покажет `not_configured`);
+- `LLM_FALLBACK_PROVIDER` — резервный провайдер (необязательно, например
+  `lm_studio`): при сбое основного ответит он.
 
 > **Важно:** в `.env.example` порты `POSTGRES_PORT=5434` и `REDIS_PORT=6381`.
 > Канонические 5432/6379 на машине разработки часто заняты другими проектами
@@ -69,7 +72,9 @@ pip install -r requirements.txt
 .\venv\Scripts\uvicorn.exe app.main:app --reload --port 8000
 ```
 
-Проверка: <http://127.0.0.1:8000/api/v1/health> → `{"status":"ok",...}`
+Проверка: <http://127.0.0.1:8000/api/v1/health> →
+`{"status":"ok","llm":{"provider":"deepseek","status":"not_configured",...},...}`
+(статус `ok` появится после задания ключа или при `LLM_PROVIDER=echo`).
 Сваггер: <http://127.0.0.1:8000/api/docs>
 
 ### Проверки качества

@@ -228,16 +228,26 @@ async def test_admin_lists_all_tasks_including_inactive(
 async def test_analytics_structure(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """Аналитика содержит все разделы сводки"""
+    """Аналитика содержит все разделы сводки, включая метрики LLM"""
     token = await _admin_token(client, db_session, "admin9")
 
     response = await client.get("/api/v1/admin/analytics", headers=_auth(token))
 
     assert response.status_code == 200
     data: dict[str, Any] = response.json()
-    assert set(data) == {"users", "tasks", "learning", "activity", "generated_at"}
+    assert set(data) == {
+        "users",
+        "tasks",
+        "learning",
+        "activity",
+        "llm",
+        "generated_at",
+    }
     assert data["users"]["total"] >= 1
     assert set(data["users"]["by_role"]) == {"student", "teacher", "admin"}
     assert data["tasks"]["total"] >= 0
     assert data["learning"]["attempts"] >= 0
     assert data["activity"]["messages"] >= 0
+    assert set(data["llm"]) == {"last_hour", "last_24h", "fallback_used", "recorded_at"}
+    assert data["llm"]["last_24h"]["window_hours"] == 24
+    assert data["llm"]["last_hour"]["requests"] >= 0

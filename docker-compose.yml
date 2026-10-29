@@ -51,6 +51,7 @@ services:
       # Внутри compose-сети Redis доступен на внутреннем порту 6379
       - SECRET_KEY=${SECRET_KEY:-change_me_secret_key}
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
+      - LLM_FALLBACK_PROVIDER=${LLM_FALLBACK_PROVIDER:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
     ports:
       - "127.0.0.1:8000:8000"
