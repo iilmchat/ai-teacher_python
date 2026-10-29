@@ -111,9 +111,14 @@ metadata, warnings}`.
 | POST | `/code/analyze` | `{code}` | `{issues, stats, summary}` |
 | GET | `/code/history?skip&limit` | — | `ExecutionRecord[]` |
 | GET | `/code/history/{id}` | — | `ExecutionRecord` (своя) |
-| GET | `/code/limits` | — | `{timeout_seconds, memory_limit_mb, max_code_length, allowed_modules}` |
+| GET | `/code/limits` | — | `{timeout_seconds, memory_limit_mb, max_output_chars, max_concurrency, queue_timeout_seconds, max_code_length, allowed_modules}` |
 
-`ExecutionResult`: `{success, output, error, error_type, execution_time, violations}`.
+`ExecutionResult`: `{success, output, error, error_type, execution_time,
+violations, memory_limit_enforced, output_truncated}`.
+
+`memory_limit_enforced=false` — ОС не дала поставить лимит памяти (тогда
+действует таймаут); `output_truncated=true` — вывод обрезан по
+`EXECUTOR_MAX_OUTPUT`. Перегрузка песочницы → 503.
 
 ### 3.5 Задачи
 
@@ -201,9 +206,11 @@ user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
 | Запрещённые вызовы | `open, eval, exec, compile, globals, locals, __import__` (прямой) |
 | Dunder-атрибуты | запрещены |
 | Таймаут | `EXECUTOR_TIMEOUT` (5 с), процесс убивается |
+| Память | `EXECUTOR_MEMORY_LIMIT` (128 МБ): `RLIMIT_AS` / Job Object |
+| Параллельные запуски | `EXECUTOR_MAX_CONCURRENCY` (4), при перегрузке 503 |
+| Вывод | `EXECUTOR_MAX_OUTPUT` (100 000 символов), обрезка с пометкой |
 | Размер кода | ≤ 20 000 символов |
 | `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |
-| Память | не ограничена на Windows (KI-009) |
 
 ---
 
@@ -249,6 +256,8 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 - [x] Метрики LLM (латентность, первый токен, токены, ошибки) в админке
 - [x] Ответ `basic` с готовым кодом помечается `warnings`
 - [x] `prompt_version` / `provider` в метаданных ответа и истории
+- [x] Память песочницы ограничена на Windows и Linux (KI-009 закрыт)
+- [x] Вывод обрезается, число параллельных запусков ограничено
 - [ ] Живой прогон LLM_EVAL — KI-008 Blocked (нет ключа/LM Studio)
 
 ---

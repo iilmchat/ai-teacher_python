@@ -3,7 +3,7 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.1.0 (выпущена)  
-**Текущий спринт:** спринт 12 завершён частично (S12-004 — KI-008); следующий — спринт 13 (Sandbox Hardening) по [TODO_V0.2.md](../TODO_V0.2.md)
+**Текущий спринт:** спринт 13 завершён; следующий — спринт 14 (Tasks v2) по [TODO_V0.2.md](../TODO_V0.2.md)
 
 ---
 
@@ -428,8 +428,8 @@
 |--------|------|-----------|--------|
 | 11 | Quality Gates & E2E | KI-001, KI-002, KI-006, KI-007, KI-012 | ✅ |
 | 12 | LLMOps | KI-008 (сужен до «нужен ключ») | ⚠️ частично |
-| 13 | Sandbox Hardening | KI-009 | следующий |
-| 14 | Tasks v2 | KI-010 | — |
+| 13 | Sandbox Hardening | KI-009 | ✅ |
+| 14 | Tasks v2 | KI-010 | следующий |
 | 15 | Teacher Console | — | — |
 | 16 | Classrooms & Assignments | — | — |
 | 17 | Engagement | — | — |
@@ -527,6 +527,7 @@
 ### Что не сделано
 - Живой прогон LLM_EVAL и ручная оценка по рубрике — нет `DEEPSEEK_API_KEY`,
   LM Studio не запущен → KI-008 остаётся Blocked, сужен до «нужен ключ»
+  (закрыт в спринте 13 после появления ключа и LM Studio)
 
 ### Метрики
 - Backend: **200 passed** (было 156), ruff 0, mypy strict 0
@@ -545,6 +546,63 @@
 
 ### Следующие шаги
 - Спринт 13: Sandbox Hardening (лимит памяти, KI-009)
+
+---
+
+## Спринт 13: Sandbox Hardening
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён (S13-006 — опционально, отложен)
+
+### Задачи
+- [x] S13-001: Лимит памяти — Linux/Docker (`RLIMIT_AS`)
+- [x] S13-002: Лимит памяти — Windows (Job Object)
+- [x] S13-003: Ограничение одновременных запусков (503 при перегрузке)
+- [x] S13-004: Тесты на запрет сети и файловой системы (14 кейсов)
+- [x] S13-005: Ограничение вывода (`EXECUTOR_MAX_OUTPUT`)
+- [~] S13-006: Раннер-контейнер — не требуется, отложен
+- [x] S13-007: Документация и закрытие KI-009
+
+### Что сделано
+- **Память:** `app/core/sandbox_limits.py` ставит лимит в дочернем процессе:
+  `resource.setrlimit(RLIMIT_AS)` на POSIX, Job Object с
+  `JOB_OBJECT_LIMIT_PROCESS_MEMORY` на Windows (ctypes, без новых зависимостей).
+  `EXECUTOR_MEMORY_LIMIT` подхватывается; `memory_limit_enforced` в результате.
+  Проверено: Windows — `MemoryError`, Linux-контейнер — `MemoryError`, API жив.
+- **Перегрузка:** общий `threading.BoundedSemaphore`, `EXECUTOR_MAX_CONCURRENCY=4`,
+  ожидание `EXECUTOR_QUEUE_TIMEOUT`, отказ 503 (`ServiceUnavailableError`).
+- **Атаки:** 14 табличных кейсов — сеть, файлы, `__builtins__`, `getattr`,
+  dunder, `eval`/`exec`; обходы не дают доступа.
+- **Вывод:** обрезка по `EXECUTOR_MAX_OUTPUT=100000`, пометка
+  `output_truncated`, суффикс «вывод обрезан».
+- **API:** `/code/limits` отдаёт memory/output/concurrency/queue;
+  ответ выполнения — `memory_limit_enforced`, `output_truncated`.
+- **Документация:** ARCHITECTURE, DESIGN_ADMIN_AND_OPS, RULES §11.8, SPEC,
+  MANUAL_TESTING_GUIDE; KI-009 → Resolved.
+- **LLM_EVAL (живой):** DeepSeek, 15 ответов, баллы 0.99 / 0.93 / 0.96;
+  `intermediate/Q2` исправлен промптом v2; LM Studio `qwen/qwen3-4b-2507`
+  проверен как fallback; KI-008 → Resolved.
+
+### Что не сделано
+- S13-006 (раннер-контейнер) — опционально: нативные лимиты работают на обеих
+  платформах; кандидат на спринт 20 (security audit).
+
+### Метрики
+- Backend: **227 passed** (+1 skip на Windows), было 200; ruff 0, mypy strict 0
+- Покрытие: backend 84%
+- Новые тесты: 27 backend
+- Frontend: 65 unit, typecheck/lint/build — без изменений
+- Закрыто KI: **KI-009**, **KI-008**
+
+### Проблемы
+- Лимит памяти ставится только в дочернем процессе: прямой вызов
+  `_run_restricted` в тестах его не применяет (иначе pytest ограничивается).
+- Windows Job Object не назначается, если процесс уже в несовместимом job —
+  тогда `memory_limit_enforced=false` и работает только таймаут.
+- CI не стартовал (KI-014, биллинг GitHub) — локальные проверки зелёные.
+
+### Следующие шаги
+- Спринт 14: Tasks v2 (импорт/экспорт, seed при старте, KI-010)
 
 ---
 

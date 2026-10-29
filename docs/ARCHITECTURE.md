@@ -96,14 +96,27 @@ dunder-атрибуты.
 Слой 3 — изоляция процесса: код выполняется в отдельном интерпретаторе
 (`subprocess`), по таймауту процесс убивается.
 
+Слой 4 — лимиты ресурсов (S13):
+
+| Лимит | Механизм | Настройка |
+|-------|----------|-----------|
+| Память, POSIX | `resource.setrlimit(RLIMIT_AS)` в дочернем процессе | `EXECUTOR_MEMORY_LIMIT` |
+| Память, Windows | Job Object + `JOB_OBJECT_LIMIT_PROCESS_MEMORY` | `EXECUTOR_MEMORY_LIMIT` |
+| Время | `subprocess.run(timeout=...)`, процесс убивается | `EXECUTOR_TIMEOUT` |
+| Параллелизм | `threading.BoundedSemaphore`, отказ 503 | `EXECUTOR_MAX_CONCURRENCY`, `EXECUTOR_QUEUE_TIMEOUT` |
+| Вывод | обрезка до JSON-сериализации | `EXECUTOR_MAX_OUTPUT` |
+
 ```
-POST /code/execute {code, stdin?} → {success, output, error, error_type, violations}
+POST /code/execute {code, stdin?} → {success, output, error, error_type,
+                                    violations, memory_limit_enforced,
+                                    output_truncated}
 POST /code/lint    {code}         → {issues[], errors, warnings, infos}
 POST /code/analyze {code}         → {issues[], stats{}, summary}
+GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
+                                    max_output_chars, max_concurrency, ...}
 ```
 
-Ограничения: память не ограничивается на Windows (KI-009), Monaco грузится с CDN
-(KI-013, только фронтенд).
+Ограничения: Monaco грузится с CDN (KI-013, только фронтенд).
 
 ## 6. Задачи и прогресс
 
