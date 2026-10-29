@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.api.v1 import auth
 
 
 @asynccontextmanager
@@ -37,6 +38,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(auth.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["Health"])
