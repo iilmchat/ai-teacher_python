@@ -517,6 +517,33 @@ tests/
    утилиты: `splitCodeFences` вынесена в `lib/markdown.ts`, иначе ESLint даёт warning.
 10. **Monaco в тестах.** `@monaco-editor/react` мокается в `src/test/setup.ts`
     на `textarea`; в рантайме Monaco грузится с CDN (KI-013).
+11. **`loadMe()` при старте.** Токен в localStorage ещё не значит «пользователь
+    загружен»: `App.tsx` вызывает `loadMe()` в `useEffect`, иначе после F5
+    `ProtectedRoute` навсегда остаётся в `initializing` (Spinner). Баг найден e2e.
+
+### 11.11. E2E (Playwright)
+
+1. **Отдельное окружение.** Backend поднимается на порту 8001 с БД
+   `ai_teacher_e2e` и провайдером `echo`; frontend — на 3100 с проксированием.
+   Порты 8000/3000 не занимаются, e2e не мешают разработке.
+2. **Порт Vite передаётся флагом** (`pnpm dev --host 127.0.0.1 --port N --strictPort`):
+   env `VITE_DEV_PORT` не всегда доходит до дочернего процесса.
+3. **Интерпретатор backend** — из venv (`E2E_PYTHON` в CI переопределяет на
+   системный `python`).
+4. **Изоляция данных.** Каждый тест регистрирует уникального пользователя
+   (`uniqueId()`); БД переиспользуется между прогонами.
+5. **Мок тяжёлых виджетов.** В e2e-режиме (`VITE_E2E=1`) Monaco заменяется на
+   `textarea[data-testid="code-input"]` — тесты не зависят от CDN (KI-013).
+6. **E2E не должны попадать в Vitest:** `test.exclude` содержит `e2e/**`.
+
+### 11.12. Rate limiting и Redis в тестах
+
+- Тесты лимитов используют in-memory фейк Redis: реальный клиент между
+  event loop'ами даёт `RuntimeError: Event loop is closed`.
+- В остальных тестах `RATE_LIMIT_ENABLED=false` (autouse-фикстура), иначе
+  лимит на login ломает прогон.
+- Middleware обязан быть fail-open: Redis недоступен → запрос проходит с
+  предупреждением, а не 500.
 
 ---
 

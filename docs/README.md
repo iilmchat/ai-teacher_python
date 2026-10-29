@@ -34,7 +34,7 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md) — как система устроена сейчас: модули, потоки, контракты
 - [RULES.md](RULES.md) — правила кода, тестов, коммитов, окружения
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
-- [../TODO_V0.2.md](../TODO_V0.2.md) — **план следующего этапа** (спринты 11–20, v0.2.0)
+- [../TODO_V0.2.md](../TODO_V0.2.md) — **план этапа v0.2.0** (спринты 11–20; 11 закрыт)
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
 ### Для QA и продукта
@@ -60,12 +60,13 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Спринты | 1–10 завершены |
-| Тесты backend | 137 (pytest, реальный PostgreSQL) |
-| Тесты frontend | 63 (Vitest + Testing Library) |
+| Спринты | 1–11 завершены (идёт этап v0.2.0) |
+| Тесты backend | 156 (pytest, реальный PostgreSQL) |
+| Тесты frontend | 63 unit + 12 e2e (Playwright) |
+| Покрытие | backend 81%, frontend 74% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | Размер фронтенда | ~119 kB gzip |
-| Открытые проблемы | см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md) |
+| Открытые проблемы | 4 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---
 
@@ -74,12 +75,16 @@
 ```bash
 # Backend
 cd backend && .\venv\Scripts\pytest.exe -q
-.\venv\Scripts\ruff.exe check app tests
+.\venv\Scripts\pytest.exe -q -m "not slow and not migrations"   # быстрый прогон
+.\venv\Scripts\ruff.exe check app tests scripts
 .\venv\Scripts\mypy.exe app --config-file ../pyproject.toml
 .\venv\Scripts\alembic.exe upgrade head && .\venv\Scripts\alembic.exe check
+.\venv\Scripts\python.exe scripts\check_ports.py --docker
 
 # Frontend
 cd frontend && pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm test:coverage
+pnpm e2e            # Playwright: backend на 8001 + vite на 3100
 
 # Стек
 docker compose up -d postgres redis

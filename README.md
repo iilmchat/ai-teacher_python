@@ -59,9 +59,10 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Спринты | 1–10 завершены |
-| Тесты backend | **137** (pytest, реальный PostgreSQL) |
-| Тесты frontend | **63** (Vitest + Testing Library) |
+| Спринты | 1–11 завершены (этап v0.2.0) |
+| Тесты backend | **156** (pytest, реальный PostgreSQL) |
+| Тесты frontend | **63** unit + **12** e2e (Playwright) |
+| Покрытие | backend **81%**, frontend **74%** строк |
 | Ruff / MyPy strict | 0 / 0 |
 | TypeScript | strict, 0 ошибок |
 | Размер фронтенда | ~119 kB gzip |
