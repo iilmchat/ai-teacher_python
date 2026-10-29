@@ -5,8 +5,8 @@
 
 **Версия:** v0.1.0  
 **Последнее обновление:** 2026-10-29  
-**Текущий спринт:** Спринт 9 (Frontend Features)  
-**Готово:** Спринты 1–8 (backend полностью + базовый frontend с auth)
+**Текущий спринт:** Спринт 10 (Admin & Polish)  
+**Готово:** Спринты 1–9 (backend полностью, frontend с чатом, песочницей и задачами)
 
 ---
 
@@ -515,82 +515,86 @@
 
 **Цель:** Реализовать ключевые UI функции (Chat, Code Editor, Tasks).
 
-### S9-001: Chat Interface
-- [ ] Создать components/Chat/ChatWindow.tsx
-- [ ] Создать components/Chat/MessageList.tsx
-- [ ] Создать components/Chat/MessageInput.tsx
-- [ ] Создать components/Chat/CodeBlock.tsx
-- [ ] **Зависит от:** S8-007
-- [ ] **Оценка:** 2.5 часа
+### S9-001: Chat Interface — ✅
+- [x] Создать components/chat/ChatWindow (страница `ChatPage` с сессиями)
+- [x] Создать components/chat/MessageList.tsx
+- [x] Создать components/chat/MessageInput.tsx
+- [x] Создать components/chat/CodeBlock.tsx (+ RichText для markdown-блоков)
+- [x] **Зависит от:** S8-007
+- [x] **Оценка:** 2.5 часа
 
-### S9-002: WebSocket Integration
-- [ ] Создать hooks/useWebSocket.ts
-- [ ] Реализовать соединение с backend
-- [ ] Реализовать streaming сообщений
-- [ ] Обработка ошибок и reconnect
-- [ ] **Зависит от:** S9-001, S4-006
-- [ ] **Оценка:** 2 часа
+### S9-002: WebSocket Integration — ✅
+- [x] Создать hooks/useChatSession.ts (+ lib/chatSocket.ts)
+- [x] Реализовать соединение с backend (JWT в query)
+- [x] Реализовать streaming сообщений (start/token/done/error)
+- [x] Обработка ошибок и REST-фолбэк при недоступном WS
+- [ ] Авто-reconnect (перенесено: при обрыве следующий запрос уходит в REST)
+- [x] **Зависит от:** S9-001, S4-006
+- [x] **Оценка:** 2 часа
 
-### S9-003: Level Selector
-- [ ] Создать components/Chat/LevelSelector.tsx
-- [ ] Интегрировать с API
-- [ ] Визуализация текущего уровня
-- [ ] **Зависит от:** S9-001, S5-004
-- [ ] **Оценка:** 1 час
+### S9-003: Level Selector — ✅
+- [x] Создать components/chat/LevelSelector.tsx
+- [x] Интегрировать с API (уровень задаётся при создании сессии)
+- [x] Визуализация текущего уровня (aria-pressed)
+- [x] **Зависит от:** S9-001, S5-004
+- [x] **Оценка:** 1 час
 
-### S9-004: Code Editor
-- [ ] Установить Monaco Editor
-- [ ] Создать components/CodeEditor/Editor.tsx
-- [ ] Настроить подсветку Python
-- [ ] Интегрировать с Code API
-- [ ] **Зависит от:** S8-007
-- [ ] **Оценка:** 2 часа
+### S9-004: Code Editor — ✅
+- [x] Установить Monaco Editor (`@monaco-editor/react`)
+- [x] Создать components/code-editor/CodeEditor.tsx
+- [x] Настроить подсветку Python
+- [x] Интегрировать с Code API (страница `/code`)
+- [ ] Локальный bundle Monaco для офлайн-режима (KI-013)
+- [x] **Зависит от:** S8-007
+- [x] **Оценка:** 2 часа
 
-### S9-005: Code Execution Panel
-- [ ] Создать components/CodeEditor/OutputPanel.tsx
-- [ ] Создать components/CodeEditor/RunButton.tsx
-- [ ] Отображение результатов выполнения
-- [ ] Отображение ошибок
-- [ ] **Зависит от:** S9-004, S6-005
-- [ ] **Оценка:** 1.5 часа
+### S9-005: Code Execution Panel — ✅
+- [x] Создать components/code-editor/OutputPanel.tsx
+- [x] Кнопка запуска (на странице `/code`, вместе с линтом)
+- [x] Отображение результатов выполнения
+- [x] Отображение ошибок и нарушений песочницы
+- [x] **Зависит от:** S9-004, S6-005
+- [x] **Оценка:** 1.5 часа
 
-### S9-006: Task List
-- [ ] Создать components/Tasks/TaskList.tsx
-- [ ] Создать components/Tasks/TaskCard.tsx
-- [ ] Фильтрация по категории и сложности
-- [ ] **Зависит от:** S8-007, S7-005
-- [ ] **Оценка:** 1.5 часа
+### S9-006: Task List — ✅
+- [x] Создать страницу `TasksPage` со списком задач (карточки)
+- [x] Фильтрация по сложности
+- [x] Отображение статуса и числа подсказок
+- [x] **Зависит от:** S8-007, S7-005
+- [x] **Оценка:** 1.5 часа
 
-### S9-007: Task View
-- [ ] Создать components/Tasks/TaskView.tsx
-- [ ] Отображение описания задачи
-- [ ] Интеграция с Code Editor
-- [ ] Отправка решения
-- [ ] **Зависит от:** S9-004, S7-005
-- [ ] **Оценка:** 2 часа
+### S9-007: Task View — ✅
+- [x] Создать pages/TaskDetailPage.tsx
+- [x] Отображение описания задачи
+- [x] Пошаговые подсказки (по кнопке)
+- [x] Интеграция с Code Editor и отправка решения
+- [x] Отображение результатов по тест-кейсам
+- [x] **Зависит от:** S9-004, S7-005
+- [x] **Оценка:** 2 часа
 
-### S9-008: Progress Visualization
-- [ ] Создать components/Tasks/ProgressBar.tsx
-- [ ] Создать components/Progress/Stats.tsx
-- [ ] Графики прогресса
-- [ ] **Зависит от:** S9-006, S7-006
-- [ ] **Оценка:** 1.5 часа
+### S9-008: Progress Visualization — ✅
+- [x] Полоса прогресса (`role="progressbar"`, completion rate)
+- [x] Разбивка по сложности (решено/всего)
+- [ ] Отдельная страница статистики (перенесено: блок на странице задач)
+- [x] **Зависит от:** S9-006, S7-006
+- [x] **Оценка:** 1.5 часа
 
-### S9-009: User Profile
-- [ ] Создать pages/Profile.tsx
-- [ ] Редактирование настроек
-- [ ] Смена уровня
-- [ ] Статистика пользователя
-- [ ] **Зависит от:** S8-007, S3-002
-- [ ] **Оценка:** 1.5 часа
+### S9-009: User Profile — ✅
+- [x] Создать pages/ProfilePage.tsx (было в спринте 8)
+- [x] Редактирование уровня помощи
+- [x] Отображение имени, email и роли
+- [ ] Расширенная статистика пользователя (в спринте 10)
+- [x] **Зависит от:** S8-007, S3-002
+- [x] **Оценка:** 1.5 часа
 
-### S9-010: Тесты Features
-- [ ] tests/components/Chat.test.tsx
-- [ ] tests/components/CodeEditor.test.tsx
-- [ ] tests/components/Tasks.test.tsx
-- [ ] tests/hooks/useWebSocket.test.ts
-- [ ] **Зависит от:** S9-001..S9-009
-- [ ] **Оценка:** 2 часа
+### S9-010: Тесты Features — ✅
+- [x] tests/chat-components.test.tsx (13 тестов)
+- [x] tests/code-editor.test.tsx (8 тестов)
+- [x] tests/chat-store.test.ts (11 тестов)
+- [x] tests/tasks-store.test.ts (8 тестов)
+- [ ] tests/hooks/useWebSocket (покрыто через сторы и компоненты)
+- [x] **Зависит от:** S9-001..S9-009
+- [x] **Оценка:** 2 часа
 
 ---
 

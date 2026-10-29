@@ -485,6 +485,12 @@ tests/
    (`127.0.0.1`, не `localhost` — см. §11.1); CORS в dev не нужен.
 6. **`import.meta.env`** требует `src/vite-env.d.ts` с объявлением `ImportMetaEnv`.
 7. **Алиасы путей** задаются дважды: `tsconfig.app.json#paths` и `vite.config.ts#resolve.alias`.
+8. **jsdom не реализует `scrollIntoView`** — в компонентах вызывайте его опционально
+   (`el?.scrollIntoView?.(...)`), иначе тесты падают на монтировании.
+9. **Правило react-refresh.** Файл с компонентом не должен экспортировать ещё и
+   утилиты: `splitCodeFences` вынесена в `lib/markdown.ts`, иначе ESLint даёт warning.
+10. **Monaco в тестах.** `@monaco-editor/react` мокается в `src/test/setup.ts`
+    на `textarea`; в рантайме Monaco грузится с CDN (KI-013).
 
 ---
 
