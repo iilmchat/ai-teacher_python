@@ -10,6 +10,17 @@
 ## [Unreleased]
 
 ### Добавлено
+- Healthcheck LLM в `/api/v1/health`: статус `ok` / `degraded` / `not_configured`,
+  провайдер, модель, fallback; ping с кэшем 60 с, ключ не раскрывается
+- Fallback провайдеров: `LLM_FALLBACK_PROVIDER`, один повтор, 503 при отказе обоих
+- Метрики LLM в памяти процесса: запросы, ошибки, latency, первый токен, токены;
+  секция `llm` в `/admin/analytics` и карточка в админке
+- Детектор «готового решения» для базового уровня: `warnings` в REST/WS,
+  лог `level_policy_warning`
+- Версии промптов (`prompts/versions.json`) и метаданные ответа
+  (`provider`, `model`, `prompt_version`, `warnings`) в истории чата
+- Миграция 004: `chat_messages.metadata` JSONB
+- Инструмент прогона LLM_EVAL: `scripts/run_llm_eval.py` (Q1–Q5 × 3 уровня)
 - E2E-тесты Playwright (12 сценариев): auth, чат, песочница, задачи, запрет админки
 - Детерминированный LLM-провайдер `echo` для e2e и демо без ключа (`LLM_PROVIDER=echo`)
 - Rate limiting в рантайме: Redis-клиент, middleware, 429 + `Retry-After`, fail-open
@@ -27,6 +38,10 @@
 - WS-протокол вынесен в `serve_chat_socket`; эндпоинт получает сессию и
   провайдера через `Depends` (тестируемость)
 - `pytest`-маркеры `slow` и `migrations`; полный backend-прогон ~59 с
+- WS-сообщение `done` содержит `warnings` политики уровня
+
+### Не сделано
+- Живой прогон LLM_EVAL (KI-008 Blocked: нет `DEEPSEEK_API_KEY`, LM Studio не запущен)
 
 ---
 

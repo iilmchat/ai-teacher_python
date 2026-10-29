@@ -3,7 +3,7 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.1.0 (выпущена)  
-**Текущий спринт:** спринт 11 завершён; следующий — спринт 12 (LLMOps) по [TODO_V0.2.md](../TODO_V0.2.md)
+**Текущий спринт:** спринт 12 завершён частично (S12-004 — KI-008); следующий — спринт 13 (Sandbox Hardening) по [TODO_V0.2.md](../TODO_V0.2.md)
 
 ---
 
@@ -427,8 +427,8 @@
 | Спринт | Тема | Закрывает | Статус |
 |--------|------|-----------|--------|
 | 11 | Quality Gates & E2E | KI-001, KI-002, KI-006, KI-007, KI-012 | ✅ |
-| 12 | LLMOps | KI-008 | следующий |
-| 13 | Sandbox Hardening | KI-009 | — |
+| 12 | LLMOps | KI-008 (сужен до «нужен ключ») | ⚠️ частично |
+| 13 | Sandbox Hardening | KI-009 | следующий |
 | 14 | Tasks v2 | KI-010 | — |
 | 15 | Teacher Console | — | — |
 | 16 | Classrooms & Assignments | — | — |
@@ -488,6 +488,60 @@
 
 ### Следующие шаги
 - Спринт 12: LLMOps (healthcheck провайдера, fallback, метрики, прогон LLM_EVAL)
+
+---
+
+## Спринт 12: LLMOps
+
+**Период:** 2026-10-29  
+**Статус:** ⚠️ Частично (S12-004 — KI-008 Blocked: нет ключа)
+
+### Задачи
+- [x] S12-001: Healthcheck провайдера
+- [x] S12-002: Fallback провайдеров
+- [x] S12-003: Метрики LLM
+- [~] S12-004: Прогон LLM_EVAL (инструмент готов; живой прогон — KI-008)
+- [x] S12-005: Детектор «готового решения»
+- [x] S12-006: Версия промптов в ответе
+- [x] S12-007: Документация LLMOps
+
+### Что сделано
+- **Health:** `/health` → `llm{provider, model, configured, reachable, status, fallback}`;
+  ping `models.list` с кэшем 60 с; без ключа — `not_configured`, а не `ok`;
+  9 тестов
+- **Fallback:** `LLM_FALLBACK_PROVIDER`; один повтор, лог `llm_fallback_used`;
+  оба упали → 503 через обработчик `LLMUnavailableError`; fallback в стриме
+  только до первого токена; 7 тестов
+- **Метрики:** `MetricsProvider` — латентность, первый токен, токены, статус;
+  агрегаты за час/сутки в памяти; секция `llm` в `/admin/analytics`;
+  карточка в админке; 6 тестов
+- **Политика уровня:** детектор готового кода/программы/фраз для `basic`;
+  `warnings` в REST и WS, лог `level_policy_warning`; 8 тестов
+- **Версии промптов:** `prompts/versions.json`, `chat_messages.metadata`
+  (миграция 004), `provider/model/prompt_version/warnings` в истории; 5 тестов
+- **LLM_EVAL:** `eval_runner` + `scripts/run_llm_eval.py` (Q1–Q5 × 3 уровня,
+  `SUMMARY.md`, `results.json`), smoke на `echo`; 4 теста
+- **Документация:** PROMPT_CURRENT, LLM_EVAL, DESIGN_ADMIN_AND_OPS, SPEC,
+  RULES (ловушки LLM), MANUAL_TESTING_GUIDE
+
+### Что не сделано
+- Живой прогон LLM_EVAL и ручная оценка по рубрике — нет `DEEPSEEK_API_KEY`,
+  LM Studio не запущен → KI-008 остаётся Blocked, сужен до «нужен ключ»
+
+### Метрики
+- Backend: **200 passed** (было 156), ruff 0, mypy strict 0
+- Frontend: **65 passed** (было 63), typecheck 0, lint 0, build 119.88 kB gzip
+- Покрытие: backend 83% (порог 70)
+- Новые тесты: 44 backend + 2 frontend
+- KI: KI-008 переведён в Blocked (причина и процедура закрытия описаны)
+
+### Проблемы
+- Healthcheck и метрики требуют сети — в тестах провайдер всегда подменяется
+- Параллельный запуск двух pytest-процессов ломает общую тестовую БД
+  (`ai_teacher_test` пересоздаётся) — запускать прогоны последовательно
+
+### Следующие шаги
+- Спринт 13: Sandbox Hardening (лимит памяти, KI-009)
 
 ---
 

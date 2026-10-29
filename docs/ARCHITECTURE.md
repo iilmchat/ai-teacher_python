@@ -27,8 +27,8 @@ FastAPI (backend)
   └─ /api/v1/health
   │
   ├─ PostgreSQL 17 + pgvector   (данные, эмбеддинги сообщений)
-  ├─ Redis                      (план: rate limiting, кэш)
-  └─ LLM: DeepSeek API | LM Studio (локально)
+  ├─ Redis                      (rate limiting, fail-open при недоступности)
+  └─ LLM: DeepSeek API | LM Studio (локально), fallback между ними
 ```
 
 ## 2. Backend: слои
@@ -36,6 +36,8 @@ FastAPI (backend)
 ```
 app/api/v1/*        HTTP-слой: валидация схем, коды ответов
 app/services/*      бизнес-логика: ChatService, TaskService, AnalyticsService
+app/services/llm/*  провайдеры LLM: база, deepseek, lm_studio, echo,
+                    fallback, health, metrics, policy, prompt_builder
 app/db/repositories Repository-паттерн: SQLAlchemy-запросы
 app/models/*        ORM-модели (SQLAlchemy 2.0, Mapped)
 app/schemas/*       Pydantic v2: вход/выход API
@@ -61,8 +63,11 @@ WS   /api/v1/chat/ws/{id}?token=...   → стриминг:
 
 1. `ChatService.stream_reply` сохраняет вопрос ученика.
 2. Собирает контекст: системный промпт уровня + последние 20 сообщений (≤4000 симв.)
-3. Стримит дельты от провайдера через WebSocket.
-4. По завершении сохраняет ответ и извлекает ```блоки кода``` в `code_blocks`.
+3. Стримит дельты от провайдера через WebSocket; fallback — только до первого
+   токена, иначе ошибка (S12-002).
+4. По завершении сохраняет ответ с метаданными (`provider`, `model`,
+   `prompt_version`, `warnings`) и извлекает ```блоки кода``` в `code_blocks`.
+5. Каждый вызов провайдера попадает в метрики (`MetricsProvider`).
 
 Если WebSocket недоступен, фронтенд отправляет тот же вопрос через REST —
 поведение идентично, но без пошагового вывода.
@@ -129,7 +134,8 @@ POST /code/analyze {code}         → {issues[], stats{}, summary}
 пути от корня проекта — при запуске из `backend/` настройки не «теряются».
 
 Ключевые переменные: `POSTGRES_*`, `REDIS_*`, `SECRET_KEY`, `LLM_PROVIDER`,
-`DEEPSEEK_API_KEY`, `EXECUTOR_TIMEOUT`.
+`LLM_FALLBACK_PROVIDER`, `DEEPSEEK_API_KEY`, `EXECUTOR_TIMEOUT`,
+`RATE_LIMIT_ENABLED`.
 
 ## 9. Docker
 
@@ -140,7 +146,6 @@ POST /code/analyze {code}         → {issues[], stats{}, summary}
 
 ## 10. Что ещё не сделано
 
-- Rate limiting реализован, но не подключён (KI-007).
-- Нет e2e-тестов и проверки в браузере против живого backend (KI-012).
-- Реальные ответы LLM не валидировались на живой модели (KI-008).
+- Живые ответы LLM не валидировались на живой модели — KI-008 Blocked:
+  нет ключа/LM Studio (инструмент прогона готов).
 - Лимит памяти песочницы не enforced на Windows (KI-009).
