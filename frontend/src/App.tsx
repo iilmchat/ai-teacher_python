@@ -1,13 +1,16 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { ComingSoonPage } from '@/pages/ComingSoonPage';
+import { ChatPage } from '@/pages/ChatPage';
+import { CodePage } from '@/pages/CodePage';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
 import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
+import { TaskDetailPage } from '@/pages/TaskDetailPage';
+import { TasksPage } from '@/pages/TasksPage';
 
 export function App() {
   return (
@@ -22,15 +25,7 @@ export function App() {
             path="chat"
             element={
               <ProtectedRoute>
-                <ComingSoonPage titleKey="nav.chat" />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="tasks"
-            element={
-              <ProtectedRoute>
-                <ComingSoonPage titleKey="nav.tasks" />
+                <ChatPage />
               </ProtectedRoute>
             }
           />
@@ -38,7 +33,23 @@ export function App() {
             path="code"
             element={
               <ProtectedRoute>
-                <ComingSoonPage titleKey="nav.code" />
+                <CodePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="tasks"
+            element={
+              <ProtectedRoute>
+                <TasksPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="tasks/:taskId"
+            element={
+              <ProtectedRoute>
+                <TaskDetailPage />
               </ProtectedRoute>
             }
           />
@@ -51,7 +62,8 @@ export function App() {
             }
           />
 
-          <Route path="*" element={<NotFoundPage />} />
+          <Route path="404" element={<NotFoundPage />} />
+          <Route path="*" element={<Navigate to="/404" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

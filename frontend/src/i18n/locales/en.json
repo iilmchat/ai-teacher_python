@@ -36,12 +36,74 @@
     "featureChat": "AI chat that guides you instead of solving for you",
     "featureCode": "Sandbox: code runs safely with linter hints",
     "featureTasks": "Tasks with automatic checks and progress",
-    "levelsLoading": "Loading levels…"
+    "levelsLoading": "Could not load levels"
   },
   "levels": {
     "basic": "Basic",
     "intermediate": "Intermediate",
     "advanced": "Advanced"
+  },
+  "chat": {
+    "title": "Chat with the assistant",
+    "sessions": "My chats",
+    "newSession": "New chat",
+    "deleteSession": "Delete chat",
+    "noSession": "No chat selected",
+    "createFirst": "Create a chat to ask your first question",
+    "emptyState": "Ask anything about Python — for example, why your code fails",
+    "inputLabel": "Message",
+    "placeholder": "Describe the problem or paste your code… (Enter to send, Shift+Enter for a new line)",
+    "send": "Send",
+    "copy": "Copy",
+    "copied": "Copied",
+    "levelLabel": "Help level",
+    "connected": "Streaming connected",
+    "disconnected": "Streaming unavailable, replies arrive complete"
+  },
+  "code": {
+    "title": "Playground",
+    "subtitle": "Code runs in an isolated sandbox: only safe modules, a few seconds time limit.",
+    "run": "Run",
+    "running": "Running…",
+    "output": "Output",
+    "noOutput": "Nothing yet",
+    "runError": "Could not run the code",
+    "executionTime": "Execution time: {{seconds}} s"
+  },
+  "tasks": {
+    "title": "Tasks",
+    "all": "All",
+    "filterDifficulty": "Filter by difficulty",
+    "difficulty": {
+      "easy": "Easy",
+      "medium": "Medium",
+      "hard": "Hard"
+    },
+    "status": {
+      "not_started": "not started",
+      "in_progress": "in progress",
+      "completed": "solved"
+    },
+    "hintsCount": "hints: {{count}}",
+    "empty": "No tasks yet — ask your teacher to add them",
+    "open": "Open",
+    "notFound": "Task not found",
+    "backToList": "Back to tasks",
+    "attempts": "Attempts",
+    "hints": "Hints",
+    "showHint": "Show hint",
+    "allHintsShown": "All hints are shown",
+    "solution": "Your solution",
+    "submit": "Check solution",
+    "results": "Check results",
+    "passedOf": "Tests passed: {{passed}} of {{total}}",
+    "case": "Test",
+    "casePassed": "passed",
+    "caseFailed": "failed"
+  },
+  "progress": {
+    "title": "Progress",
+    "summary": "{{completed}} of {{total}} tasks solved"
   },
   "profile": {
     "title": "Profile",
@@ -67,7 +129,6 @@
   "common": {
     "loading": "Loading…",
     "retry": "Retry",
-    "close": "Close",
-    "comingSoon": "This section arrives in the next sprint."
+    "close": "Close"
   }
 }
