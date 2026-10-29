@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     #: Сколько секунд ждать свободный слот, прежде чем вернуть 503
     executor_queue_timeout: float = 5.0
 
+    #: Наполнять задачи при старте приложения (S14-002, KI-010)
+    seed_on_start: bool = False
+
     # Rate limiting (S11-003)
     #: В тестах отключается, чтобы лимиты не влияли на прогон
     rate_limit_enabled: bool = True

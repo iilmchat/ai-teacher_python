@@ -9,12 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.executor import SandboxedExecutor
 from app.core.test_runner import CaseRunOutcome, run_test_cases
-from app.db.repositories.task import ProgressRepository, TaskRepository
+from app.db.repositories.task import (
+    ProgressRepository,
+    TaskRepository,
+    TaskVersionRepository,
+)
 from app.errors import NotFoundError, ValidationError
 from app.models.task import (
     Task,
     TaskDifficulty,
     TaskStatus,
+    TaskVersion,
     UserTaskProgress,
 )
 from app.models.user import User
@@ -27,6 +32,7 @@ from app.schemas.task import (
     TaskListItem,
     TaskStatsResponse,
     TaskUpdate,
+    TaskVersionItem,
     TestCaseResult,
 )
 
@@ -39,6 +45,7 @@ class TaskService:
         self.executor = executor
         self.tasks = TaskRepository(db)
         self.progress = ProgressRepository(db)
+        self.versions = TaskVersionRepository(db)
 
     # --- Чтение ---------------------------------------------------------
 
@@ -48,6 +55,8 @@ class TaskService:
         *,
         difficulty: TaskDifficulty | None = None,
         category: str | None = None,
+        tag: str | None = None,
+        search: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[TaskListItem]:
@@ -55,6 +64,8 @@ class TaskService:
         tasks = await self.tasks.list_tasks(
             difficulty=difficulty,
             category=category,
+            tag=tag,
+            search=search,
             skip=skip,
             limit=limit,
         )
@@ -71,9 +82,14 @@ class TaskService:
                     category=task.category,
                     hints_count=len(task.hints or []),
                     status=record.status if record else TaskStatus.NOT_STARTED,
+                    tags=list(task.tags or []),
                 )
             )
         return items
+
+    async def list_categories(self) -> list[str]:
+        """Категории активных задач"""
+        return await self.tasks.list_categories()
 
     async def _get_task_or_404(self, task_id: UUID) -> Task:
         task = await self.tasks.get(task_id)
@@ -97,6 +113,7 @@ class TaskService:
             test_cases_count=len(task.test_cases or []),
             status=record.status if record else TaskStatus.NOT_STARTED,
             attempts=record.attempts if record else 0,
+            tags=list(task.tags or []),
         )
 
     async def get_hint(self, task_id: UUID, index: int) -> tuple[str, int]:
@@ -254,6 +271,33 @@ class TaskService:
 
     # --- Управление (преподаватель/админ) -------------------------------
 
+    @staticmethod
+    def _snapshot(task: Task) -> dict[str, object]:
+        """Полный снимок задачи для истории версий"""
+        return {
+            "title": task.title,
+            "description": task.description,
+            "difficulty": task.difficulty.value,
+            "category": task.category,
+            "tags": list(task.tags or []),
+            "test_cases": list(task.test_cases or []),
+            "hints": list(task.hints or []),
+            "solution_template": task.solution_template,
+            "is_active": task.is_active,
+        }
+
+    async def _save_version(self, task: Task, author: User | None) -> None:
+        """Сохранить текущее состояние задачи как новую версию"""
+        next_version = await self.versions.latest_version(task.id) + 1
+        await self.versions.create(
+            TaskVersion(
+                task_id=task.id,
+                version=next_version,
+                snapshot=self._snapshot(task),
+                created_by=author.id if author is not None else None,
+            )
+        )
+
     async def create_task(self, payload: TaskCreate, author: User) -> Task:
         """Создать задачу"""
         task = Task(
@@ -261,6 +305,7 @@ class TaskService:
             description=payload.description,
             difficulty=payload.difficulty,
             category=payload.category,
+            tags=list(payload.tags),
             test_cases=[case.model_dump() for case in payload.test_cases],
             hints=list(payload.hints),
             solution_template=payload.solution_template,
@@ -268,10 +313,28 @@ class TaskService:
         )
         return await self.tasks.create(task)
 
-    async def update_task(self, task_id: UUID, payload: TaskUpdate) -> Task:
-        """Обновить задачу"""
+    async def create_many(
+        self, payloads: list[TaskCreate], author: User
+    ) -> list[Task]:
+        """Создать несколько задач (генерация/массовый импорт)"""
+        created: list[Task] = []
+        for payload in payloads:
+            created.append(await self.create_task(payload, author))
+        return created
+
+    async def export_active(self) -> list[Task]:
+        """Все активные задачи для выгрузки"""
+        return await self.tasks.list_tasks(limit=1000)
+
+    async def update_task(
+        self, task_id: UUID, payload: TaskUpdate, author: User | None = None
+    ) -> Task:
+        """Обновить задачу, сохранив предыдущее состояние в истории"""
         task = await self._get_task_or_404(task_id)
         data = payload.model_dump(exclude_unset=True)
+
+        if not data:
+            return task
 
         if "test_cases" in data and data["test_cases"] is not None:
             data["test_cases"] = [
@@ -279,8 +342,62 @@ class TaskService:
                 for case in payload.test_cases or []
             ]
 
+        # Снимок делаем до мутации, иначе история потеряет старое состояние
+        await self._save_version(task, author)
+
         for field_name, value in data.items():
             setattr(task, field_name, value)
+
+        await self.db.commit()
+        await self.db.refresh(task)
+        return task
+
+    async def list_versions(self, task_id: UUID) -> list[TaskVersionItem]:
+        """История версий задачи (новые сверху)"""
+        await self._get_task_or_404(task_id)
+        versions = await self.versions.list_for_task(task_id)
+        items: list[TaskVersionItem] = []
+        for version in versions:
+            snapshot = dict(version.snapshot or {})
+            test_cases = snapshot.get("test_cases") or []
+            items.append(
+                TaskVersionItem(
+                    id=version.id,
+                    version=version.version,
+                    title=str(snapshot.get("title", "")),
+                    test_cases_count=len(test_cases)
+                    if isinstance(test_cases, list)
+                    else 0,
+                    solution_template=snapshot.get("solution_template"),
+                    created_at=version.created_at,
+                )
+            )
+        return items
+
+    async def restore_version(
+        self, task_id: UUID, version: int, author: User | None = None
+    ) -> Task:
+        """Откатить задачу к версии (текущее состояние тоже сохраняется)"""
+        task = await self._get_task_or_404(task_id)
+        target = await self.versions.get_by_version(task_id, version)
+        if target is None:
+            raise NotFoundError(f"Версия {version} не найдена")
+        snapshot = dict(target.snapshot or {})
+
+        await self._save_version(task, author)
+
+        task.title = str(snapshot.get("title", task.title))
+        task.description = str(snapshot.get("description", task.description))
+        try:
+            task.difficulty = TaskDifficulty(str(snapshot.get("difficulty")))
+        except ValueError:
+            task.difficulty = task.difficulty
+        task.category = str(snapshot.get("category", task.category))
+        task.tags = list(snapshot.get("tags") or [])
+        task.test_cases = list(snapshot.get("test_cases") or [])
+        task.hints = list(snapshot.get("hints") or [])
+        task.solution_template = snapshot.get("solution_template")
+        task.is_active = bool(snapshot.get("is_active", True))
 
         await self.db.commit()
         await self.db.refresh(task)
