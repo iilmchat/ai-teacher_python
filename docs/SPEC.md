@@ -133,6 +133,13 @@ violations, memory_limit_enforced, output_truncated}`.
 | POST | `/tasks` | `TaskCreate` | 201 `TaskAdminDetail` (teacher/admin) |
 | PATCH | `/tasks/{id}` | `TaskUpdate` | `TaskAdminDetail` (teacher/admin) |
 | DELETE | `/tasks/{id}` | — | 204 (teacher/admin) |
+| GET | `/tasks?tag=&q=` | — | фильтр по тегу и поиск (S14-004) |
+| GET | `/tasks/categories` | — | `{categories[]}` |
+| POST | `/tasks/import` | `{tasks: [...]}` | `{created, skipped, errors[]}` (teacher/admin) |
+| GET | `/tasks/export?format=json\|yaml` | — | массив задач (teacher/admin) |
+| POST | `/tasks/generate` | `{topic, difficulty, count≤5}` | `{created[], rejected[], prompt_tokens, completion_tokens}` |
+| GET | `/tasks/{id}/versions` | — | `{items[]}` (teacher/admin) |
+| POST | `/tasks/{id}/versions/{v}/restore` | — | `TaskAdminDetail` (teacher/admin) |
 
 `SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message}`.
 
@@ -163,7 +170,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 ---
 
-## 4. Схема БД (миграции 001–004)
+## 4. Схема БД (миграции 001–006)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
@@ -179,9 +186,13 @@ chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
 code_executions(id, user_id→users, code, output, error, success, execution_time,
                 created_at)
 
-tasks(id, title, description, difficulty, category, test_cases JSONB,
+tasks(id, title, description, difficulty, category, tags JSONB, test_cases JSONB,
       hints JSONB, solution_template, created_by→users, created_at, is_active)
-   difficulty ∈ {easy, medium, hard}
+   difficulty ∈ {easy, medium, hard} · tags — до 10, нижний регистр
+
+task_versions(id, task_id→tasks, version, snapshot JSONB, created_by→users,
+              created_at)
+   UNIQUE(task_id, version) · snapshot — полное состояние задачи до правки
 
 user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
                    best_solution, completed_at, updated_at)
@@ -193,7 +204,8 @@ user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
 
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
-`tasks(category)`, `user_task_progress(user_id)`.
+`tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
+`user_task_progress(user_id)`.
 
 ---
 
@@ -248,7 +260,7 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 (KI-013). `KI-007` и `KI-012` закрыты в S11; `KI-008`, `KI-009`, `KI-013`
 остаются.
 
-### Дополнение v0.2.0 (спринты 11–12)
+### Дополнение v0.2.0 (спринты 11–14)
 
 - [x] E2E 12/12, rate limiting (429 + `Retry-After`), тесты миграций и WS
 - [x] `/health` различает `ok` / `degraded` / `not_configured`, ключ не раскрыт
@@ -258,7 +270,10 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 - [x] `prompt_version` / `provider` в метаданных ответа и истории
 - [x] Память песочницы ограничена на Windows и Linux (KI-009 закрыт)
 - [x] Вывод обрезается, число параллельных запусков ограничено
-- [ ] Живой прогон LLM_EVAL — KI-008 Blocked (нет ключа/LM Studio)
+- [x] Живой прогон LLM_EVAL, оценки 0.99 / 0.93 / 0.96 (KI-008 закрыт)
+- [x] Импорт/экспорт задач JSON/YAML, seed при старте (KI-010 закрыт)
+- [x] Генерация задач через LLM с проверкой эталона в песочнице
+- [x] Теги/поиск и история версий задач с откатом
 
 ---
 
