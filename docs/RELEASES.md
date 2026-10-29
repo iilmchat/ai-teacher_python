@@ -156,6 +156,42 @@
 
 ---
 
+## Спринт 5: Three Levels
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён
+
+### Задачи
+- [x] S5-001: Промпты трёх уровней (созданы в спринте 4, здесь доработаны)
+- [x] S5-002: Level Management (переключение уровня пользователя)
+- [x] S5-003: Level-aware generation (промпт по уровню сессии + fallback)
+- [x] S5-004: Level API (`/users/me/level`, `/chat/levels`, `/users/levels`)
+- [x] S5-005: Тесты уровней (14 тестов)
+
+### Что сделано
+- `app/services/levels.py`: описания уровней (`title`, `description`,
+  `audience`, `gives_ready_code`), `has_prompt`, `resolve_level` (fallback)
+- `app/api/v1/users.py`: профиль, `PATCH /users/me/level`,
+  `GET /users/me/level`, справочник, админские `GET /users/{id}` и
+  `PATCH /users/{id}/role`
+- `GET /chat/levels`: справочник уровней в контексте чата
+- `ChatSessionCreate.level` стал необязательным — сессия наследует уровень
+  профиля (найден и исправлен баг: дефолт `"basic"` перебивал наследование)
+- `ChatService` применяет `resolve_level` при создании сессии и сборке промпта
+
+### Проблемы
+- KI-008: реальные ответы LLM не проверены (нет ключа)
+
+### Метрики
+- Тесты: **67 passed**
+- Ruff: 0 ошибок · MyPy (strict): 0 ошибок
+- Smoke: PATCH level → advanced, новая сессия `advanced`, `/chat/levels` отдаёт 3 уровня
+
+### Следующие шаги
+- Спринт 6: безопасное выполнение Python-кода (executor, linter, code API)
+
+---
+
 ## Шаблон отчёта по спринту
 
 ```

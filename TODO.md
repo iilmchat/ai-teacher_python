@@ -5,8 +5,8 @@
 
 **Версия:** v0.1.0  
 **Последнее обновление:** 2026-10-29  
-**Текущий спринт:** Спринт 5 (Three Levels)  
-**Готово:** Спринты 1–4 (инфраструктура, ядро backend, аутентификация, чат с LLM)
+**Текущий спринт:** Спринт 6 (Code Execution)  
+**Готово:** Спринты 1–5 (инфраструктура, ядро backend, аутентификация, чат с LLM, три уровня)
 
 ---
 
@@ -269,43 +269,43 @@
 
 **Цель:** Реализовать три уровня ассистента с разными промптами.
 
-### S5-001: Level-specific Prompts
-- [ ] Создать app/services/llm/prompts/basic.txt
-- [ ] Создать app/services/llm/prompts/intermediate.txt
-- [ ] Создать app/services/llm/prompts/advanced.txt
-- [ ] Протестировать каждый уровень вручную
-- [ ] **Зависит от:** S4-003
-- [ ] **Оценка:** 2 часа
+### S5-001: Level-specific Prompts — ✅
+- [x] Создать app/services/llm/prompts/basic.txt
+- [x] Создать app/services/llm/prompts/intermediate.txt
+- [x] Создать app/services/llm/prompts/advanced.txt
+- [ ] Протестировать каждый уровень вручную с реальной LLM (нужен API-ключ, KI-008)
+- [x] **Зависит от:** S4-003
+- [x] **Оценка:** 2 часа
 
-### S5-002: Level Management
-- [ ] Добавить поле level в User и ChatSession
-- [ ] Реализовать переключение уровня
-- [ ] Добавить валидацию уровня
-- [ ] Обновить схемы
-- [ ] **Зависит от:** S2-005, S4-002
-- [ ] **Оценка:** 1 час
+### S5-002: Level Management — ✅
+- [x] Добавить поле level в User и ChatSession (было с S2-005)
+- [x] Реализовать переключение уровня (PATCH /users/me/level)
+- [x] Добавить валидацию уровня (Pydantic Enum + parse_level)
+- [x] Обновить схемы (ChatSessionCreate.level теперь Optional)
+- [x] **Зависит от:** S2-005, S4-002
+- [x] **Оценка:** 1 час
 
-### S5-003: Level-aware Response Generation
-- [ ] Интегрировать выбор промпта в ChatService
-- [ ] Добавить метаданные уровня в ответ
-- [ ] Реализовать fallback логику
-- [ ] **Зависит от:** S5-001, S5-002
-- [ ] **Оценка:** 1.5 часа
+### S5-003: Level-aware Response Generation — ✅
+- [x] Интегрировать выбор промпта в ChatService
+- [x] Добавить метаданные уровня в ответ (GET /users/me/level, /chat/levels)
+- [x] Реализовать fallback логику (resolve_level → basic при отсутствии промпта)
+- [x] **Зависит от:** S5-001, S5-002
+- [x] **Оценка:** 1.5 часа
 
-### S5-004: Level API
-- [ ] PATCH /api/v1/users/me/level
-- [ ] GET /api/v1/chat/levels (информация о уровнях)
-- [ ] Обновить POST /api/v1/chat/sessions (параметр level)
-- [ ] **Зависит от:** S5-002
-- [ ] **Оценка:** 1 час
+### S5-004: Level API — ✅
+- [x] PATCH /api/v1/users/me/level
+- [x] GET /api/v1/chat/levels (информация о уровнях)
+- [x] GET /api/v1/users/levels (тот же справочник в профиле)
+- [x] Обновить POST /api/v1/chat/sessions (параметр level необязателен)
+- [x] **Зависит от:** S5-002
+- [x] **Оценка:** 1 час
 
-### S5-005: Тесты Levels
-- [ ] tests/test_levels_basic.py
-- [ ] tests/test_levels_intermediate.py
-- [ ] tests/test_levels_advanced.py
-- [ ] tests/test_level_switching.py
-- [ ] **Зависит от:** S5-003, S5-004
-- [ ] **Оценка:** 1.5 часа
+### S5-005: Тесты Levels — ✅
+- [x] tests/test_levels.py (14 тестов: чистые функции + API)
+- [x] Проверка переключения уровня и наследования сессией
+- [x] Проверка fallback и справочника уровней
+- [x] **Зависит от:** S5-003, S5-004
+- [x] **Оценка:** 1.5 часа
 
 ---
 

@@ -30,19 +30,25 @@
 - Chat API: `POST/GET /chat/sessions`, `GET/DELETE /chat/sessions/{id}`,
   `POST /chat/sessions/{id}/messages`
 - WebSocket `/api/v1/chat/ws/{session_id}` со стримингом `start/token/done/error`
+- Управление уровнями: `PATCH /users/me/level`, `GET /users/me/level`,
+  `GET /chat/levels`, `GET /users/levels`
+- Наследование уровня сессией от профиля + fallback на базовый уровень
+- Админские эндпоинты профиля: `GET /users/{id}`, `PATCH /users/{id}/role`
 - Доменные ошибки `AppError` с единым HTTP-обработчиком
-- Тесты: 53 (health + auth + chat + prompts + websocket) на реальном PostgreSQL
+- Тесты: 67 (health + auth + chat + prompts + websocket + levels)
 
 ### Изменено
 - Внешние порты вынесены в ENV: Postgres `5434`, Redis `6381` (KI-001)
 - `Settings` читает `.env` из корня проекта по абсолютному пути
 - Пароли хэшируются напрямую через `bcrypt` вместо `passlib` (KI-005)
 - Healthcheck возвращает `llm_provider`
+- `ChatSessionCreate.level` необязателен: сессия наследует уровень профиля
 
 ### Исправлено
 - Enum-колонки писали имена вместо значений (`STUDENT` вместо `student`) (KI-004)
 - `server_default` для JSONB приводил к ошибке миграции
 - Конфликт имени `metadata` с `DeclarativeBase` в модели `ChatSession`
+- Дефолт `level="basic"` в запросе перебивал уровень профиля пользователя
 
 ### Безопасность
 - bcrypt-хэширование паролей, ограничение длины 72 байтами
