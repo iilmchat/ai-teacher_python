@@ -20,6 +20,7 @@ from app.schemas.task import (
     TaskCreate,
     TaskExportItem,
     TaskImportError,
+    TaskImportPreview,
     TaskImportResponse,
 )
 
@@ -57,6 +58,34 @@ def _validation_message(error: PydanticValidationError) -> str:
     first = error.errors()[0]
     location = ".".join(str(part) for part in first.get("loc", ()))
     return f"{location}: {first.get('msg', 'некорректное значение')}"
+
+
+def preview_import(text: str) -> TaskImportPreview:
+    """Проверить файл без сохранения: сколько задач валидны и где ошибки"""
+    items = parse_task_payload(text)
+    valid = 0
+    errors: list[TaskImportError] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            errors.append(
+                TaskImportError(
+                    index=index, message="Запись должна быть объектом"
+                )
+            )
+            continue
+        raw_title = item.get("title")
+        title = str(raw_title)[:255] if raw_title is not None else None
+        try:
+            TaskCreate.model_validate(item)
+        except PydanticValidationError as exc:
+            errors.append(
+                TaskImportError(
+                    index=index, title=title, message=_validation_message(exc)
+                )
+            )
+            continue
+        valid += 1
+    return TaskImportPreview(tasks=valid, errors=errors)
 
 
 async def import_tasks(

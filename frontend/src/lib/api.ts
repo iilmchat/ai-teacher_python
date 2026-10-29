@@ -24,6 +24,8 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   form?: Record<string, string>;
+  /** Файл для multipart-загрузки */
+  file?: File;
   /** Не добавлять Authorization (для login/register) */
   anonymous?: boolean;
 }
@@ -101,6 +103,10 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   if (options.form) {
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
     body = new URLSearchParams(options.form).toString();
+  } else if (options.file) {
+    const formData = new FormData();
+    formData.append('file', options.file);
+    body = formData;
   } else if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
     body = JSON.stringify(options.body);
@@ -149,6 +155,8 @@ export const api = {
     apiRequest<T>(path, { method: 'POST', body }),
   postForm: <T>(path: string, form: Record<string, string>) =>
     apiRequest<T>(path, { method: 'POST', form }),
+  postFile: <T>(path: string, file: File) =>
+    apiRequest<T>(path, { method: 'POST', file }),
   patch: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),

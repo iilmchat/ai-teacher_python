@@ -1,4 +1,4 @@
-import Editor, { type OnMount } from '@monaco-editor/react';
+import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface CodeEditorProps {
@@ -8,12 +8,14 @@ interface CodeEditorProps {
   readOnly?: boolean;
 }
 
+const MonacoEditor = lazy(() => import('@/components/code-editor/MonacoEditor'));
+
 /**
- * Обёртка Monaco.
+ * Обёртка редактора.
  *
- * В e2e-режиме (`VITE_E2E=1`) рендерится обычная textarea: Playwright не должен
- * зависеть от загрузки Monaco с CDN (KI-013), а логика страниц проверяется
- * одинаково. В обычном режиме используется редактор.
+ * В e2e-режиме (`VITE_E2E=1`) рендерится textarea: Playwright не зависит от
+ * Monaco. В обычном режиме Monaco загружается локально отдельным чанком
+ * (S19-001), без CDN.
  */
 export function CodeEditor({
   value,
@@ -23,11 +25,6 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const { t } = useTranslation();
   const isE2E = import.meta.env.VITE_E2E === '1';
-
-  const handleMount: OnMount = (editor) => {
-    // Отключаем лишние подсказки, чтобы не пугать новичков
-    editor.updateOptions({ quickSuggestions: false });
-  };
 
   if (isE2E) {
     return (
@@ -44,26 +41,19 @@ export function CodeEditor({
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-300">
-      <Editor
-        height={height}
-        defaultLanguage="python"
-        theme="vs-dark"
+    <Suspense
+      fallback={
+        <div style={{ height }} className="rounded-lg border border-slate-300 p-4 text-sm text-slate-400">
+          {t('common.loading')}
+        </div>
+      }
+    >
+      <MonacoEditor
         value={value}
-        onChange={(next) => onChange(next ?? '')}
-        onMount={handleMount}
-        loading={<div className="p-4 text-sm text-slate-400">{t('common.loading')}</div>}
-        options={{
-          readOnly,
-          minimap: { enabled: false },
-          fontSize: 14,
-          lineNumbers: 'on',
-          scrollBeyondLastLine: false,
-          automaticLayout: true,
-          tabSize: 4,
-          insertSpaces: true,
-        }}
+        onChange={onChange}
+        height={height}
+        readOnly={readOnly}
       />
-    </div>
+    </Suspense>
   );
 }

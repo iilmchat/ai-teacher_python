@@ -26,6 +26,15 @@ export default defineConfig({
   build: {
     // Основной чанк держим в пределах 200 kB gzip (RULES §3.2)
     chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        // S19-002: vendor отдельно, entry остаётся маленьким
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          i18n: ['i18next', 'react-i18next'],
+        },
+      },
+    },
   },
   test: {
     environment: 'jsdom',

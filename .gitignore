@@ -75,6 +75,8 @@ pnpm-debug.log*
 # Frontend build
 frontend/dist/
 frontend/build/
+# Локальные ассеты Monaco копируются из node_modules при сборке (S19-001)
+frontend/public/monaco/
 # Кэш инкрементальной сборки TypeScript
 *.tsbuildinfo
 frontend/.next/
