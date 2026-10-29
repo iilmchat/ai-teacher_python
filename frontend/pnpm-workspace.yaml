@@ -1,0 +1,10 @@
+# pnpm 12 читает настройки из этого файла, а не из package.json (RULES §11.5)
+packages:
+  - '.'
+
+# Разрешаем postinstall только нужным пакетам (supply-chain safety)
+allowBuilds:
+  esbuild: true
+
+onlyBuiltDependencies:
+  - esbuild

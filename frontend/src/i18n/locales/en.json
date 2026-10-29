@@ -1,0 +1,73 @@
+{
+  "nav": {
+    "main": "Main navigation",
+    "home": "Home",
+    "chat": "Chat",
+    "tasks": "Tasks",
+    "code": "Playground",
+    "profile": "Profile",
+    "login": "Log in",
+    "register": "Sign up",
+    "logout": "Log out"
+  },
+  "auth": {
+    "loginTitle": "Log in",
+    "loginSubtitle": "Sign in to continue learning",
+    "registerTitle": "Sign up",
+    "registerSubtitle": "Create a student account",
+    "username": "Username",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 8 characters",
+    "submitLogin": "Log in",
+    "submitRegister": "Create account",
+    "noAccount": "No account yet?",
+    "hasAccount": "Already have an account?",
+    "toRegister": "Sign up",
+    "toLogin": "Log in"
+  },
+  "home": {
+    "title": "Python teacher for school students",
+    "subtitle": "The assistant gives hints, explanations and code review depending on the chosen help level.",
+    "ctaChat": "Start chatting",
+    "ctaTasks": "Browse tasks",
+    "levelsTitle": "Three levels of help",
+    "featuresTitle": "What the assistant does",
+    "featureChat": "AI chat that guides you instead of solving for you",
+    "featureCode": "Sandbox: code runs safely with linter hints",
+    "featureTasks": "Tasks with automatic checks and progress",
+    "levelsLoading": "Loading levels…"
+  },
+  "levels": {
+    "basic": "Basic",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced"
+  },
+  "profile": {
+    "title": "Profile",
+    "username": "Username",
+    "email": "Email",
+    "role": "Role",
+    "level": "Help level",
+    "levelHint": "The level applies to new chat sessions",
+    "saved": "Level saved",
+    "save": "Save",
+    "roles": {
+      "student": "Student",
+      "teacher": "Teacher",
+      "admin": "Administrator"
+    }
+  },
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundText": "Check the address or go back home.",
+    "toHome": "Go home",
+    "generic": "Something went wrong"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "close": "Close",
+    "comingSoon": "This section arrives in the next sprint."
+  }
+}

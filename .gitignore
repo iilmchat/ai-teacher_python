@@ -10,8 +10,10 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+# Только корневые lib/ и lib64/ (артефакты Python-сборки).
+# Префикс / обязателен: иначе игнорируется frontend/src/lib/**
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -73,6 +75,8 @@ pnpm-debug.log*
 # Frontend build
 frontend/dist/
 frontend/build/
+# Кэш инкрементальной сборки TypeScript
+*.tsbuildinfo
 frontend/.next/
 frontend/out/
 
