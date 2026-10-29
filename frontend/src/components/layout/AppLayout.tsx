@@ -50,6 +50,18 @@ export function AppLayout() {
             {user && (
               <>
                 <NavLink
+                  to="/dashboard"
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`
+                  }
+                >
+                  {t('nav.dashboard')}
+                </NavLink>
+                <NavLink
                   to="/classrooms"
                   className={({ isActive }) =>
                     `rounded-lg px-3 py-1.5 text-sm transition-colors ${

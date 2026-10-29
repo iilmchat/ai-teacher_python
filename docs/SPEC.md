@@ -191,7 +191,18 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 Не участник класса → 403; неверный код → 404; повторное назначение задачи → 409.
 
-### 3.9 Служебное
+### 3.9 Вовлечение
+
+| Метод | Путь | Параметры | Ответ |
+|-------|------|-----------|-------|
+| GET | `/me/achievements` | — | `{items[]}` — полученные достижения |
+| GET | `/me/stats` | — | `{solved, attempts, avg_attempts, streak_days, achievements_count, chat_sessions, chat_messages}` |
+| GET | `/me/notifications` | `unread_only?` | `{items[], unread}`; создаёт напоминания о дедлайнах |
+| POST | `/me/notifications/{id}/read` | — | `NotificationItem`; чужое — 404 |
+
+Типы уведомлений: `assignment`, `deadline`, `achievement`.
+
+### 3.10 Служебное
 
 `GET /health` → `{status, version, app_name, llm_provider, llm}`
 
@@ -201,7 +212,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 ---
 
-## 4. Схема БД (миграции 001–007)
+## 4. Схема БД (миграции 001–008)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
@@ -234,6 +245,12 @@ classroom_members(id, classroom_id→classrooms, user_id→users, role, joined_a
    role ∈ {owner, student} · UNIQUE(classroom_id, user_id)
 assignments(id, classroom_id→classrooms, task_id→tasks, due_at, created_at)
    UNIQUE(classroom_id, task_id)
+
+achievements(code*, title, description, icon)
+user_achievements(id, user_id→users, code→achievements, earned_at)
+   UNIQUE(user_id, code)
+notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
+   type ∈ {assignment, deadline, achievement}
 ```
 
 Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс.
@@ -243,7 +260,8 @@ assignments(id, classroom_id→classrooms, task_id→tasks, due_at, created_at)
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
 `user_task_progress(user_id)`, `classrooms(owner_id)`,
-`classroom_members(user_id)`, `assignments(classroom_id)`.
+`classroom_members(user_id)`, `assignments(classroom_id)`,
+`user_achievements(user_id)`, `notifications(user_id, read_at)`.
 
 ---
 

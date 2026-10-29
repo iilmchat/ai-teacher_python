@@ -395,3 +395,40 @@ export interface ClassProgress {
     completed: number;
   }[];
 }
+
+// --- Engagement (S17) --------------------------------------------------
+
+export interface Achievement {
+  code: string;
+  title: string;
+  description: string;
+  icon: string;
+  earned_at: string;
+}
+
+export interface AchievementsResponse {
+  items: Achievement[];
+}
+
+export interface UserStats {
+  solved: number;
+  attempts: number;
+  avg_attempts: number;
+  streak_days: number;
+  achievements_count: number;
+  chat_sessions: number;
+  chat_messages: number;
+}
+
+export interface AppNotification {
+  id: string;
+  type: 'assignment' | 'deadline' | 'achievement';
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  items: AppNotification[];
+  unread: number;
+}

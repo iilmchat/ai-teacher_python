@@ -33,6 +33,11 @@ const ClassroomDetailPage = lazy(() =>
 const CodePage = lazy(() =>
   import('@/pages/CodePage').then((module) => ({ default: module.CodePage })),
 );
+const DashboardPage = lazy(() =>
+  import('@/pages/DashboardPage').then((module) => ({
+    default: module.DashboardPage,
+  })),
+);
 const HomePage = lazy(() =>
   import('@/pages/HomePage').then((module) => ({ default: module.HomePage })),
 );
@@ -122,6 +127,14 @@ export function App() {
               element={
                 <ProtectedRoute>
                   <ClassroomsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="dashboard"
+              element={
+                <ProtectedRoute>
+                  <DashboardPage />
                 </ProtectedRoute>
               }
             />

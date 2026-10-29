@@ -177,6 +177,19 @@ class TaskService:
         await self.db.refresh(record)
 
         if outcome.passed:
+            # Достижения не должны ломать выдачу результата ученику
+            try:
+                from app.services.engagement_service import evaluate_achievements
+
+                await evaluate_achievements(self.db, user.id)
+            except Exception:  # noqa: BLE001
+                import structlog
+
+                structlog.get_logger(__name__).warning(
+                    "achievement_evaluation_failed", user_id=str(user.id)
+                )
+
+        if outcome.passed:
             message = (
                 "Задача решена! Все тесты пройдены "
                 f"({outcome.passed_count}/{outcome.total_count})."
