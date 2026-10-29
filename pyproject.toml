@@ -44,8 +44,8 @@ warn_redundant_casts = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-# pgvector и jose не поставляют py.typed-маркеров
-module = ["redis.*", "pgvector.*", "jose.*"]
+# pgvector, jose и RestrictedPython не поставляют py.typed-маркеров
+module = ["redis.*", "pgvector.*", "jose.*", "RestrictedPython.*"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 
