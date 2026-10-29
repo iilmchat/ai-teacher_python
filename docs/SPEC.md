@@ -174,7 +174,24 @@ by_provider}` (S12-003, метрики в памяти процесса).
 Доступ: `teacher`/`admin`; ученик получает 403. Не-ученик в
 `/teacher/students/{id}` — 404.
 
-### 3.8 Служебное
+### 3.8 Классы и назначения
+
+| Метод | Путь | Параметры | Ответ |
+|-------|------|-----------|-------|
+| POST | `/classrooms` | `{name}` | 201 `Classroom` (teacher/admin) |
+| GET | `/classrooms` | — | `{items[]}` — свои классы |
+| GET | `/classrooms/{id}` | — | `ClassroomDetail` (с участниками) |
+| POST | `/classrooms/join` | `{join_code}` | `Classroom` |
+| POST | `/classrooms/{id}/join` | `{join_code}` | `Classroom` (проверяет id) |
+| DELETE | `/classrooms/{id}/members/{user_id}` | — | 204 (владелец) |
+| POST | `/classrooms/{id}/assignments` | `{task_id, due_at?}` | 201 `AssignmentItem` (владелец) |
+| GET | `/classrooms/{id}/assignments` | — | `{items[]}` (участник) |
+| GET | `/classrooms/{id}/progress` | — | матрица + `completion_rate` (владелец) |
+| GET | `/me/assignments` | — | `{items[]}` с `overdue` |
+
+Не участник класса → 403; неверный код → 404; повторное назначение задачи → 409.
+
+### 3.9 Служебное
 
 `GET /health` → `{status, version, app_name, llm_provider, llm}`
 
@@ -184,7 +201,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 ---
 
-## 4. Схема БД (миграции 001–006)
+## 4. Схема БД (миграции 001–007)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
@@ -211,6 +228,12 @@ task_versions(id, task_id→tasks, version, snapshot JSONB, created_by→users,
 user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
                    best_solution, completed_at, updated_at)
    status ∈ {not_started, in_progress, completed} · UNIQUE(user_id, task_id)
+
+classrooms(id, name, owner_id→users, join_code*, created_at)
+classroom_members(id, classroom_id→classrooms, user_id→users, role, joined_at)
+   role ∈ {owner, student} · UNIQUE(classroom_id, user_id)
+assignments(id, classroom_id→classrooms, task_id→tasks, due_at, created_at)
+   UNIQUE(classroom_id, task_id)
 ```
 
 Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс.
@@ -219,7 +242,8 @@ user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
-`user_task_progress(user_id)`.
+`user_task_progress(user_id)`, `classrooms(owner_id)`,
+`classroom_members(user_id)`, `assignments(classroom_id)`.
 
 ---
 

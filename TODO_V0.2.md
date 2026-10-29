@@ -8,9 +8,9 @@
 
 **Целевая версия:** v0.2.0 «Classroom»  
 **Создан:** 2026-10-29  
-**Текущий спринт:** 15 (Teacher Console) — завершён; 19 — частично (S19-001/002); следующий — 16  
+**Текущий спринт:** 16 (Classrooms & Assignments) — завершён; следующий — 17 (Engagement)  
 **Базис:** v0.1.0 (137 backend-тестов, 63 frontend, 13 KI: 9 открытых)  
-**Текущее состояние:** 256 backend-тестов (+1 skip на Windows), 71 frontend-unit + 12 e2e, KI открыто — 1 (KI-014 CI)
+**Текущее состояние:** 264 backend-теста (+1 skip на Windows), 74 frontend-unit + 12 e2e, KI открыто — 1 (KI-014 CI)
 
 ---
 
@@ -424,59 +424,58 @@ event loop'ами (pytest создаёт новый loop на тест) — ис
 
 ---
 
-## Спринт 16: Classrooms & Assignments
+## Спринт 16: Classrooms & Assignments — ✅ завершён (2026-10-30)
 
 **Цель:** классы, enrollment и назначения задач с дедлайнами.
 
 **Зависит от:** спринт 15  
-**Оценка:** 3 дня
+**Оценка:** 3 дня · **Факт:** ~3 ч
 
-### S16-001: Модели и миграция
-- [ ] `classrooms(id, name, owner_id, join_code, created_at)`
-- [ ] `classroom_members(classroom_id, user_id, role, joined_at)` — UNIQUE
-- [ ] `assignments(id, classroom_id, task_id, due_at, created_at)`
-- [ ] Миграция `004`, `alembic check`
-- [ ] **Зависит от:** —
-- [ ] **Оценка:** 4 ч
+### S16-001: Модели и миграция — ✅
+- [x] `classrooms(id, name, owner_id, join_code, created_at)`
+- [x] `classroom_members(classroom_id, user_id, role, joined_at)` — UNIQUE
+- [x] `assignments(id, classroom_id, task_id, due_at, created_at)` — UNIQUE(task, class)
+- [x] Миграция `007`, `alembic check` без расхождений
+- [x] **Зависит от:** —
+- [x] **Оценка:** 4 ч
 
-### S16-002: API классов
-- [ ] `POST /classrooms`, `GET /classrooms` (свои), `GET /classrooms/{id}`
-- [ ] `POST /classrooms/{id}/join` (по `join_code`)
-- [ ] `DELETE /classrooms/{id}/members/{user_id}` (владелец)
-- [ ] Роли: владелец — teacher/admin; участники — student
-- [ ] **Зависит от:** S16-001
-- [ ] **Оценка:** 5 ч
+### S16-002: API классов — ✅
+- [x] `POST /classrooms`, `GET /classrooms` (свои), `GET /classrooms/{id}`
+- [x] `POST /classrooms/join` и `POST /classrooms/{id}/join` по `join_code`
+- [x] `DELETE /classrooms/{id}/members/{user_id}` (владелец, кроме себя)
+- [x] Роли: владелец — teacher/admin; участники — student
+- [x] **Зависит от:** S16-001
+- [x] **Оценка:** 5 ч
 
-### S16-003: Назначения
-- [ ] `POST /classrooms/{id}/assignments` `{task_id, due_at}`
-- [ ] `GET /classrooms/{id}/assignments` (со статусами участников)
-- [ ] `GET /me/assignments` — «мои задания» с дедлайном
-- [ ] Просроченные: статус `overdue` (вычисляемый)
-- [ ] **Зависит от:** S16-002
-- [ ] **Оценка:** 5 ч
+### S16-003: Назначения — ✅
+- [x] `POST /classrooms/{id}/assignments` `{task_id, due_at}`
+- [x] `GET /classrooms/{id}/assignments` (со счётчиками выполнения)
+- [x] `GET /me/assignments` — «мои задания» с дедлайном
+- [x] Просроченные: `overdue` (вычисляемый), статус из прогресса
+- [x] **Зависит от:** S16-002
+- [x] **Оценка:** 5 ч
 
-### S16-004: Прогресс класса
-- [ ] `GET /classrooms/{id}/progress` — матрица «ученик × задача» (completed/attempts)
-- [ ] Агрегаты: средний completion rate, проблемные задачи (много попыток)
-- [ ] **Зависит от:** S16-003
-- [ ] **Оценка:** 4 ч
+### S16-004: Прогресс класса — ✅
+- [x] `GET /classrooms/{id}/progress` — матрица «ученик × задача» (status/attempts)
+- [x] Агрегаты: completion rate, проблемные задачи
+- [x] **Зависит от:** S16-003
+- [x] **Оценка:** 4 ч
 
-### S16-005: UI классов
-- [ ] `/classrooms`: список, создание, вступление по коду
-- [ ] `/classrooms/:id`: участники, назначения, матрица прогресса
-- [ ] `/assignments` для ученика: список с дедлайнами
-- [ ] **Зависит от:** S16-002…S16-004
-- [ ] **Оценка:** 8 ч
+### S16-005: UI классов — ✅
+- [x] `/classrooms`: список, создание, вступление по коду
+- [x] `/classrooms/:id`: участники, назначения, матрица прогресса
+- [x] `/assignments` для ученика: список с дедлайнами и `overdue`
+- [x] **Зависит от:** S16-002…S16-004
+- [x] **Оценка:** 8 ч
 
-### S16-006: Тесты и документация
-- [ ] Тесты: доступ к чужому классу (403), join_code, дедлайны, матрица
-- [ ] `docs/SPEC.md`: новые сущности и эндпоинты
-- [ ] `USER_GUIDE`: сценарий «класс»
-- [ ] **Зависит от:** S16-001…S16-005
-- [ ] **Оценка:** 3 ч
+### S16-006: Тесты и документация — ✅
+- [x] 8 backend-тестов (403, код, дубликат, дедлайны, матрица, исключение) + 3 frontend
+- [x] `SPEC`, `ARCHITECTURE`, `USER_GUIDE`, `MANUAL_TESTING_GUIDE`
+- [x] **Зависит от:** S16-001…S16-005
+- [x] **Оценка:** 3 ч
 
-**DoD:** учитель создаёт класс, ученики вступают по коду, задания видны с
-дедлайнами, прогресс класса отображается; миграция `004` в схеме.
+**DoD:** ✅ учитель создаёт класс, ученики вступают по коду, задания видны с
+дедлайнами, прогресс класса отображается; миграция `007` в схеме.
 
 ---
 

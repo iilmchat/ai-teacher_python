@@ -135,6 +135,8 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
   (`seed_service`, `SEED_ON_START`).
 - Кабинет учителя (`/teacher/*`): списки задач и учеников, агрегаты прогресса,
   импорт файла; доступ teacher/admin.
+- Классы (`/classrooms/*`): участники по `join_code`, назначения с дедлайнами,
+  матрица «ученик × задача» и `/me/assignments`.
 
 ## 6.1 Frontend
 
@@ -154,7 +156,9 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 | `code_executions` | история запусков кода |
 | `tasks` / `user_task_progress` | задачи и прогресс |
 | `task_versions` | история правок задач |
-| `alembic_version` | миграции (001 → 006) |
+| `classrooms` / `classroom_members` | классы и участники |
+| `assignments` | назначения задач классам |
+| `alembic_version` | миграции (001 → 007) |
 
 Миграции: `backend/alembic/versions/`. Перед коммитом —
 `alembic upgrade head && alembic check`.

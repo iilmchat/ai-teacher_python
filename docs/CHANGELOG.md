@@ -10,6 +10,10 @@
 ## [Unreleased]
 
 ### Добавлено
+- Классы: `classrooms`, `classroom_members`, `assignments` (миграция 007);
+  создание, вступление по коду, исключение участника
+- Назначения задач классу с дедлайнами, `/me/assignments`, матрица прогресса
+  класса; UI `/classrooms`, `/classrooms/:id`, `/assignments`
 - Кабинет учителя: `/teacher/tasks` (CRUD, тест-кейсы, импорт с предпросмотром)
   и `/teacher/students` (агрегаты и прогресс по задачам)
 - API учителя: `/teacher/tasks`, `/teacher/students`,
