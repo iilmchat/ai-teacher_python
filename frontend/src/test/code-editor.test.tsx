@@ -17,17 +17,17 @@ const RESULT: ExecutionResult = {
 };
 
 describe('CodeEditor', () => {
-  it('показывает начальный код', () => {
+  it('показывает начальный код', async () => {
     render(<CodeEditor value="print(1)" onChange={vi.fn()} />);
 
-    expect(screen.getByTestId('monaco-mock')).toHaveValue('print(1)');
+    expect(await screen.findByTestId('monaco-mock')).toHaveValue('print(1)');
   });
 
   it('сообщает об изменениях', async () => {
     const onChange = vi.fn();
     render(<CodeEditor value="" onChange={onChange} />);
 
-    await userEvent.type(screen.getByTestId('monaco-mock'), 'x');
+    await userEvent.type(await screen.findByTestId('monaco-mock'), 'x');
 
     expect(onChange).toHaveBeenCalled();
   });

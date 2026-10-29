@@ -116,7 +116,8 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
                                     max_output_chars, max_concurrency, ...}
 ```
 
-Ограничения: Monaco грузится с CDN (KI-013, только фронтенд).
+Ограничения снято: Monaco работает офлайн, ассеты локальные (S19-001, KI-013
+закрыт).
 
 ## 6. Задачи и прогресс
 
@@ -132,6 +133,17 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 - Контент: импорт/экспорт JSON/YAML (`task_import`), генерация через LLM с
   прогоном эталона в песочнице (`task_generation`), seed при старте
   (`seed_service`, `SEED_ON_START`).
+- Кабинет учителя (`/teacher/*`): списки задач и учеников, агрегаты прогресса,
+  импорт файла; доступ teacher/admin.
+
+## 6.1 Frontend
+
+- React 19 + Vite; все страницы — `React.lazy` (route-level code splitting).
+- Entry ≤ 80 kB gzip, vendor-чанки `react`/`i18n`, Monaco — отдельный чанк.
+- Monaco: AMD-ассеты `min/vs` копируются в `public/monaco/vs` (prebuild),
+  `MonacoEditor` грузится lazy, worker — с собственного origin; `pnpm
+  test:offline` проверяет отсутствие CDN в бандле.
+- `TeacherRoute` и `AdminRoute` закрывают разделы по роли.
 
 ## 7. Данные
 

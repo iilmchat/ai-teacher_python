@@ -252,3 +252,71 @@ export interface AnalyticsResponse {
   };
   generated_at: string;
 }
+
+// --- Teacher Console (S15) ---------------------------------------------
+
+export interface TeacherStudent {
+  id: string;
+  email: string;
+  username: string;
+  level: UserLevel;
+  completed_tasks: number;
+  attempts: number;
+  last_active: string;
+}
+
+export interface TeacherStudentList {
+  total: number;
+  items: TeacherStudent[];
+}
+
+export interface TeacherProgressItem {
+  task_id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  status: TaskStatus;
+  attempts: number;
+  completed_at: string | null;
+}
+
+export interface TeacherStudentDetail {
+  student: TeacherStudent;
+  total_tasks: number;
+  completed: number;
+  in_progress: number;
+  completion_rate: number;
+  items: TeacherProgressItem[];
+}
+
+export interface TeacherTaskItem {
+  id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  category: string;
+  tags: string[];
+  test_cases_count: number;
+  hints_count: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TaskAdminDetail extends TaskDetail {
+  test_cases: { input: string; expected_output: string; description: string | null }[];
+  is_active: boolean;
+}
+
+export interface TeacherTaskList {
+  total: number;
+  items: TeacherTaskItem[];
+}
+
+export interface TaskImportPreview {
+  tasks: number;
+  errors: { index: number; title?: string | null; message: string }[];
+}
+
+export interface TaskImportReport {
+  created: number;
+  skipped: number;
+  errors: { index: number; title?: string | null; message: string }[];
+}

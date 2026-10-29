@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import websocket
-from app.api.v1 import admin, auth, chat, code, tasks, users
+from app.api.v1 import admin, auth, chat, code, tasks, teacher, users
 from app.config import settings
 from app.core.rate_limiter import RateLimitMiddleware
 from app.db.database import async_session_factory
@@ -100,6 +100,7 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(code.router, prefix="/api/v1")
 app.include_router(tasks.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(teacher.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 

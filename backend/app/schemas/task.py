@@ -218,6 +218,19 @@ class TaskImportError(BaseModel):
     message: str
 
 
+class TaskImportContent(BaseModel):
+    """Текст файла для предпросмотра импорта"""
+
+    content: str = Field(..., min_length=1, max_length=2_000_000)
+
+
+class TaskImportPreview(BaseModel):
+    """Предпросмотр файла: сколько задач валидны, где ошибки"""
+
+    tasks: int
+    errors: list[TaskImportError] = Field(default_factory=list)
+
+
 class TaskImportResponse(BaseModel):
     """Отчёт импорта: созданные, пропущенные, ошибки"""
 

@@ -3,7 +3,7 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.1.0 (выпущена)  
-**Текущий спринт:** спринт 14 завершён; следующий — спринт 15 (Teacher Console) по [TODO_V0.2.md](../TODO_V0.2.md)
+**Текущий спринт:** спринт 15 завершён; 19 — частично (S19-001/002); следующий — спринт 16 (Classrooms & Assignments)
 
 ---
 
@@ -430,11 +430,11 @@
 | 12 | LLMOps | KI-008 (закрыт в 13) | ✅ |
 | 13 | Sandbox Hardening | KI-009 | ✅ |
 | 14 | Tasks v2 | KI-010 | ✅ |
-| 15 | Teacher Console | — | следующий |
-| 16 | Classrooms & Assignments | — | — |
+| 15 | Teacher Console | — | ✅ |
+| 16 | Classrooms & Assignments | — | следующий |
 | 17 | Engagement | — | — |
 | 18 | UX, A11y & Design System | — | — |
-| 19 | Performance & Scale | KI-013 | — |
+| 19 | Performance & Scale | KI-013 | ⚠️ S19-001/002 |
 | 20 | Security Audit & Release | — | — |
 
 Порядок обязателен: спринты 11–13 закрывают технический долг, только затем
@@ -652,6 +652,68 @@
 
 ### Следующие шаги
 - Спринт 15: Teacher Console (UI управления задачами)
+
+---
+
+## Спринт 15: Teacher Console
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён
+
+### Задачи
+- [x] S15-001: Страница управления задачами
+- [x] S15-002: Форма задачи с конструктором тест-кейсов
+- [x] S15-003: Импорт задач в UI
+- [x] S15-004: Прогресс учеников для учителя
+- [x] S15-005: Тесты и документация
+
+### Что сделано
+- **API учителя:** `GET /teacher/tasks` (включая неактивные),
+  `GET /teacher/tasks/{id}`, `GET /teacher/students` (агрегаты),
+  `GET /teacher/students/{id}/progress`; доступ teacher/admin, ученик — 403
+- **UI:** `/teacher/tasks` — таблица, создание/правка, деактивация, импорт
+  файла с предпросмотром; `/teacher/students` — таблица учеников и карточка
+  прогресса; `TeacherRoute`, ссылка «Кабинет» в навигации
+- **Импорт:** `POST /tasks/import/preview` и `/tasks/import/file` (multipart)
+- **Тесты:** 6 backend + 6 frontend (71 всего)
+- **Документация:** USER_GUIDE, SPEC, ARCHITECTURE, MANUAL_TESTING_GUIDE
+
+### Что не сделано
+- Кнопка «прогнать эталон» в форме — проверка эталона есть в генерации (S14-003)
+
+### Метрики
+- Backend: **256 passed** (+1 skip), ruff/mypy 0, покрытие **82%**
+- Frontend: **71 passed**, typecheck/lint 0, entry 76.3 kB gzip
+- Закрыто KI: нет (KI-013 — в S19)
+
+### Проблемы
+- CI не стартовал (KI-014, биллинг) — мерж по временному разрешению
+
+### Следующие шаги
+- Спринт 16: Classrooms & Assignments
+
+---
+
+## Спринт 19: Performance & Scale — ⚠️ частично (S19-001/002)
+
+**Период:** 2026-10-29  
+**Статус:** ⚠️ S19-001/002 выполнены; S19-003…006 отложены после S16
+
+### Что сделано
+- **Monaco локально (KI-013):** `monaco-editor` + AMD-ассеты в `public/monaco/vs`
+  (копируются prebuild), `MonacoEditor` — lazy-чанк, worker с своего origin;
+  `pnpm test:offline` проверяет отсутствие CDN в бандле
+- **Code splitting:** все страницы через `React.lazy`; entry **76.3 kB gzip**
+  (≤80), react 15.3 + i18n 18.4, Monaco отдельным чанком
+- Frontend: 71 unit, build 0, offline-check — passed
+
+### Отложено
+- S19-003 Redis-кэш, S19-004 оптимизация запросов, S19-005 pgvector-поиск,
+  S19-006 нагрузочный тест — после появления классов (S16), иначе нечего
+  кэшировать и оптимизировать
+
+### Закрыто KI
+- **KI-013**
 
 ---
 

@@ -3,8 +3,8 @@ import { cleanup } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, vi } from 'vitest';
 
-// Monaco в jsdom не работает: подменяем редактор обычной textarea
-vi.mock('@monaco-editor/react', () => ({
+// Monaco загружается lazy-чанком: подменяем его до импорта страницы
+vi.mock('@/components/code-editor/MonacoEditor', () => ({
   default: ({
     value,
     onChange,

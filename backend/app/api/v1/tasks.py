@@ -8,13 +8,14 @@ Task API: список задач, проверка решений, прогре
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.executor import SandboxedExecutor
 from app.core.security import get_current_active_user, require_role
 from app.db.database import get_db
+from app.errors import ValidationError
 from app.models.task import Task, TaskDifficulty
 from app.models.user import User, UserRole
 from app.schemas.task import (
@@ -28,6 +29,8 @@ from app.schemas.task import (
     TaskDetail,
     TaskGenerateRequest,
     TaskGenerateResponse,
+    TaskImportContent,
+    TaskImportPreview,
     TaskImportRequest,
     TaskImportResponse,
     TaskListItem,
@@ -38,7 +41,13 @@ from app.schemas.task import (
 )
 from app.services.llm import LLMProvider, create_llm_provider
 from app.services.task_generation import generate_tasks
-from app.services.task_import import export_tasks, export_to_yaml, import_tasks
+from app.services.task_import import (
+    export_tasks,
+    export_to_yaml,
+    import_tasks,
+    parse_task_payload,
+    preview_import,
+)
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -128,6 +137,37 @@ async def import_tasks_endpoint(
 ) -> TaskImportResponse:
     """Импорт задач из JSON/YAML-представления (S14-001)"""
     return await import_tasks(db, payload.tasks, author)
+
+
+@router.post("/import/preview", response_model=TaskImportPreview)
+async def preview_import_endpoint(
+    payload: TaskImportContent,
+    _: TeacherUser,
+) -> TaskImportPreview:
+    """Предпросмотр файла перед импортом: задачи и ошибки (S15-003)"""
+    try:
+        return preview_import(payload.content)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
+
+@router.post("/import/file", response_model=TaskImportResponse)
+async def import_tasks_file(
+    file: UploadFile,
+    author: TeacherUser,
+    db: DbSession,
+) -> TaskImportResponse:
+    """Импорт задач из загруженного JSON/YAML-файла (S15-003)"""
+    raw = await file.read()
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValidationError("Файл должен быть в кодировке UTF-8") from exc
+    try:
+        items = parse_task_payload(text)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    return await import_tasks(db, items, author)
 
 
 def get_llm_provider() -> LLMProvider:
