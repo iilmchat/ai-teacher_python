@@ -28,10 +28,10 @@ class LMStudioProvider(LLMProvider):
     def __init__(
         self,
         base_url: str | None = None,
-        model: str = "local-model",
+        model: str | None = None,
     ) -> None:
         # LM Studio не проверяет ключ, но OpenAI-клиент требует непустое значение
-        self.model = model
+        self.model = model or settings.lm_studio_model
         self._base_url = base_url or settings.lm_studio_url
         self._client = AsyncOpenAI(
             api_key="lm-studio",

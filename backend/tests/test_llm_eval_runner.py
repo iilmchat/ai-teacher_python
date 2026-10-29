@@ -35,9 +35,12 @@ async def test_run_eval_writes_all_answers_and_summary(tmp_path: Path) -> None:
 
 
 async def test_run_eval_records_prompt_version(tmp_path: Path) -> None:
-    results = await run_eval(EchoProvider(), tmp_path)
+    from app.services.llm.prompt_builder import prompt_version
 
-    assert {result.prompt_version for result in results} == {1}
+    results = await run_eval(EchoProvider(), tmp_path)
+    expected = {prompt_version(level) for level in LEVELS}
+
+    assert {result.prompt_version for result in results} == expected
     assert all(result.answer.strip() for result in results)
 
 

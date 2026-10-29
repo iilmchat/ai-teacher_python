@@ -113,6 +113,7 @@ async def test_health_endpoint_reports_not_configured_without_key(
 ) -> None:
     """Без ключа статус — not_configured, а не ok (урок из chess-проекта)"""
     monkeypatch.setattr(settings, "llm_provider", "deepseek")
+    monkeypatch.setattr(settings, "llm_fallback_provider", "")
     monkeypatch.setattr(settings, "deepseek_api_key", "change_me_api_key")
 
     response = await client.get("/api/v1/health")
