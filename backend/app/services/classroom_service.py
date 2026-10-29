@@ -190,6 +190,27 @@ class ClassroomService:
         self.db.add(assignment)
         await self.db.commit()
         await self.db.refresh(assignment)
+
+        members = await self.get_members(classroom_id)
+        student_ids = [
+            member.user_id
+            for member in members
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        if student_ids:
+            from app.services.engagement_service import (
+                create_assignment_notifications,
+            )
+
+            await create_assignment_notifications(
+                self.db,
+                student_ids,
+                classroom_id=classroom.id,
+                classroom_name=classroom.name,
+                assignment_id=assignment.id,
+                task_title=task.title,
+                due_at=due_at,
+            )
         return assignment
 
     async def list_assignments(

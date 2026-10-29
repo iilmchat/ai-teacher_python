@@ -15,13 +15,16 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 import app.models  # noqa: F401  # регистрирует все модели в Base.metadata
 from app.config import settings
+from app.data.achievements import ACHIEVEMENTS
 from app.db.database import Base, get_db
 from app.main import app
+from app.models.engagement import Achievement
 
 TEST_DB_NAME = "ai_teacher_test"
 
@@ -70,6 +73,12 @@ async def test_engine():
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
+        # create_all не выполняет seed из миграции 008 — добавляем справочник
+        await conn.execute(
+            pg_insert(Achievement)
+            .values(ACHIEVEMENTS)
+            .on_conflict_do_nothing(index_elements=["code"])
+        )
 
     yield engine
 
