@@ -5,10 +5,10 @@ Task API: список задач, проверка решений, прогре
 `/{task_id}`, иначе FastAPI пытается разобрать слово как UUID.
 """
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -18,6 +18,7 @@ from app.db.database import get_db
 from app.models.task import Task, TaskDifficulty
 from app.models.user import User, UserRole
 from app.schemas.task import (
+    CategoriesResponse,
     HintResponse,
     ProgressSummary,
     SubmitRequest,
@@ -25,11 +26,19 @@ from app.schemas.task import (
     TaskAdminDetail,
     TaskCreate,
     TaskDetail,
+    TaskGenerateRequest,
+    TaskGenerateResponse,
+    TaskImportRequest,
+    TaskImportResponse,
     TaskListItem,
     TaskStatsResponse,
     TaskUpdate,
+    TaskVersionList,
     TestCase,
 )
+from app.services.llm import LLMProvider, create_llm_provider
+from app.services.task_generation import generate_tasks
+from app.services.task_import import export_tasks, export_to_yaml, import_tasks
 from app.services.task_service import TaskService
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -63,6 +72,8 @@ async def list_tasks(
     service: TaskServiceDep,
     difficulty: TaskDifficulty | None = None,
     category: str | None = None,
+    tag: str | None = None,
+    q: str | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[TaskListItem]:
@@ -71,6 +82,8 @@ async def list_tasks(
         current_user,
         difficulty=difficulty,
         category=category,
+        tag=tag,
+        search=q,
         skip=skip,
         limit=limit,
     )
@@ -82,6 +95,71 @@ async def get_progress(
 ) -> ProgressSummary:
     """Сводка прогресса ученика"""
     return await service.get_progress(current_user)
+
+
+@router.get("/categories", response_model=CategoriesResponse)
+async def list_categories(
+    _: CurrentUser, service: TaskServiceDep
+) -> CategoriesResponse:
+    """Категории активных задач (S14-004)"""
+    return CategoriesResponse(categories=await service.list_categories())
+
+
+@router.get("/export")
+async def export_tasks_endpoint(
+    _: TeacherUser,
+    service: TaskServiceDep,
+    format: Literal["json", "yaml"] = "json",
+) -> Any:
+    """Выгрузка всех активных задач в JSON или YAML (S14-001)"""
+    tasks = await service.export_active()
+    if format == "yaml":
+        return Response(
+            content=export_to_yaml(tasks), media_type="application/yaml"
+        )
+    return export_tasks(tasks)
+
+
+@router.post("/import", response_model=TaskImportResponse)
+async def import_tasks_endpoint(
+    payload: TaskImportRequest,
+    author: TeacherUser,
+    db: DbSession,
+) -> TaskImportResponse:
+    """Импорт задач из JSON/YAML-представления (S14-001)"""
+    return await import_tasks(db, payload.tasks, author)
+
+
+def get_llm_provider() -> LLMProvider:
+    """Провайдер LLM для генерации задач; переопределяется в тестах"""
+    return create_llm_provider()
+
+
+LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
+ExecutorDep = Annotated[SandboxedExecutor, Depends(get_executor)]
+
+
+@router.post("/generate", response_model=TaskGenerateResponse)
+async def generate_tasks_endpoint(
+    payload: TaskGenerateRequest,
+    author: TeacherUser,
+    service: TaskServiceDep,
+    executor: ExecutorDep,
+    provider: LLMProviderDep,
+) -> TaskGenerateResponse:
+    """Сгенерировать задачи через LLM и проверить эталон в песочнице (S14-003)"""
+    try:
+        accepted, rejected, usage = await generate_tasks(provider, payload, executor)
+    finally:
+        await provider.close()
+
+    created = await service.create_many(accepted, author)
+    return TaskGenerateResponse(
+        created=[_admin_detail(task) for task in created],
+        rejected=rejected,
+        prompt_tokens=usage.prompt_tokens if usage else 0,
+        completion_tokens=usage.completion_tokens if usage else 0,
+    )
 
 
 @router.get("/stats", response_model=TaskStatsResponse)
@@ -107,6 +185,28 @@ async def get_hint(
     """Подсказка по номеру (с нуля)"""
     hint, total = await service.get_hint(task_id, index)
     return HintResponse(index=index, hint=hint, total=total)
+
+
+@router.get("/{task_id}/versions", response_model=TaskVersionList)
+async def list_task_versions(
+    task_id: UUID, _: TeacherUser, service: TaskServiceDep
+) -> TaskVersionList:
+    """История версий задачи (S14-005)"""
+    return TaskVersionList(items=await service.list_versions(task_id))
+
+
+@router.post(
+    "/{task_id}/versions/{version}/restore", response_model=TaskAdminDetail
+)
+async def restore_task_version(
+    task_id: UUID,
+    version: int,
+    author: TeacherUser,
+    service: TaskServiceDep,
+) -> TaskAdminDetail:
+    """Откатить задачу к выбранной версии"""
+    task = await service.restore_version(task_id, version, author)
+    return _admin_detail(task)
 
 
 @router.post("/{task_id}/submit", response_model=SubmitResponse)
@@ -138,11 +238,11 @@ async def create_task(
 async def update_task(
     task_id: UUID,
     payload: TaskUpdate,
-    _: TeacherUser,
+    author: TeacherUser,
     service: TaskServiceDep,
 ) -> TaskAdminDetail:
-    """Обновить задачу"""
-    task = await service.update_task(task_id, payload)
+    """Обновить задачу (старое состояние — в историю версий)"""
+    task = await service.update_task(task_id, payload, author)
     return _admin_detail(task)
 
 
@@ -166,6 +266,7 @@ def _admin_detail(task: Task) -> TaskAdminDetail:
         description=task.description,
         difficulty=task.difficulty,
         category=task.category,
+        tags=list(task.tags or []),
         hints=list(task.hints or []),
         solution_template=task.solution_template,
         test_cases_count=len(task.test_cases or []),

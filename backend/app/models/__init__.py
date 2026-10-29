@@ -11,6 +11,7 @@ from app.models.task import (
     Task,
     TaskDifficulty,
     TaskStatus,
+    TaskVersion,
     UserTaskProgress,
 )
 from app.models.user import User, UserLevel, UserRole
@@ -23,6 +24,7 @@ __all__ = [
     "Task",
     "TaskDifficulty",
     "TaskStatus",
+    "TaskVersion",
     "User",
     "UserLevel",
     "UserRole",

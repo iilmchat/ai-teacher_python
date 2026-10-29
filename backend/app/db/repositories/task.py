@@ -4,11 +4,11 @@
 
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.base import BaseRepository
-from app.models.task import Task, TaskDifficulty, UserTaskProgress
+from app.models.task import Task, TaskDifficulty, TaskVersion, UserTaskProgress
 
 
 class TaskRepository(BaseRepository[Task]):
@@ -22,11 +22,13 @@ class TaskRepository(BaseRepository[Task]):
         *,
         difficulty: TaskDifficulty | None = None,
         category: str | None = None,
+        tag: str | None = None,
+        search: str | None = None,
         only_active: bool = True,
         skip: int = 0,
         limit: int = 100,
     ) -> list[Task]:
-        """Список задач с фильтрами"""
+        """Список задач с фильтрами (теги — JSONB, поиск — ILIKE)"""
         query = select(Task)
         if only_active:
             query = query.where(Task.is_active.is_(True))
@@ -34,9 +36,29 @@ class TaskRepository(BaseRepository[Task]):
             query = query.where(Task.difficulty == difficulty)
         if category is not None:
             query = query.where(Task.category == category)
+        if tag:
+            query = query.where(Task.tags.contains([tag.strip().lower()]))
+        if search:
+            pattern = f"%{search.strip().lower()}%"
+            query = query.where(
+                or_(
+                    func.lower(Task.title).like(pattern),
+                    func.lower(Task.description).like(pattern),
+                )
+            )
         query = query.order_by(Task.created_at.asc()).offset(skip).limit(limit)
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def list_categories(self) -> list[str]:
+        """Уникальные категории активных задач"""
+        result = await self.session.execute(
+            select(Task.category)
+            .where(Task.is_active.is_(True))
+            .distinct()
+            .order_by(Task.category)
+        )
+        return [str(row[0]) for row in result.all()]
 
     async def count_by_difficulty(self) -> dict[str, int]:
         """Количество задач по сложностям"""
@@ -104,3 +126,40 @@ class ProgressRepository(BaseRepository[UserTaskProgress]):
             select(UserTaskProgress.id).where(UserTaskProgress.task_id == task_id).limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+
+class TaskVersionRepository(BaseRepository[TaskVersion]):
+    """История версий задач (S14-005)"""
+
+    def __init__(self, session: AsyncSession):
+        super().__init__(TaskVersion, session)
+
+    async def list_for_task(self, task_id: UUID) -> list[TaskVersion]:
+        """Версии задачи (новые сверху)"""
+        result = await self.session.execute(
+            select(TaskVersion)
+            .where(TaskVersion.task_id == task_id)
+            .order_by(TaskVersion.version.desc())
+        )
+        return list(result.scalars().all())
+
+    async def latest_version(self, task_id: UUID) -> int:
+        """Номер последней версии (0, если истории нет)"""
+        result = await self.session.execute(
+            select(func.max(TaskVersion.version)).where(
+                TaskVersion.task_id == task_id
+            )
+        )
+        return int(result.scalar_one() or 0)
+
+    async def get_by_version(
+        self, task_id: UUID, version: int
+    ) -> TaskVersion | None:
+        """Конкретная версия задачи"""
+        result = await self.session.execute(
+            select(TaskVersion).where(
+                TaskVersion.task_id == task_id,
+                TaskVersion.version == version,
+            )
+        )
+        return result.scalar_one_or_none()

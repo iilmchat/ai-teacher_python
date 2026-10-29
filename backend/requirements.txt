@@ -35,6 +35,9 @@ restrictedpython==7.4
 openai==1.55.3
 httpx==0.28.1
 
+# Task import/export (S14-001)
+PyYAML==6.0.2
+
 # Logging
 structlog==24.4.0
 

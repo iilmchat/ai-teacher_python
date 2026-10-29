@@ -108,6 +108,35 @@
 
 Роль выдаёт только администратор — при регистрации всегда создаётся ученик.
 
+### 8.1. Импорт и генерация задач (для преподавателя)
+
+**Импорт из файла.** Формат — JSON или YAML: массив задач или `{tasks: [...]}`.
+Обязательные поля: `title`, `description`, `test_cases`; опционально —
+`difficulty`, `category`, `tags`, `hints`, `solution_template`.
+
+```bash
+cd backend
+python scripts/import_tasks.py tasks.yaml
+```
+
+Отчёт: `{created, skipped, errors}`. Дубликаты по заголовку пропускаются,
+битая запись не мешает импорту остальных. Через API:
+`POST /api/v1/tasks/import` (teacher/admin), выгрузка —
+`GET /api/v1/tasks/export?format=json|yaml`.
+
+**Генерация через LLM.** `POST /api/v1/tasks/generate` с
+`{topic, difficulty, count ≤ 5}`: модель возвращает задачи с тест-кейсами,
+каждая проверяется прогоном эталонного решения в песочнице. Невалидные
+попадают в `rejected` и не сохраняются.
+
+**Теги и поиск.** В каталоге: `GET /api/v1/tasks?tag=loops&q=сумма`,
+категории — `GET /api/v1/tasks/categories`.
+
+**История версий.** Перед каждой правкой сохраняется снимок задачи;
+`GET /api/v1/tasks/{id}/versions` и
+`POST /api/v1/tasks/{id}/versions/{v}/restore` (teacher/admin).
+UI для всего этого — в спринте 15.
+
 ---
 
 ## 9. Частые вопросы

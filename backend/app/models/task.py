@@ -52,6 +52,7 @@ class Task(Base):
     __table_args__ = (
         Index("idx_tasks_difficulty", "difficulty"),
         Index("idx_tasks_category", "category"),
+        Index("idx_tasks_tags", "tags", postgresql_using="gin"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -63,6 +64,8 @@ class Task(Base):
         default=TaskDifficulty.EASY,
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False, default="general")
+    #: Теги для поиска и группировки (S14-004)
+    tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     # [{"input": "...", "expected_output": "...", "description": "..."}]
     test_cases: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     hints: Mapped[list[str]] = mapped_column(JSONB, default=list)
@@ -78,9 +81,45 @@ class Task(Base):
     progress: Mapped[list["UserTaskProgress"]] = relationship(
         back_populates="task", cascade="all, delete-orphan"
     )
+    versions: Mapped[list["TaskVersion"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Task {self.title} ({self.difficulty.value})>"
+
+
+class TaskVersion(Base):
+    """Снимок задачи перед правкой (S14-005).
+
+    Правка тест-кейсов «ломает» уже сданные решения, поэтому история версий
+    позволяет посмотреть, что было, и откатиться.
+    """
+
+    __tablename__ = "task_versions"
+    __table_args__ = (
+        UniqueConstraint("task_id", "version", name="uq_task_version"),
+        Index("idx_task_versions_task", "task_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Полный снимок полей задачи на момент версии
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    created_by: Mapped[UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    task: Mapped["Task"] = relationship(back_populates="versions")
+
+    def __repr__(self) -> str:
+        return f"<TaskVersion task={self.task_id} v{self.version}>"
 
 
 class UserTaskProgress(Base):

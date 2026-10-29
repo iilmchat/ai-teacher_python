@@ -11,6 +11,21 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.task import TaskDifficulty, TaskStatus
 
 MAX_TEST_CASES = 50
+MAX_TAGS = 10
+
+
+def _normalize_tags(value: list[str] | None) -> list[str] | None:
+    """Теги — в нижний регистр, без дублей и пустых значений"""
+    if value is None:
+        return None
+    result: list[str] = []
+    for tag in value:
+        normalized = tag.strip().lower()
+        if normalized and normalized not in result:
+            result.append(normalized[:30])
+    if len(result) > MAX_TAGS:
+        raise ValueError(f"Не больше {MAX_TAGS} тегов")
+    return result
 
 
 class TestCase(BaseModel):
@@ -31,6 +46,7 @@ class TaskCreate(BaseModel):
     test_cases: list[TestCase] = Field(..., min_length=1, max_length=MAX_TEST_CASES)
     hints: list[str] = Field(default_factory=list, max_length=20)
     solution_template: str | None = None
+    tags: list[str] = Field(default_factory=list, max_length=MAX_TAGS)
 
     @field_validator("test_cases")
     @classmethod
@@ -38,6 +54,11 @@ class TaskCreate(BaseModel):
         if not value:
             raise ValueError("Нужен хотя бы один тест-кейс")
         return value
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        return _normalize_tags(value) or []
 
 
 class TaskUpdate(BaseModel):
@@ -50,7 +71,13 @@ class TaskUpdate(BaseModel):
     test_cases: list[TestCase] | None = Field(None, max_length=MAX_TEST_CASES)
     hints: list[str] | None = Field(None, max_length=20)
     solution_template: str | None = None
+    tags: list[str] | None = Field(None, max_length=MAX_TAGS)
     is_active: bool | None = None
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str] | None) -> list[str] | None:
+        return _normalize_tags(value)
 
 
 class TaskListItem(BaseModel):
@@ -62,6 +89,7 @@ class TaskListItem(BaseModel):
     category: str
     hints_count: int
     status: TaskStatus
+    tags: list[str] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -79,6 +107,7 @@ class TaskDetail(BaseModel):
     test_cases_count: int
     status: TaskStatus
     attempts: int
+    tags: list[str] = Field(default_factory=list)
 
 
 class TaskAdminDetail(TaskDetail):
@@ -170,3 +199,83 @@ class TestRunOutcome(BaseModel):
     results: list[TestCaseResult]
     all_violations: list[str] = Field(default_factory=list)
     details: dict[str, Any] = Field(default_factory=dict)
+
+
+# --- Импорт, экспорт, генерация, версии (S14) ---------------------------
+
+
+class TaskImportRequest(BaseModel):
+    """Импорт задач: массив объектов в формате TaskCreate"""
+
+    tasks: list[dict[str, Any]] = Field(..., min_length=1, max_length=100)
+
+
+class TaskImportError(BaseModel):
+    """Ошибка одной записи импорта"""
+
+    index: int
+    title: str | None = None
+    message: str
+
+
+class TaskImportResponse(BaseModel):
+    """Отчёт импорта: созданные, пропущенные, ошибки"""
+
+    created: int
+    skipped: int
+    errors: list[TaskImportError] = Field(default_factory=list)
+
+
+class TaskExportItem(TaskCreate):
+    """Задача в выгрузке (полный формат для повторного импорта)"""
+
+    id: UUID
+
+
+class TaskGenerateRequest(BaseModel):
+    """Генерация задач через LLM"""
+
+    topic: str = Field(..., min_length=3, max_length=200)
+    difficulty: TaskDifficulty = TaskDifficulty.EASY
+    count: int = Field(default=1, ge=1, le=5)
+
+
+class TaskGenerateError(BaseModel):
+    """Причина, по которой сгенерированная задача не сохранена"""
+
+    title: str | None = None
+    reason: str
+
+
+class TaskGenerateResponse(BaseModel):
+    """Результат генерации: сохранённые задачи и отказы"""
+
+    created: list[TaskAdminDetail] = Field(default_factory=list)
+    rejected: list[TaskGenerateError] = Field(default_factory=list)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+
+class TaskVersionItem(BaseModel):
+    """Версия задачи в истории"""
+
+    id: UUID
+    version: int
+    title: str
+    test_cases_count: int
+    solution_template: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TaskVersionList(BaseModel):
+    """История версий задачи"""
+
+    items: list[TaskVersionItem]
+
+
+class CategoriesResponse(BaseModel):
+    """Список категорий задач"""
+
+    categories: list[str]

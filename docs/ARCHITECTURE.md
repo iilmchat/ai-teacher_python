@@ -120,13 +120,18 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 
 ## 6. Задачи и прогресс
 
-- `Task` — описание, сложность, категория, `test_cases` (JSONB), `hints`.
+- `Task` — описание, сложность, категория, `tags`, `test_cases` (JSONB), `hints`.
+- `TaskVersion` — снимок задачи перед правкой (`snapshot` JSONB), уникален по
+  `(task_id, version)`; откат сохраняет текущее состояние как новую версию.
 - `UserTaskProgress` — уникальная пара `(user_id, task_id)`, `attempts`,
   `status` (`not_started → in_progress → completed`), `best_solution`.
 - Submit: каждый кейс выполняется в песочнице с подставленным `stdin`,
   вывод сравнивается после нормализации (`\r\n`, хвостовые пробелы).
 - Прогресс считается по всем активным задачам: `completion_rate`, разбивка по
   сложности.
+- Контент: импорт/экспорт JSON/YAML (`task_import`), генерация через LLM с
+  прогоном эталона в песочнице (`task_generation`), seed при старте
+  (`seed_service`, `SEED_ON_START`).
 
 ## 7. Данные
 
@@ -136,7 +141,8 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 | `chat_sessions` / `chat_messages` | диалоги, `embedding` (pgvector, 1536) |
 | `code_executions` | история запусков кода |
 | `tasks` / `user_task_progress` | задачи и прогресс |
-| `alembic_version` | миграции (001 → 003) |
+| `task_versions` | история правок задач |
+| `alembic_version` | миграции (001 → 006) |
 
 Миграции: `backend/alembic/versions/`. Перед коммитом —
 `alembic upgrade head && alembic check`.

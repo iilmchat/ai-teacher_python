@@ -14,10 +14,12 @@ from app.api import websocket
 from app.api.v1 import admin, auth, chat, code, tasks, users
 from app.config import settings
 from app.core.rate_limiter import RateLimitMiddleware
+from app.db.database import async_session_factory
 from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
 from app.services.llm import LLMError, LLMUnavailableError, create_llm_provider
 from app.services.llm.health import check_provider_health
+from app.services.seed_service import seed_tasks
 
 logger = structlog.get_logger(__name__)
 
@@ -33,6 +35,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         redis_available=redis_ok,
         rate_limit_enabled=settings.rate_limit_enabled,
     )
+
+    if settings.seed_on_start:
+        try:
+            async with async_session_factory() as session:
+                created = await seed_tasks(session)
+            logger.info("seed_completed", created=created)
+        except Exception as exc:  # noqa: BLE001 — seed не должен валить старт
+            logger.warning("seed_failed", error=str(exc))
+
     yield
     await close_redis()
     logger.info("app_stopped", app_name=settings.app_name)

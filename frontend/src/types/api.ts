@@ -77,6 +77,7 @@ export interface TaskListItem {
   category: string;
   hints_count: number;
   status: TaskStatus;
+  tags?: string[];
 }
 
 export interface TaskDetail {
@@ -90,6 +91,7 @@ export interface TaskDetail {
   test_cases_count: number;
   status: TaskStatus;
   attempts: number;
+  tags?: string[];
 }
 
 export interface TestCaseResult {

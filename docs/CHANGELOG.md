@@ -10,6 +10,14 @@
 ## [Unreleased]
 
 ### Добавлено
+- Импорт/экспорт задач: JSON и YAML, `POST /tasks/import`,
+  `GET /tasks/export?format=json|yaml`, CLI `scripts/import_tasks.py`
+- `SEED_ON_START=true` — идемпотентное наполнение задач при старте (KI-010)
+- Генерация задач через LLM: `POST /tasks/generate`, проверка эталонного
+  решения в песочнице, отчёт `created/rejected`
+- Теги задач (`tasks.tags`, GIN-индекс) и поиск `?tag=&q=`,
+  `GET /tasks/categories`
+- История версий задач (`task_versions`), `GET /tasks/{id}/versions` и откат
 - Живой прогон LLM_EVAL на DeepSeek: 15 ответов, оценки basic 0.99 /
   intermediate 0.93 / advanced 0.96; отчёт `docs/reports/llm-eval/2026-10-29/`
 - `LM_STUDIO_MODEL` — имя локальной модели; `qwen/qwen3-4b-2507` проверен
@@ -51,6 +59,7 @@
 - WS-сообщение `done` содержит `warnings` политики уровня
 - `/code/limits` отдаёт лимиты памяти, вывода и параллелизма; результат
   выполнения — `memory_limit_enforced` / `output_truncated`
+- Задачи: `tags` в ответах API, `q`/`tag` в каталоге, `PyYAML` в зависимостях
 
 ### Исправлено
 - Лимит памяти песочницы на Windows больше не «декоративный»: Job Object
