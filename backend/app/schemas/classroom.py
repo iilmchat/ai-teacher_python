@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 from app.models.task import TaskDifficulty, TaskStatus
 
@@ -30,11 +30,10 @@ class ClassroomList(BaseModel):
 
 
 class ClassroomMemberItem(BaseModel):
-    """Участник класса"""
+    """Участник класса (email одноклассникам не раскрываем)"""
 
     user_id: UUID
     username: str
-    email: EmailStr
     role: str
     joined_at: datetime
 
