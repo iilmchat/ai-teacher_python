@@ -148,6 +148,10 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 - `TeacherRoute` и `AdminRoute` закрывают разделы по роли.
 - Достижения, streak и уведомления: `engagement_service`; уведомления создаются
   на назначение, достижение и лениво на дедлайн ≤72 ч.
+- UI-токены и тёмная тема: `index.css` (`--surface`, `--border`, `--app-fg`),
+  класс `dark` на `<html>`, состояние в `store/theme.ts`, Monaco `vs`/`vs-dark`.
+- Дизайн-система: `components/ui/*` (Modal, Toast, Tabs, Table, Badge,
+  Skeleton); `/dev/ui` собирается только в dev (`import.meta.env.DEV`).
 
 ## 7. Данные
 
