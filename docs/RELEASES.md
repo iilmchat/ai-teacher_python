@@ -359,6 +359,58 @@
 
 ---
 
+## Спринт 10: Admin & Polish — релиз v0.1.0
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён
+
+### Задачи
+- [x] S10-001: Admin Dashboard (сводка, пользователи, задачи)
+- [x] S10-002: Управление пользователями (поиск, роли)
+- [~] S10-003: Задачи в админке (просмотр; CRUD — через teacher-эндпоинты)
+- [x] S10-004: Admin API (users, tasks, analytics)
+- [x] S10-005: Analytics Service
+- [x] S10-006: Документация (9 новых документов + обновления)
+- [x] S10-007: Production docker-compose
+- [~] S10-008: Производительность (бандл 119 kB, индексы; splitting отложен)
+- [~] S10-009: Финальные проверки (без Playwright — KI-012)
+- [x] S10-010: Релиз v0.1.0
+
+### Что сделано
+- `app/services/analytics_service.py`: пользователи по ролям, активность 24ч/7д,
+  задачи по сложности, попытки/завершения, активность чата и песочницы
+- `app/api/v1/admin.py`: `GET/PATCH/DELETE /admin/users`, `GET /admin/tasks`,
+  `GET /admin/analytics`; защита от понижения/удаления себя
+- Frontend `/admin`: дашборд, поиск и таблица пользователей со сменой роли,
+  список задач; `AdminRoute` закрывает доступ не-админам
+- Документация: `docs/README.md`, `GETTING_STARTED.md`, `USER_GUIDE.md`,
+  `ARCHITECTURE.md`, `MANUAL_TESTING_GUIDE.md`, `ASSISTANT_LEVELS.md`,
+  `PROMPT_CURRENT.md`, `LLM_EVAL.md`, `DESIGN_ADMIN_AND_OPS.md`
+- `docker-compose.prod.yml`: БД/Redis без публикации портов, healthchecks
+- CI: pnpm 12, `--allow-build=esbuild`, шаги lint/test для фронтенда
+- 11 новых тестов админки (всего backend 137)
+
+### Проблемы
+- KI-012: нет e2e и проверки с живым backend
+- KI-013: Monaco с CDN (офлайн)
+- Блокировка пользователей не реализована (нет поля `is_active`)
+- Экспорт аналитики и графики — в планах
+
+### Метрики релиза
+- Backend: **137 passed**, ruff 0, mypy strict 0, `alembic check` чист
+- Frontend: **63 passed**, typecheck 0, lint 0, build **119 kB gzip**
+- Документация: 15 файлов в `docs/` + README, Design, TODO
+- Тег: `v0.1.0`
+
+### Следующие шаги (v0.2)
+- E2E-тесты (Playwright) и прогон в CI против compose-стека (KI-012)
+- Подключить rate limiting (KI-007)
+- Локальный Monaco bundle (KI-013)
+- Живая валидация ответов LLM по методике LLM_EVAL (KI-008)
+- Лимит памяти песочницы (KI-009)
+
+---
+
 ## Шаблон отчёта по спринту
 
 ```

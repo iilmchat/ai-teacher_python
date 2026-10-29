@@ -9,62 +9,53 @@
 
 ## [Unreleased]
 
+_Изменений пока нет._
+
+---
+
+## [0.1.0] - 2026-10-29
+
+Первый релиз: backend, frontend, админка, документация.
+
 ### Добавлено
-- Базовая структура проекта (backend, frontend, docs)
-- Документация (Design.md, TODO.md, RULES.md)
-- FastAPI-приложение с health check endpoint
-- Docker Compose (PostgreSQL 17 + pgvector, Redis)
-- CI/CD через GitHub Actions
-- Модели данных: `User`, `ChatSession`, `ChatMessage`
-- Репозитории с базовым CRUD и специализированными запросами
-- Pydantic-схемы для пользователей и чата
-- Alembic-миграция `001` (users, chat_sessions, chat_messages, VECTOR)
-- JWT-аутентификация: access (30 мин) и refresh (7 дней) токены
-- Эндпоинты `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
-  `GET/PATCH /auth/me`
-- RBAC через `require_role` и rate limiting middleware на Redis
-- LLM-слой: контракт `LLMProvider`, провайдеры DeepSeek и LM Studio,
-  фабрика выбора по `LLM_PROVIDER`
-- Промпты трёх уровней в файлах (`prompts/basic|intermediate|advanced.txt`)
-- `ChatService`: сессии, история, контекст (20 сообщений), стриминг ответа
-- Chat API: `POST/GET /chat/sessions`, `GET/DELETE /chat/sessions/{id}`,
-  `POST /chat/sessions/{id}/messages`
-- WebSocket `/api/v1/chat/ws/{session_id}` со стримингом `start/token/done/error`
-- Управление уровнями: `PATCH /users/me/level`, `GET /users/me/level`,
-  `GET /chat/levels`, `GET /users/levels`
-- Наследование уровня сессией от профиля + fallback на базовый уровень
-- Админские эндпоинты профиля: `GET /users/{id}`, `PATCH /users/{id}/role`
+
+**Инфраструктура**
+- Структура проекта (`backend/`, `frontend/`, `docs/`), `Docker Compose`, CI GitHub Actions
+- Документация: `Design.md`, `TODO.md`, `docs/RULES.md` и 15 документов в `docs/`
+
+**Backend**
+- FastAPI-приложение с health-check и структурированными логами (`structlog`)
+- Модели `User`, `ChatSession`, `ChatMessage`, `CodeExecution`, `Task`, `UserTaskProgress`
+- Alembic-миграции `001`–`003` (pgvector, JSONB, enum-типы)
+- Репозитории с CRUD и специализированными запросами; Pydantic-схемы
+- JWT-аутентификация (access 30 мин, refresh 7 дней), bcrypt, RBAC
+- Эндпоинты `/auth/*`, `/users/*`, `/chat/*`, `/code/*`, `/tasks/*`, `/admin/*`
+- LLM-слой: контракт `LLMProvider`, провайдеры DeepSeek и LM Studio, фабрика
+- Промпты трёх уровней в файлах (`basic`, `intermediate`, `advanced`)
+- Чат: сессии, история, контекст (20 сообщений), стриминг, WebSocket
+- Песочница кода: AST-проверки, RestrictedPython, белый список модулей,
+  изоляция процесса с убийством по таймауту, `stdin` для `input()`
+- Линтер: ошибки безопасности, предупреждения стиля, подсказки, метрики
+- Система задач: проверка по тест-кейсам, подсказки, прогресс, статистика
+- Аналитика для админки: пользователи по ролям, DAU, задачи, попытки, активность
 - Доменные ошибки `AppError` с единым HTTP-обработчиком
-- Песочница выполнения кода: RestrictedPython, белый список модулей,
-  выполнение в отдельном процессе с убийством по таймауту
-- AST-линтер: ошибки безопасности, предупреждения стиля, docstring-подсказки
-- Code API: `POST /code/execute`, `/code/lint`, `/code/analyze`,
-  `GET /code/history`, `/code/limits`
-- Модель `CodeExecution` и миграция `002`
-- Система задач: модели `Task`/`UserTaskProgress`, миграция `003`, seed из 6 задач
-- Проверка решений по тест-кейсам: `stdin` → `input()`, сравнение с нормализацией
-- Task API: каталог с фильтрами, карточка, подсказки, submit, CRUD для преподавателей
-- Прогресс: `GET /tasks/progress`, `GET /tasks/stats` (попытки, completion rate,
-  разбивка по сложности)
-- Тесты: 126 (health, auth, chat, prompts, levels, websocket, executor, linter,
-  code API, tasks, runner)
-- Frontend: React 19 + Vite + TypeScript strict + Tailwind 4
-- API-клиент с авто-refresh токена и типизированными ошибками
-- Zustand-стор аутентификации, страницы входа и регистрации, профиль с уровнем
-- Локализация ru/en, layout с навигацией и защищённые маршруты
-- Docker-образ фронтенда (nginx: SPA + прокси `/api` и WebSocket)
-- Тесты фронтенда: 20 (Vitest + Testing Library)
-- Чат с WebSocket-стримингом и REST-фолбэком, выбор уровня при создании сессии
-- Monaco-редактор, страница песочницы с запуском кода и линтом
-- Каталог задач с фильтрами, карточка задачи с подсказками и проверкой решения
-- Полоса прогресса и разбивка решённых задач по сложности
-- Тесты фронтенда: 60 (сторы чата и задач, компоненты, редактор)
 
-### Изменено
-- Навигация ведёт на реальные страницы вместо заглушек; неизвестный путь → `/404`
+**Frontend**
+- React 19 + Vite 6 + TypeScript strict + Tailwind 4 + ESLint/Prettier
+- API-клиент с авто-refresh токена, `ApiError`, обработка ошибок Pydantic
+- Zustand-сторы: `auth`, `chat`, `tasks`
+- Страницы: главная, вход, регистрация, профиль, чат, песочница, задачи,
+  детали задачи, админка, 404
+- Чат со стримингом (WebSocket) и REST-фолбэком; блоки кода с копированием
+- Monaco-редактор, панель вывода с результатом, ошибками, нарушениями, линтом
+- Каталог задач с фильтрами, подсказки по одной, отчёт по тест-кейсам
+- Прогресс: полоса и разбивка по сложности
+- Админка: дашборд, поиск и таблица пользователей, смена ролей, список задач
+- i18n ru/en, Docker-образ (node → nginx) с SPA-fallback и прокси `/api`+WS
 
-### Безопасность
-- Регистрация больше не принимает `role`: эскалация до admin/teacher закрыта (KI-011)
+**Тесты**
+- Backend: **137** (pytest, реальный PostgreSQL, транзакционный откат)
+- Frontend: **63** (Vitest + Testing Library)
 
 ### Изменено
 - Внешние порты вынесены в ENV: Postgres `5434`, Redis `6381` (KI-001)
@@ -72,26 +63,25 @@
 - Пароли хэшируются напрямую через `bcrypt` вместо `passlib` (KI-005)
 - Healthcheck возвращает `llm_provider`
 - `ChatSessionCreate.level` необязателен: сессия наследует уровень профиля
+- Навигация ведёт на реальные страницы; неизвестный путь → `/404`
 
 ### Исправлено
 - Enum-колонки писали имена вместо значений (`STUDENT` вместо `student`) (KI-004)
 - `server_default` для JSONB приводил к ошибке миграции
 - Конфликт имени `metadata` с `DeclarativeBase` в модели `ChatSession`
 - Дефолт `level="basic"` в запросе перебивал уровень профиля пользователя
+- `app/models/__init__.py` не импортировал модели — Alembic не видел таблиц
+- Lazy-relationship `task.progress` давал `MissingGreenlet` в async-сессии
+- `.gitignore` с `lib/` игнорировал `frontend/src/lib/**`
 
 ### Безопасность
+- Регистрация не принимает `role`: эскалация до admin/teacher закрыта (KI-011)
 - bcrypt-хэширование паролей, ограничение длины 72 байтами
-- Rate limiting: 5 запросов/мин на login, 300/мин общий лимит
 - JWT-токены разделены по типу (`access` / `refresh`)
-
----
-
-## [0.1.0] - 2026-10-29
-
-### Добавлено
-- Базовая архитектура проекта
-- Документация по разработке
-- Структура backend и frontend
+- Rate limiting реализован (5/мин на login, 300/мин общий) — не подключён (KI-007)
+- Песочница: запрет `os`/`sys`/`subprocess`/`open`/`eval`/`exec`, dunder-атрибутов
+- Чужие ресурсы (чаты, история запусков, задачи) недоступны — 403
+- Админ не может понизить или удалить сам себя
 
 ---
 

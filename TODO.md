@@ -5,8 +5,8 @@
 
 **Версия:** v0.1.0  
 **Последнее обновление:** 2026-10-29  
-**Текущий спринт:** Спринт 10 (Admin & Polish)  
-**Готово:** Спринты 1–9 (backend полностью, frontend с чатом, песочницей и задачами)
+**Текущий спринт:** завершены все 10 спринтов  
+**Готово:** Спринты 1–10 (backend, frontend, админка, документация, релиз v0.1.0)
 
 ---
 
@@ -602,85 +602,85 @@
 
 **Цель:** Создать админ-панель, финальная документация и деплой.
 
-### S10-001: Admin Dashboard
-- [ ] Создать pages/Admin/Dashboard.tsx
-- [ ] Общая статистика системы
-- [ ] Графики активности
-- [ ] **Зависит от:** S8-007
-- [ ] **Оценка:** 2 часа
+### S10-001: Admin Dashboard — ✅
+- [x] Создать pages/AdminPage.tsx (сводка + пользователи + задачи в одном экране)
+- [x] Общая статистика системы (пользователи, задачи, обучение, активность)
+- [ ] Графики активности (перенесено: числовые метрики, без графиков)
+- [x] **Зависит от:** S8-007
+- [x] **Оценка:** 2 часа
 
-### S10-002: Admin Users Management
-- [ ] Создать pages/Admin/Users.tsx
-- [ ] Список пользователей
-- [ ] Редактирование ролей
-- [ ] Блокировка пользователей
-- [ ] **Зависит от:** S10-001, S3-003
-- [ ] **Оценка:** 2 часа
+### S10-002: Admin Users Management — ✅
+- [x] Список пользователей (поиск по имени/email, фильтр по роли)
+- [x] Редактирование ролей (select в таблице, API PATCH)
+- [ ] Блокировка пользователей (нет поля `is_active`; отложено)
+- [x] Запрет понижения/удаления себя
+- [x] **Зависит от:** S10-001, S3-003
+- [x] **Оценка:** 2 часа
 
-### S10-003: Admin Tasks Management
-- [ ] Создать pages/Admin/Tasks.tsx
-- [ ] CRUD для задач
-- [ ] Массовый импорт задач
-- [ ] **Зависит от:** S10-001, S7-005
-- [ ] **Оценка:** 2 часа
+### S10-003: Admin Tasks Management — ⚠️ частично
+- [x] Просмотр всех задач, включая неактивные (`GET /admin/tasks`)
+- [x] CRUD задач доступен роли `teacher` через `/api/v1/tasks` (без UI-формы)
+- [ ] Массовый импорт задач (отложено, seed-скрипт покрывает стартовый набор)
+- [x] **Зависит от:** S10-001, S7-005
+- [x] **Оценка:** 2 часа
 
-### S10-004: Admin API
-- [ ] GET /api/v1/admin/users
-- [ ] PATCH /api/v1/admin/users/{id}
-- [ ] DELETE /api/v1/admin/users/{id}
-- [ ] POST /api/v1/admin/tasks
-- [ ] PUT /api/v1/admin/tasks/{id}
-- [ ] DELETE /api/v1/admin/tasks/{id}
-- [ ] GET /api/v1/admin/analytics
-- [ ] **Зависит от:** S3-003, S7-003
-- [ ] **Оценка:** 2 часа
+### S10-004: Admin API — ✅
+- [x] GET /api/v1/admin/users (+ `role`, `search`, пагинация)
+- [x] PATCH /api/v1/admin/users/{id}
+- [x] DELETE /api/v1/admin/users/{id}
+- [x] GET /api/v1/admin/tasks
+- [x] GET /api/v1/admin/analytics
+- [ ] POST/PUT/DELETE /admin/tasks (используется `/api/v1/tasks` с ролью teacher)
+- [x] **Зависит от:** S3-003, S7-003
+- [x] **Оценка:** 2 часа
 
-### S10-005: Analytics Service
-- [ ] Создать app/services/analytics_service.py
-- [ ] Подсчёт метрик (DAU, MAU, completion rate)
-- [ ] Экспорт отчётов
-- [ ] **Зависит от:** S2-007
-- [ ] **Оценка:** 1.5 часа
+### S10-005: Analytics Service — ✅
+- [x] Создать app/services/analytics_service.py
+- [x] Метрики: пользователи по ролям, DAU 24ч/7д, задачи, попытки, completion, активность
+- [ ] Экспорт отчётов (CSV/JSON) — отложено
+- [x] **Зависит от:** S2-007
+- [x] **Оценка:** 1.5 часа
 
-### S10-006: Documentation Finalization
-- [ ] Обновить README.md
-- [ ] Создать docs/GETTING_STARTED.md
-- [ ] Создать docs/USER_GUIDE.md
-- [ ] Создать docs/ARCHITECTURE.md
-- [ ] Обновить docs/CHANGELOG.md
-- [ ] **Зависит от:** все предыдущие
-- [ ] **Оценка:** 2 часа
+### S10-006: Documentation Finalization — ✅
+- [x] Обновить README.md (статус, метрики, навигация)
+- [x] Создать docs/README.md, GETTING_STARTED, USER_GUIDE, ARCHITECTURE
+- [x] Создать MANUAL_TESTING_GUIDE, ASSISTANT_LEVELS, PROMPT_CURRENT, LLM_EVAL,
+      DESIGN_ADMIN_AND_OPS
+- [x] Обновить CHANGELOG, RELEASES, KNOWN_ISSUES, RULES, TODO
+- [x] **Зависит от:** все предыдущие
+- [x] **Оценка:** 2 часа
 
-### S10-007: Production Deployment
-- [ ] Создать docker-compose.prod.yml
-- [ ] Настроить nginx
-- [ ] Настроить SSL (опционально)
-- [ ] Настроить мониторинг
-- [ ] **Зависит от:** S1-003, S10-006
-- [ ] **Оценка:** 2 часа
+### S10-007: Production Deployment — ✅
+- [x] Создать docker-compose.prod.yml (БД/Redis не публикуются, только frontend)
+- [x] Настроить nginx (SPA, /api, WebSocket, кэш ассетов)
+- [ ] Настроить SSL (опционально, требует домена — отложено)
+- [ ] Настроить мониторинг (метрики в планах, см. DESIGN_ADMIN_AND_OPS §6)
+- [x] **Зависит от:** S1-003, S10-006
+- [x] **Оценка:** 2 часа
 
-### S10-008: Performance Optimization
-- [ ] Оптимизация frontend bundle
-- [ ] Code splitting
-- [ ] Lazy loading
-- [ ] Оптимизация SQL запросов
-- [ ] **Зависит от:** S9-001..S9-010
-- [ ] **Оценка:** 2 часа
+### S10-008: Performance Optimization — ⚠️ частично
+- [x] Bundle в пределах лимита: **119 kB gzip** (цель 200 kB)
+- [ ] Code splitting по маршрутам (отложено: текущий размер позволяет)
+- [ ] Lazy loading тяжёлых страниц (Monaco грузится с CDN)
+- [x] Индексы БД для всех фильтров (users, tasks, progress, code, chat)
+- [x] **Зависит от:** S9-001..S9-010
+- [x] **Оценка:** 2 часа
 
-### S10-009: Final Testing
-- [ ] Полный прогон всех тестов
-- [ ] E2E тесты (Playwright)
-- [ ] Нагрузочное тестирование (опционально)
-- [ ] **Зависит от:** все предыдущие
-- [ ] **Оценка:** 2 часа
+### S10-009: Final Testing — ⚠️ частично
+- [x] Полный прогон: backend 137, frontend 63
+- [x] Ручной чек-лист оформлен (MANUAL_TESTING_GUIDE) и пройден в части smoke
+- [ ] E2E тесты (Playwright) — KI-012
+- [ ] Нагрузочное тестирование — отложено
+- [x] **Зависит от:** все предыдущие
+- [x] **Оценка:** 2 часа
 
-### S10-010: Release Preparation
-- [ ] Создать GitHub release
-- [ ] Обновить версию в pyproject.toml
-- [ ] Обновить CHANGELOG.md
-- [ ] Push в GitHub
-- [ ] **Зависит от:** S10-009
-- [ ] **Оценка:** 1 час
+### S10-010: Release Preparation — ✅
+- [x] Версия v0.1.0 в pyproject.toml / package.json
+- [x] CHANGELOG: раздел `[0.1.0]` с датой
+- [x] Push в GitHub, тег `v0.1.0`
+- [ ] GitHub Release: создать вручную на странице релизов
+- [x] **Зависит от:** S10-009
+- [x] **Оценка:** 1 час
 
 ---
 

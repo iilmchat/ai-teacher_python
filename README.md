@@ -1,93 +1,92 @@
 # AI Teacher for Python
 
-**Версия:** v0.1.0  
-**Стек:** Python 3.12 + FastAPI | React 19 | PostgreSQL 17 + pgvector | Redis | LM Studio / DeepSeek | Docker Compose  
-**© 2026 RuChating (iilmchat)**
+Интерактивный ассистент-учитель по Python для школьников 10–17 лет.
+Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
+и задачи с автопроверкой.
+
+**Версия:** v0.1.0 · **© 2026 RuChating (iilmchat)**
+
+**Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · DeepSeek / LM Studio · Docker Compose
 
 ---
 
-## Описание
+## Возможности
 
-Интерактивный AI-ассистент для обучения школьников программированию на Python с тремя уровнями помощи:
+- **Три уровня помощи** — базовый (наводящие вопросы, без готового кода),
+  средний (объяснение + пример синтаксиса), продвинутый (полное решение с разбором).
+- **Чат** со стримингом ответов (WebSocket) и REST-фолбэком.
+- **Песочница кода** — RestrictedPython + изоляция процесса, белый список модулей,
+  лимит времени; линтер с ошибками безопасности и подсказками по стилю.
+- **Задачи** — 6 готовых, проверка по тест-кейсам с `input()`, подсказки по одной,
+  подробный отчёт по каждому тесту.
+- **Прогресс** — статусы, попытки, процент решения, разбивка по сложности.
+- **Админка** — пользователи и роли, задачи, аналитика (DAU, попытки, сообщения, запуски).
+- **i18n** — русский и английский.
 
-- **Базовый** — подсказки и наводящие вопросы
-- **Средний** — частичные объяснения с примерами
-- **Продвинутый** — полные решения с разбором
-
-## Функции
-
-- Чат-бот с адаптивным уровнем помощи
-- Генерация и проверка заданий
-- Анализ кода с объяснением ошибок
-- Прогресс-обучение (от простого к сложному)
-- Административная панель для учителей
+---
 
 ## Быстрый старт
 
-### Требования
-
-- Python 3.12+
-- Node.js 20+
-- Docker Desktop
-- PostgreSQL 17
-- Redis
-
-### Установка
-
 ```bash
-# Клонировать репозиторий
-git clone https://github.com/ruchating/ai-teacher-python.git
-cd ai-teacher-python
+git clone https://github.com/iilmchat/ai-teacher_python.git
+cd ai-teacher_python
+cp .env.example .env            # заполните SECRET_KEY, POSTGRES_PASSWORD, DEEPSEEK_API_KEY
 
-# Скопировать .env.example в .env
-cp .env.example .env
+docker compose up -d postgres redis
 
-# Запустить с помощью Docker Compose
-docker compose up -d
-
-# Или запустить локально
 # Backend
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv && .\venv\Scripts\Activate.ps1   # Linux: source venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+alembic upgrade head
+python scripts/seed_tasks.py
+uvicorn app.main:app --reload --port 8000
 
-# Frontend
+# Frontend (в новом терминале)
 cd frontend
-pnpm install
+pnpm install --allow-build=esbuild
 pnpm dev
 ```
 
-### Доступ
+- Frontend: <http://127.0.0.1:3000>
+- API: <http://127.0.0.1:8000/api/v1/health> · Swagger: <http://127.0.0.1:8000/api/docs>
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
-
-## Документация
-
-- [Design.md](Design.md) — архитектура проекта
-- [TODO.md](TODO.md) — план разработки
-- [docs/RULES.md](docs/RULES.md) — правила разработки
-- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — руководство по установке
-
-## Разработка
-
-### Статус проекта
-
-🚧 В разработке — Спринт 1
-
-### CI/CD
-
-- [![CI](https://github.com/ruchating/ai-teacher-python/workflows/CI/badge.svg)](https://github.com/ruchating/ai-teacher-python/workflows/CI/badge.svg)
-- [![Tests](https://img.shields.io/badge/tests-0%20passed-9cf)](https://img.shields.io/badge/tests-0%20passed-9cf)
-- [![Coverage](https://img.shields.io/badge/coverage-0%25-green)](https://img.shields.io/badge/coverage-0%25-green)
-
-## Лицензия
-
-MIT License
+Подробно, с типичными ошибками — [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ---
 
-**© 2026 RuChating (iilmchat)**
+## Статус
+
+| Показатель | Значение |
+|------------|----------|
+| Спринты | 1–10 завершены |
+| Тесты backend | **137** (pytest, реальный PostgreSQL) |
+| Тесты frontend | **63** (Vitest + Testing Library) |
+| Ruff / MyPy strict | 0 / 0 |
+| TypeScript | strict, 0 ошибок |
+| Размер фронтенда | ~119 kB gzip |
+
+---
+
+## Документация
+
+Навигация: [docs/README.md](docs/README.md)
+
+- [Design.md](Design.md) — исходный дизайн и решения
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как устроено сейчас
+- [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — инструкция ученику
+- [docs/ASSISTANT_LEVELS.md](docs/ASSISTANT_LEVELS.md) — уровни помощи
+- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) — развёртывание
+- [docs/MANUAL_TESTING_GUIDE.md](docs/MANUAL_TESTING_GUIDE.md) — приёмка
+- [docs/LLM_EVAL.md](docs/LLM_EVAL.md) — оценка качества ответов LLM
+- [docs/DESIGN_ADMIN_AND_OPS.md](docs/DESIGN_ADMIN_AND_OPS.md) — админка, LLMOps, FinOps
+- [docs/PROMPT_CURRENT.md](docs/PROMPT_CURRENT.md) — актуальные инструкции ассистента
+- [docs/RULES.md](docs/RULES.md) — правила разработки
+- [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+- [TODO.md](TODO.md) — план работ
+
+---
+
+## Лицензия
+
+MIT License · © 2026 RuChating (iilmchat)
