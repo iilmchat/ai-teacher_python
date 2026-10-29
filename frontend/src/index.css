@@ -1,7 +1,29 @@
 @import 'tailwindcss';
 
+@theme {
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.06), 0 8px 24px rgb(15 23 42 / 0.06);
+  --color-brand-50: #eef2ff;
+  --color-brand-500: #6366f1;
+  --color-brand-700: #4338ca;
+}
+
 :root {
   color-scheme: light;
+  --app-bg: #f8fafc;
+  --app-fg: #0f172a;
+  --surface: #ffffff;
+  --surface-muted: #f1f5f9;
+  --border: #e2e8f0;
+}
+
+html.dark {
+  color-scheme: dark;
+  --app-bg: #0b1220;
+  --app-fg: #e2e8f0;
+  --surface: #111c2e;
+  --surface-muted: #162338;
+  --border: #26364f;
 }
 
 html,
@@ -17,12 +39,89 @@ body {
     system-ui,
     -apple-system,
     sans-serif;
-  background-color: var(--color-slate-50);
-  color: var(--color-slate-900);
+  background-color: var(--app-bg);
+  color: var(--app-fg);
 }
 
 /* Единый стиль фокуса для доступности */
 :focus-visible {
   outline: 2px solid var(--color-indigo-500);
   outline-offset: 2px;
+}
+
+/* Слой совместимости: существующие утилиты получают тёмные значения.
+   Новые компоненты используют токены --surface/--border/--app-fg. */
+.dark .bg-white {
+  background-color: var(--surface) !important;
+}
+.dark .bg-slate-50 {
+  background-color: var(--app-bg) !important;
+}
+.dark .bg-slate-100 {
+  background-color: var(--surface-muted) !important;
+}
+.dark .bg-slate-200 {
+  background-color: #24344d !important;
+}
+.dark .bg-indigo-50 {
+  background-color: #1e2a4a !important;
+}
+.dark .bg-amber-50 {
+  background-color: #3a2a12 !important;
+}
+.dark .bg-emerald-50 {
+  background-color: #123126 !important;
+}
+.dark .bg-rose-50 {
+  background-color: #3b1620 !important;
+}
+.dark .text-slate-900,
+.dark .text-slate-800 {
+  color: var(--app-fg) !important;
+}
+.dark .text-slate-700,
+.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+.dark .text-amber-700,
+.dark .text-amber-800 {
+  color: #fcd34d !important;
+}
+.dark .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+.dark .text-rose-700 {
+  color: #fca5a5 !important;
+}
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 {
+  border-color: var(--border) !important;
+}
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--border) !important;
+}
+.dark .hover\:bg-slate-100:hover {
+  background-color: var(--surface-muted) !important;
+}
+.dark input,
+.dark select,
+.dark textarea {
+  background-color: #0f1a2b;
+  color: var(--app-fg);
+  border-color: var(--border);
+}
+.dark input::placeholder {
+  color: #64748b;
+}
+.dark .shadow-sm,
+.dark .shadow {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
 }

@@ -12,7 +12,9 @@
     "profile": "Profile",
     "login": "Log in",
     "register": "Sign up",
-    "logout": "Log out"
+    "logout": "Log out",
+    "menu": "Menu",
+    "mobile": "Mobile navigation"
   },
   "auth": {
     "loginTitle": "Log in",
@@ -50,6 +52,8 @@
   "chat": {
     "title": "Chat with the assistant",
     "sessions": "My chats",
+    "openSessions": "Open chat list",
+    "closeSessions": "Close chat list",
     "newSession": "New chat",
     "deleteSession": "Delete chat",
     "noSession": "No chat selected",
@@ -121,11 +125,26 @@
     "levelHint": "The level applies to new chat sessions",
     "saved": "Level saved",
     "save": "Save",
+    "appearance": "Appearance",
+    "appearanceHint": "Theme is stored in the browser",
     "roles": {
       "student": "Student",
       "teacher": "Teacher",
       "admin": "Administrator"
     }
+  },
+  "theme": {
+    "label": "Dark theme",
+    "toDark": "Enable dark theme",
+    "toLight": "Enable light theme"
+  },
+  "a11y": {
+    "skipToContent": "Skip to content"
+  },
+  "access": {
+    "adminOnly": "Administrators only",
+    "teacherOnly": "Teachers only",
+    "home": "Home"
   },
   "admin": {
     "title": "Administration",

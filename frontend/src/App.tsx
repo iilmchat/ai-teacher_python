@@ -38,6 +38,13 @@ const DashboardPage = lazy(() =>
     default: module.DashboardPage,
   })),
 );
+const DevUiPage = import.meta.env.DEV
+  ? lazy(() =>
+      import('@/pages/DevUiPage').then((module) => ({
+        default: module.DevUiPage,
+      })),
+    )
+  : null;
 const HomePage = lazy(() =>
   import('@/pages/HomePage').then((module) => ({ default: module.HomePage })),
 );
@@ -97,6 +104,9 @@ export function App() {
             <Route index element={<HomePage />} />
             <Route path="login" element={<LoginPage />} />
             <Route path="register" element={<RegisterPage />} />
+            {DevUiPage && (
+              <Route path="dev/ui" element={<DevUiPage />} />
+            )}
 
             <Route
               path="chat"

@@ -6,6 +6,7 @@ import {
   MONACO_EDITOR_MODULE,
   MONACO_LOADER_URL,
 } from '@/lib/monacoSetup';
+import { useThemeStore } from '@/store/theme';
 
 interface MonacoEditorProps {
   value: string;
@@ -56,6 +57,7 @@ export default function MonacoEditor({
   readOnly,
 }: MonacoEditorProps) {
   const { t } = useTranslation();
+  const theme = useThemeStore((state) => state.theme);
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const onChangeRef = useRef(onChange);
@@ -75,7 +77,7 @@ export default function MonacoEditor({
         const editor = window.monaco.editor.create(containerRef.current, {
           value,
           language: 'python',
-          theme: 'vs-dark',
+          theme: theme === 'dark' ? 'vs-dark' : 'vs',
           readOnly,
           minimap: { enabled: false },
           fontSize: 14,
@@ -113,6 +115,10 @@ export default function MonacoEditor({
   useEffect(() => {
     editorRef.current?.updateOptions({ readOnly });
   }, [readOnly]);
+
+  useEffect(() => {
+    window.monaco?.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs');
+  }, [theme]);
 
   if (failed) {
     return (
