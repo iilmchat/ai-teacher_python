@@ -68,7 +68,8 @@
     "output": "Результат",
     "noOutput": "Пока пусто",
     "runError": "Не удалось выполнить код",
-    "executionTime": "Время выполнения: {{seconds}} с"
+    "executionTime": "Время выполнения: {{seconds}} с",
+    "editorLabel": "Редактор кода"
   },
   "tasks": {
     "title": "Задачи",

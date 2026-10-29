@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -13,8 +14,17 @@ import { ProfilePage } from '@/pages/ProfilePage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { TaskDetailPage } from '@/pages/TaskDetailPage';
 import { TasksPage } from '@/pages/TasksPage';
+import { useAuthStore } from '@/store/auth';
 
 export function App() {
+  const loadMe = useAuthStore((state) => state.loadMe);
+
+  // После полной перезагрузки страницы восстанавливаем профиль по токену,
+  // иначе ProtectedRoute навсегда остаётся в состоянии инициализации.
+  useEffect(() => {
+    void loadMe();
+  }, [loadMe]);
+
   return (
     <BrowserRouter>
       <Routes>

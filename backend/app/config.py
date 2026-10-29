@@ -98,6 +98,10 @@ class Settings(BaseSettings):
     executor_timeout: int = 5  # секунд
     executor_memory_limit: int = 128  # MB
 
+    # Rate limiting (S11-003)
+    #: В тестах отключается, чтобы лимиты не влияли на прогон
+    rate_limit_enabled: bool = True
+
 
 # Глобальный экземпляр настроек
 settings = Settings()

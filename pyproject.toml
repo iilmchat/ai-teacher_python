@@ -57,15 +57,23 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "migrations: тесты Alembic на отдельной БД (медленные, запускаются отдельно)",
+    "slow: тесты с реальными подпроцессами песочницы (можно отфильтровать)",
+]
 
 [tool.coverage.run]
 source = ["app"]
 branch = true
 
 [tool.coverage.report]
+fail_under = 70
+show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "def __repr__",
     "raise AssertionError",
     "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
 ]

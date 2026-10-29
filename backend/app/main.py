@@ -13,6 +13,8 @@ from fastapi.responses import JSONResponse
 from app.api import websocket
 from app.api.v1 import admin, auth, chat, code, tasks, users
 from app.config import settings
+from app.core.rate_limiter import RateLimitMiddleware
+from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
 
 logger = structlog.get_logger(__name__)
@@ -21,8 +23,16 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения"""
-    logger.info("app_starting", app_name=settings.app_name, version=settings.version)
+    redis_ok = await ping_redis()
+    logger.info(
+        "app_starting",
+        app_name=settings.app_name,
+        version=settings.version,
+        redis_available=redis_ok,
+        rate_limit_enabled=settings.rate_limit_enabled,
+    )
     yield
+    await close_redis()
     logger.info("app_stopped", app_name=settings.app_name)
 
 
@@ -44,6 +54,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiting (fail-open: если Redis недоступен, запросы проходят)
+app.add_middleware(RateLimitMiddleware)
 
 
 @app.exception_handler(AppError)

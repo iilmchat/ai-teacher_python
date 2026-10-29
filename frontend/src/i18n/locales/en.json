@@ -68,7 +68,8 @@
     "output": "Output",
     "noOutput": "Nothing yet",
     "runError": "Could not run the code",
-    "executionTime": "Execution time: {{seconds}} s"
+    "executionTime": "Execution time: {{seconds}} s",
+    "editorLabel": "Code editor"
   },
   "tasks": {
     "title": "Tasks",

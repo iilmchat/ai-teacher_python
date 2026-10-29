@@ -83,6 +83,12 @@ frontend/out/
 # Frontend testing
 frontend/coverage/
 
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/blob-report/
+frontend/.playwright/
+
 # Frontend misc
 frontend/.pnp
 frontend/.pnp.js

@@ -9,8 +9,11 @@ interface CodeEditorProps {
 }
 
 /**
- * Обёртка Monaco. В тестах и при отсутствии загрузчика используется
- * тот же контракт, поэтому компонент можно замокать.
+ * Обёртка Monaco.
+ *
+ * В e2e-режиме (`VITE_E2E=1`) рендерится обычная textarea: Playwright не должен
+ * зависеть от загрузки Monaco с CDN (KI-013), а логика страниц проверяется
+ * одинаково. В обычном режиме используется редактор.
  */
 export function CodeEditor({
   value,
@@ -19,11 +22,26 @@ export function CodeEditor({
   readOnly = false,
 }: CodeEditorProps) {
   const { t } = useTranslation();
+  const isE2E = import.meta.env.VITE_E2E === '1';
 
   const handleMount: OnMount = (editor) => {
     // Отключаем лишние подсказки, чтобы не пугать новичков
     editor.updateOptions({ quickSuggestions: false });
   };
+
+  if (isE2E) {
+    return (
+      <textarea
+        data-testid="code-input"
+        aria-label={t('code.editorLabel')}
+        value={value}
+        readOnly={readOnly}
+        onChange={(event) => onChange(event.target.value)}
+        style={{ height }}
+        className="w-full rounded-lg border border-slate-300 bg-slate-900 p-3 font-mono text-sm text-slate-100"
+      />
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-300">

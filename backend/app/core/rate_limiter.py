@@ -1,80 +1,127 @@
 """
-Rate limiting middleware using Redis
+Rate limiting через Redis (S11-003).
+
+`RateLimitMiddleware` работает по принципу fail-open: если Redis недоступен,
+запрос пропускается с предупреждением в логе — защита не должна ронять API.
+
+Лимиты:
+- `POST /auth/login` — 5 запросов в минуту на IP;
+- остальные запросы — 300 в минуту на IP;
+- служебные пути (`/health`, `/docs`, `/openapi.json`, `/`) не лимитируются.
+
+В тестах лимиты отключаются флагом `RATE_LIMIT_ENABLED=false`.
 """
+
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import redis.asyncio as redis
+import structlog
 from fastapi import Request, status
 from fastapi.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.config import settings
+
+logger = structlog.get_logger(__name__)
+
+#: Пути, которые не лимитируются
+EXEMPT_PATHS: frozenset[str] = frozenset(
+    {"/", "/api/v1/health", "/api/docs", "/api/redoc", "/api/openapi.json"}
+)
+
+LOGIN_PATH = "/api/v1/auth/login"
+LOGIN_LIMIT = 5
+GENERAL_LIMIT = 300
+WINDOW_SECONDS = 60
+
+PREFIX = "rate_limit"
 
 
 class RateLimiter:
-    """Rate limiter using Redis"""
+    """Счётчик запросов в Redis"""
 
-    def __init__(self, redis_client: "redis.Redis[Any]"):
+    def __init__(self, redis_client: "redis.Redis[Any]") -> None:
         self.redis = redis_client
-        self.prefix = "rate_limit"
 
-    async def is_rate_limited(self, key: str, limit: int, period: int) -> bool:
-        """Check if rate limit exceeded"""
-        current = await self.redis.get(f"{self.prefix}:{key}")
+    async def is_limited(self, key: str, limit: int, period: int = WINDOW_SECONDS) -> bool:
+        """Увеличить счётчик и сказать, превышен ли лимит"""
+        full_key = f"{PREFIX}:{key}"
+        current = await self.redis.get(full_key)
 
         if current is None:
-            await self.redis.setex(f"{self.prefix}:{key}", period, 1)
+            await self.redis.setex(full_key, period, 1)
             return False
 
-        if int(current) >= limit:
+        count = int(current)
+        if count >= limit:
             return True
 
-        await self.redis.incr(f"{self.prefix}:{key}")
+        await self.redis.incr(full_key)
         return False
 
     async def get_remaining(self, key: str, limit: int) -> int:
-        """Get remaining requests"""
-        current = await self.redis.get(f"{self.prefix}:{key}")
+        """Сколько запросов осталось"""
+        current = await self.redis.get(f"{PREFIX}:{key}")
         if current is None:
             return limit
         return max(0, limit - int(current))
 
 
-def create_rate_limit_middleware(
-    redis_client: "redis.Redis[Any]",
-) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
-    """Create rate limiting middleware"""
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Middleware лимитов; Redis берётся через фабрику при первом запросе"""
 
-    async def rate_limit_middleware(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    def __init__(
+        self,
+        app: Any,
+        redis_factory: Callable[[], "redis.Redis[Any]"] | None = None,
+    ) -> None:
+        super().__init__(app)
+        if redis_factory is None:
+            from app.db.redis import get_redis
+
+            redis_factory = get_redis
+        self.redis_factory = redis_factory
+
+    def _client_ip(self, request: Request) -> str:
+        """IP клиента: за прокси учитываем X-Forwarded-For"""
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        # Skip rate limiting for health checks
-        if request.url.path in ["/api/v1/health", "/", "/api/docs", "/api/openapi.json"]:
+        if not settings.rate_limit_enabled or request.url.path in EXEMPT_PATHS:
             return await call_next(request)
 
-        # Get client IP
-        client_ip = request.client.host if request.client else "unknown"
+        try:
+            limiter = RateLimiter(self.redis_factory())
+        except Exception as exc:  # noqa: BLE001 — Redis недоступен
+            logger.warning("rate_limit_unavailable", error=str(exc))
+            return await call_next(request)
 
-        # Login rate limit (5 per minute)
-        if request.url.path == "/api/v1/auth/login" and request.method == "POST":
-            key = f"login:{client_ip}"
-            limiter = RateLimiter(redis_client)
+        is_login = request.url.path == LOGIN_PATH and request.method == "POST"
+        key = (
+            f"login:{self._client_ip(request)}"
+            if is_login
+            else f"general:{self._client_ip(request)}"
+        )
+        limit = LOGIN_LIMIT if is_login else GENERAL_LIMIT
 
-            if await limiter.is_rate_limited(key, limit=5, period=60):
-                return JSONResponse(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": "Too many login attempts. Please try again later."}
-                )
+        try:
+            limited = await limiter.is_limited(key, limit=limit)
+        except Exception as exc:  # noqa: BLE001 — fail-open при сбое Redis
+            logger.warning("rate_limit_check_failed", error=str(exc))
+            return await call_next(request)
 
-        # General rate limit (300 per minute)
-        else:
-            key = f"general:{client_ip}"
-            limiter = RateLimiter(redis_client)
-
-            if await limiter.is_rate_limited(key, limit=300, period=60):
-                return JSONResponse(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    content={"detail": "Rate limit exceeded. Please slow down."}
-                )
+        if limited:
+            logger.info("rate_limit_exceeded", path=request.url.path, key=key)
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Слишком много запросов. Попробуйте позже."},
+                headers={"Retry-After": str(WINDOW_SECONDS)},
+            )
 
         return await call_next(request)
-
-    return rate_limit_middleware

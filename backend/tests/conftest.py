@@ -54,6 +54,15 @@ def ensure_test_database() -> Iterator[None]:
     yield
 
 
+@pytest.fixture(autouse=True)
+def disable_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """По умолчанию лимиты выключены, чтобы не влиять на другие тесты.
+
+    Тесты лимитов включают флаг сами (см. `test_rate_limit.py`).
+    """
+    monkeypatch.setattr(settings, "rate_limit_enabled", False)
+
+
 @pytest_asyncio.fixture
 async def test_engine():
     """Engine к тестовой БД; схема создаётся при необходимости"""

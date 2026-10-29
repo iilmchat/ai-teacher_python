@@ -1,13 +1,15 @@
 """
 Тесты песочницы (S6-007).
 
-Каждый тест запускает отдельный интерпретатор, поэтому набор намеренно
-небольшой: проверяем ключевые гарантии безопасности и корректный вывод.
+Каждый тест запускает отдельный интерпретатор, поэтому набор помечен `slow`:
+быстрый прогон — `pytest -m "not slow"`, полный — `pytest`.
 """
 
 import pytest
 
 from app.core.executor import SandboxedExecutor, find_violations
+
+pytestmark = pytest.mark.slow
 
 
 @pytest.fixture

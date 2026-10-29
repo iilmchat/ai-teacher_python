@@ -12,12 +12,14 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    // Запросы к API проксируются на backend, чтобы не настраивать CORS в dev
+    port: Number(process.env.VITE_DEV_PORT ?? 3000),
+    // Запросы к API проксируются на backend, чтобы не настраивать CORS в dev.
+    // E2E поднимает backend на отдельном порту через VITE_PROXY_TARGET.
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.VITE_PROXY_TARGET ?? 'http://127.0.0.1:8000',
         changeOrigin: true,
+        ws: true,
       },
     },
   },
@@ -30,5 +32,18 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: false,
+    // e2e-спеки Playwright не должны попадать в Vitest
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'html'],
+      include: ['src/lib/**', 'src/store/**'],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 });
