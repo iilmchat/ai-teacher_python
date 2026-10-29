@@ -23,7 +23,10 @@ select = [
     "C4",  # flake8-comprehensions
     "UP",  # pyupgrade
 ]
-ignore = []
+ignore = [
+    # FastAPI: Depends() в значениях по умолчанию — штатный паттерн фреймворка
+    "B008",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
@@ -41,11 +44,15 @@ warn_redundant_casts = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-module = ["redis.*", "pgvector.*"]
+# pgvector и jose не поставляют py.typed-маркеров
+module = ["redis.*", "pgvector.*", "jose.*"]
 ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Явно задаём scope-loop для async-фикстур, чтобы избежать DeprecationWarning
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]

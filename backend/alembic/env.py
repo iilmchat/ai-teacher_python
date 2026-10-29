@@ -19,10 +19,14 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
+from app.config import settings
 from app.db.database import Base
 from app.models import *  # noqa
 
 target_metadata = Base.metadata
+
+# URL берётся только из Settings (RULES §3.1), а не из alembic.ini
+config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

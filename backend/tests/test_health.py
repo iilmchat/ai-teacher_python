@@ -1,13 +1,12 @@
 """
 Tests for health check endpoints
 """
-from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
 
-def test_health_check(client: TestClient):
-    """Test health check endpoint"""
-    response = client.get("/api/v1/health")
+async def test_health_check(client: AsyncClient) -> None:
+    """Health check возвращает ok и версию"""
+    response = await client.get("/api/v1/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
@@ -15,9 +14,9 @@ def test_health_check(client: TestClient):
     assert "app_name" in data
 
 
-def test_root_endpoint(client: TestClient):
-    """Test root endpoint"""
-    response = client.get("/")
+async def test_root_endpoint(client: AsyncClient) -> None:
+    """Корневой эндпоинт возвращает ссылки на docs и health"""
+    response = await client.get("/")
     assert response.status_code == 200
     data = response.json()
     assert "message" in data
@@ -25,9 +24,8 @@ def test_root_endpoint(client: TestClient):
     assert "health" in data
 
 
-async def test_health_check_async(async_client: AsyncClient):
-    """Test health check endpoint (async)"""
-    response = await async_client.get("/api/v1/health")
+async def test_openapi_schema_available(client: AsyncClient) -> None:
+    """OpenAPI-схема доступна"""
+    response = await client.get("/api/openapi.json")
     assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "ok"
+    assert "paths" in response.json()

@@ -1,7 +1,7 @@
 """
 Chat repository
 """
-from typing import List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -9,16 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.repositories.base import BaseRepository
-from app.models.chat import ChatSession, ChatMessage, MessageRole
+from app.models.chat import ChatMessage, ChatSession, MessageRole
 
 
 class ChatSessionRepository(BaseRepository[ChatSession]):
     """Репозиторий для работы с сессиями чата"""
-    
+
     def __init__(self, session: AsyncSession):
         super().__init__(ChatSession, session)
-    
-    async def get_with_messages(self, session_id: UUID) -> Optional[ChatSession]:
+
+    async def get_with_messages(self, session_id: UUID) -> ChatSession | None:
         """Получить сессию с сообщениями"""
         result = await self.session.execute(
             select(ChatSession)
@@ -26,10 +26,10 @@ class ChatSessionRepository(BaseRepository[ChatSession]):
             .where(ChatSession.id == session_id)
         )
         return result.scalar_one_or_none()
-    
+
     async def get_user_sessions(
         self, user_id: UUID, skip: int = 0, limit: int = 100
-    ) -> List[ChatSession]:
+    ) -> list[ChatSession]:
         """Получить сессии пользователя"""
         result = await self.session.execute(
             select(ChatSession)
@@ -38,18 +38,18 @@ class ChatSessionRepository(BaseRepository[ChatSession]):
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
+        return list(result.scalars().all())
 
 
 class ChatMessageRepository(BaseRepository[ChatMessage]):
     """Репозиторий для работы с сообщениями чата"""
-    
+
     def __init__(self, session: AsyncSession):
         super().__init__(ChatMessage, session)
-    
+
     async def get_session_messages(
         self, session_id: UUID, skip: int = 0, limit: int = 100
-    ) -> List[ChatMessage]:
+    ) -> list[ChatMessage]:
         """Получить сообщения сессии"""
         result = await self.session.execute(
             select(ChatMessage)
@@ -58,10 +58,14 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
             .offset(skip)
             .limit(limit)
         )
-        return result.scalars().all()
-    
+        return list(result.scalars().all())
+
     async def create_message(
-        self, session_id: UUID, role: MessageRole, content: str, code_blocks: List = None
+        self,
+        session_id: UUID,
+        role: MessageRole,
+        content: str,
+        code_blocks: list[Any] | None = None,
     ) -> ChatMessage:
         """Создать сообщение"""
         message = ChatMessage(

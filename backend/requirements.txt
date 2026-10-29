@@ -11,17 +11,20 @@ aioredis==2.0.1
 sqlalchemy[asyncio]==2.0.36
 alembic==1.14.0
 pgvector==0.3.6
+psycopg2-binary==2.9.13
 
 # Redis
 redis==5.2.0
 
 # Validation
 pydantic==2.10.1
-pydantic-settings==2.6.1
+pydantic-settings==2.16.2
 email-validator==2.2.0
 
 # Security
-passlib[bcrypt]==1.7.4
+# passlib не используется: несовместим с bcrypt 5.x (ValueError на 72+ байтах),
+# хэширование выполняется напрямую через bcrypt (см. app/core/security.py)
+bcrypt==5.0.0
 python-jose[cryptography]==3.3.0
 pyjwt==2.10.0
 
@@ -46,4 +49,3 @@ testcontainers==4.9.0
 
 # Types
 types-redis==4.6.0.20241004
-types-passlib==1.7.7.20240819

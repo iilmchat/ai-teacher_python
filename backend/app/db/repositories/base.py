@@ -1,7 +1,7 @@
 """
 Base repository with common CRUD operations
 """
-from typing import Generic, TypeVar, Optional, List
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy import select
@@ -9,39 +9,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import Base
 
-
 ModelType = TypeVar("ModelType", bound=Base)
 
 
 class BaseRepository(Generic[ModelType]):
     """Базовый репозиторий с CRUD операциями"""
-    
+
     def __init__(self, model: type[ModelType], session: AsyncSession):
         self.model = model
         self.session = session
-    
+
     async def create(self, obj: ModelType) -> ModelType:
         """Создать объект"""
         self.session.add(obj)
         await self.session.commit()
         await self.session.refresh(obj)
         return obj
-    
-    async def get(self, id: UUID) -> Optional[ModelType]:
+
+    async def get(self, id: UUID) -> ModelType | None:
         """Получить объект по ID"""
-        result = await self.session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        # Generic-модель не объявляет колонку id статически, поэтому нужен type: ignore
+        id_column = self.model.id  # type: ignore[attr-defined]
+        result = await self.session.execute(select(self.model).where(id_column == id))
         return result.scalar_one_or_none()
-    
-    async def get_all(self, skip: int = 0, limit: int = 100) -> List[ModelType]:
+
+    async def get_all(self, skip: int = 0, limit: int = 100) -> list[ModelType]:
         """Получить все объекты с пагинацией"""
-        result = await self.session.execute(
-            select(self.model).offset(skip).limit(limit)
-        )
-        return result.scalars().all()
-    
-    async def update(self, id: UUID, **kwargs) -> Optional[ModelType]:
+        result = await self.session.execute(select(self.model).offset(skip).limit(limit))
+        return list(result.scalars().all())
+
+    async def update(self, id: UUID, **kwargs: Any) -> ModelType | None:
         """Обновить объект"""
         obj = await self.get(id)
         if obj:
@@ -50,7 +47,7 @@ class BaseRepository(Generic[ModelType]):
             await self.session.commit()
             await self.session.refresh(obj)
         return obj
-    
+
     async def delete(self, id: UUID) -> bool:
         """Удалить объект"""
         obj = await self.get(id)

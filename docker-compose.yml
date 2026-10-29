@@ -1,13 +1,15 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    # Официальный образ с предустановленным pgvector (нужен для VECTOR-колонок)
+    image: pgvector/pgvector:pg17
     container_name: ai_teacher_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_password}
       POSTGRES_DB: ${POSTGRES_DB:-ai_teacher}
     ports:
-      - "127.0.0.1:5432:5432"
+      # Внешний порт задаётся через ENV (KI-001): 5432 занят чужим контейнером ticket-postgres
+      - "127.0.0.1:${POSTGRES_PORT:-5434}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -21,7 +23,8 @@ services:
     image: redis:7-alpine
     container_name: ai_teacher_redis
     ports:
-      - "127.0.0.1:6379:6379"
+      # Внешний порт задаётся через ENV (KI-001): 6379 занят чужим контейнером workflow-builder-redis
+      - "127.0.0.1:${REDIS_PORT:-6381}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -37,6 +40,7 @@ services:
       dockerfile: Dockerfile
     container_name: ai_teacher_backend
     environment:
+      # Внутри compose-сети используется внутренний порт контейнера (5432)
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-ai_teacher}
@@ -44,6 +48,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-ai_teacher}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      # Внутри compose-сети Redis доступен на внутреннем порту 6379
       - SECRET_KEY=${SECRET_KEY:-change_me_secret_key}
       - LLM_PROVIDER=${LLM_PROVIDER:-deepseek}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}

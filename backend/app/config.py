@@ -1,29 +1,54 @@
 """
 Конфигурация приложения с использованием pydantic-settings
 """
-from typing import List
+from pathlib import Path
+from typing import Annotated, Any
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# .env лежит в корне проекта (на два уровня выше backend/app)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENV_FILE = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
     """Настройки приложения"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # App
     app_name: str = "AI Teacher for Python"
     version: str = "0.1.0"
     debug: bool = False
-    allowed_origins: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    # NoDecode: значение приходит строкой и режется нашим валидатором (CSV или JSON)
+    allowed_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
+    def parse_allowed_origins(cls, value: Any) -> Any:
+        """Поддержка формата CSV (a,b) и JSON-массива из ENV"""
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                import json
+
+                return json.loads(raw)
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
 
     # Database
+    # KI-001: канонический 5432 занят чужим контейнером, проект использует 5434
     postgres_host: str = "127.0.0.1"
-    postgres_port: int = 5432
+    postgres_port: int = 5434
     postgres_user: str = "ai_teacher"
     postgres_password: str = "change_me_password"
     postgres_db: str = "ai_teacher"
@@ -45,8 +70,9 @@ class Settings(BaseSettings):
         )
 
     # Redis
+    # KI-001: канонический 6379 занят чужим контейнером, проект использует 6381
     redis_host: str = "127.0.0.1"
-    redis_port: int = 6379
+    redis_port: int = 6381
     redis_db: int = 0
 
     @property

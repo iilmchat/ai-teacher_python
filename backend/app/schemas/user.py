@@ -2,12 +2,12 @@
 Pydantic schemas for User model
 """
 from datetime import datetime
-from typing import Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field
 
-from app.models.user import UserRole, UserLevel
+from app.models.user import UserLevel, UserRole
 
 
 class UserBase(BaseModel):
@@ -18,28 +18,31 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Схема для создания пользователя"""
-    password: str = Field(..., min_length=8, max_length=100)
-    role: Optional[UserRole] = UserRole.STUDENT
-    level: Optional[UserLevel] = UserLevel.BASIC
+    # max_length=72 — ограничение bcrypt (пароль длиннее не хэшируется)
+    password: str = Field(..., min_length=8, max_length=72)
+    role: UserRole | None = UserRole.STUDENT
+    level: UserLevel | None = UserLevel.BASIC
 
 
 class UserUpdate(BaseModel):
     """Схема для обновления пользователя"""
-    email: Optional[EmailStr] = None
-    username: Optional[str] = Field(None, min_length=3, max_length=100)
-    level: Optional[UserLevel] = None
-    settings: Optional[dict] = None
+
+    email: EmailStr | None = None
+    username: str | None = Field(None, min_length=3, max_length=100)
+    level: UserLevel | None = None
+    settings: dict[str, Any] | None = None
 
 
 class UserResponse(UserBase):
     """Схема ответа с пользователем"""
+
     id: UUID
     role: UserRole
     level: UserLevel
     created_at: datetime
     last_active: datetime
-    settings: dict
-    
+    settings: dict[str, Any]
+
     model_config = {"from_attributes": True}
 
 

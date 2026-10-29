@@ -1,7 +1,7 @@
 """
 Database configuration and session management
 """
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -41,7 +41,7 @@ async_session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     Dependency для получения сессии БД
-    
+
     Usage:
         @app.get("/items")
         async def get_items(db: AsyncSession = Depends(get_db)):
@@ -58,12 +58,12 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
-async def init_db():
+async def init_db() -> None:
     """Инициализация БД (создание таблиц)"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def close_db():
+async def close_db() -> None:
     """Закрытие соединений с БД"""
     await engine.dispose()

@@ -1,84 +1,99 @@
 """
-Pytest configuration and fixtures
-"""
-import asyncio
-from typing import AsyncGenerator, Generator
+Pytest configuration and fixtures.
 
+Тесты работают на реальном PostgreSQL с pgvector: SQLite не поддерживает
+JSONB и тип VECTOR. Каждый тест выполняется в транзакции, которая
+откатывается в конце — состояние между тестами не разделяется (RULES §4.4).
+
+Создание тестовой БД выполняется синхронно (psycopg2) в session-scoped
+фикстуре: это исключает привязку async-фикстур к чужому event loop.
+"""
+from collections.abc import AsyncGenerator, Iterator
+
+import psycopg2
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app.main import app
+import app.models  # noqa: F401  # регистрирует все модели в Base.metadata
+from app.config import settings
 from app.db.database import Base, get_db
+from app.main import app
+
+TEST_DB_NAME = "ai_teacher_test"
 
 
-# Test database URL (in-memory SQLite for tests)
-TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
-
-# Create test engine
-test_engine = create_async_engine(
-    TEST_DATABASE_URL,
-    echo=False,
-)
-
-# Create test session factory
-test_session_factory = async_sessionmaker(
-    test_engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-)
+def _database_url(database: str) -> str:
+    """Async URL подключения к указанной БД на тестовом сервере"""
+    return (
+        f"postgresql+asyncpg://{settings.postgres_user}:{settings.postgres_password}"
+        f"@{settings.postgres_host}:{settings.postgres_port}/{database}"
+    )
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Create event loop for async tests"""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_database() -> Iterator[None]:
+    """Пересоздаёт чистую тестовую БД перед запуском тестов"""
+    connection = psycopg2.connect(
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        user=settings.postgres_user,
+        password=settings.postgres_password,
+        dbname="postgres",
+    )
+    connection.autocommit = True
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f'DROP DATABASE IF EXISTS "{TEST_DB_NAME}" WITH (FORCE)')
+            cursor.execute(f'CREATE DATABASE "{TEST_DB_NAME}"')
+    finally:
+        connection.close()
+    yield
 
 
 @pytest_asyncio.fixture
-async def db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Create test database session"""
-    async with test_engine.begin() as conn:
+async def test_engine():
+    """Engine к тестовой БД; схема создаётся при необходимости"""
+    engine = create_async_engine(_database_url(TEST_DB_NAME), poolclass=NullPool)
+    async with engine.begin() as conn:
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.create_all)
-    
-    async with test_session_factory() as session:
-        yield session
-        await session.rollback()
-    
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
+    yield engine
 
-@pytest.fixture
-def client(db_session: AsyncSession) -> TestClient:
-    """Create test client with database session"""
-    async def override_get_db():
-        yield db_session
-    
-    app.dependency_overrides[get_db] = override_get_db
-    
-    with TestClient(app) as test_client:
-        yield test_client
-    
-    app.dependency_overrides.clear()
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture
-async def async_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """Create async test client"""
-    async def override_get_db():
+async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Сессия БД в транзакции; в конце теста изменения откатываются"""
+    connection = await test_engine.connect()
+    transaction = await connection.begin()
+    session = AsyncSession(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+    try:
+        yield session
+    finally:
+        await session.close()
+        await transaction.rollback()
+        await connection.close()
+
+
+@pytest_asyncio.fixture
+async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP-клиент с подменой зависимости get_db на тестовую сессию"""
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    ) as ac:
-        yield ac
-    
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as async_client:
+        yield async_client
     app.dependency_overrides.clear()

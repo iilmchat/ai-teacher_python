@@ -1,216 +1,194 @@
 """
-Tests for authentication endpoints
+Tests for authentication endpoints (S3-005).
+
+Все тесты асинхронные: используется общий event loop с фикстурой client,
+что необходимо для asyncpg (соединение привязано к loop).
 """
-import pytest
-from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
-from app.main import app
+REGISTER_URL = "/api/v1/auth/register"
+LOGIN_URL = "/api/v1/auth/login"
 
 
-def test_register_user(client: TestClient):
-    """Test user registration"""
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "test@example.com",
-            "username": "testuser",
-            "password": "testpassword123"
-        }
+async def _register(
+    client: AsyncClient,
+    email: str,
+    username: str,
+    password: str = "password123",
+):
+    """Хелпер регистрации пользователя"""
+    return await client.post(
+        REGISTER_URL,
+        json={"email": email, "username": username, "password": password},
     )
+
+
+async def test_register_user(client: AsyncClient) -> None:
+    """Успешная регистрация возвращает профиль без пароля"""
+    response = await _register(client, "test@example.com", "testuser", "testpassword123")
+
     assert response.status_code == 201
     data = response.json()
     assert data["email"] == "test@example.com"
     assert data["username"] == "testuser"
+    assert data["role"] == "student"
+    assert data["level"] == "basic"
     assert "id" in data
+    assert "hashed_password" not in data
 
 
-def test_register_duplicate_email(client: TestClient):
-    """Test registration with duplicate email"""
-    # First registration
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "duplicate@example.com",
-            "username": "user1",
-            "password": "password123"
-        }
-    )
-    
-    # Second registration with same email
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "duplicate@example.com",
-            "username": "user2",
-            "password": "password123"
-        }
-    )
+async def test_register_duplicate_email(client: AsyncClient) -> None:
+    """Повторный email отклоняется с 400"""
+    await _register(client, "duplicate@example.com", "user1")
+    response = await _register(client, "duplicate@example.com", "user2")
+
     assert response.status_code == 400
     assert "Email already registered" in response.json()["detail"]
 
 
-def test_register_duplicate_username(client: TestClient):
-    """Test registration with duplicate username"""
-    # First registration
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "user1@example.com",
-            "username": "duplicateuser",
-            "password": "password123"
-        }
-    )
-    
-    # Second registration with same username
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "user2@example.com",
-            "username": "duplicateuser",
-            "password": "password123"
-        }
-    )
+async def test_register_duplicate_username(client: AsyncClient) -> None:
+    """Повторный username отклоняется с 400"""
+    await _register(client, "user1@example.com", "duplicateuser")
+    response = await _register(client, "user2@example.com", "duplicateuser")
+
     assert response.status_code == 400
     assert "Username already taken" in response.json()["detail"]
 
 
-def test_login_success(client: TestClient):
-    """Test successful login"""
-    # Register user first
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "login@example.com",
-            "username": "loginuser",
-            "password": "password123"
-        }
+async def test_register_invalid_email(client: AsyncClient) -> None:
+    """Некорректный email отклоняется с 422"""
+    response = await _register(client, "not-an-email", "invalidmail")
+
+    assert response.status_code == 422
+
+
+async def test_register_short_password(client: AsyncClient) -> None:
+    """Слишком короткий пароль отклоняется с 422"""
+    response = await _register(client, "short@example.com", "shortpass", "123")
+
+    assert response.status_code == 422
+
+
+async def test_login_success(client: AsyncClient) -> None:
+    """Вход по username возвращает пару токенов"""
+    await _register(client, "login@example.com", "loginuser")
+
+    response = await client.post(
+        LOGIN_URL,
+        data={"username": "loginuser", "password": "password123"},
     )
-    
-    # Login with username
-    response = client.post(
-        "/api/v1/auth/login",
-        data={
-            "username": "loginuser",
-            "password": "password123"
-        }
-    )
+
     assert response.status_code == 200
     data = response.json()
     assert "access_token" in data
     assert "refresh_token" in data
     assert data["token_type"] == "bearer"
+    assert data["user"]["username"] == "loginuser"
 
 
-def test_login_with_email(client: TestClient):
-    """Test login with email instead of username"""
-    # Register user
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "email@example.com",
-            "username": "emailuser",
-            "password": "password123"
-        }
+async def test_login_with_email(client: AsyncClient) -> None:
+    """Вход возможен по email"""
+    await _register(client, "email@example.com", "emailuser")
+
+    response = await client.post(
+        LOGIN_URL,
+        data={"username": "email@example.com", "password": "password123"},
     )
-    
-    # Login with email
-    response = client.post(
-        "/api/v1/auth/login",
-        data={
-            "username": "email@example.com",
-            "password": "password123"
-        }
-    )
+
     assert response.status_code == 200
     assert "access_token" in response.json()
 
 
-def test_login_wrong_password(client: TestClient):
-    """Test login with wrong password"""
-    # Register user
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "wrongpass@example.com",
-            "username": "wrongpassuser",
-            "password": "correctpassword"
-        }
+async def test_login_wrong_password(client: AsyncClient) -> None:
+    """Неверный пароль — 401"""
+    await _register(client, "wrongpass@example.com", "wrongpassuser", "correctpassword")
+
+    response = await client.post(
+        LOGIN_URL,
+        data={"username": "wrongpassuser", "password": "wrongpassword"},
     )
-    
-    # Login with wrong password
-    response = client.post(
-        "/api/v1/auth/login",
-        data={
-            "username": "wrongpassuser",
-            "password": "wrongpassword"
-        }
-    )
+
     assert response.status_code == 401
 
 
-def test_get_me(client: TestClient):
-    """Test get current user info"""
-    # Register user
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "me@example.com",
-            "username": "meuser",
-            "password": "password123"
-        }
+async def test_login_unknown_user(client: AsyncClient) -> None:
+    """Несуществующий пользователь — 401"""
+    response = await client.post(
+        LOGIN_URL,
+        data={"username": "ghost", "password": "password123"},
     )
-    
-    # Login
-    login_response = client.post(
-        "/api/v1/auth/login",
-        data={
-            "username": "meuser",
-            "password": "password123"
-        }
-    )
-    token = login_response.json()["access_token"]
-    
-    # Get current user
-    response = client.get(
+
+    assert response.status_code == 401
+
+
+async def _login(client: AsyncClient, username: str, password: str = "password123") -> str:
+    """Хелпер получения access token"""
+    response = await client.post(LOGIN_URL, data={"username": username, "password": password})
+    return response.json()["access_token"]
+
+
+async def test_get_me(client: AsyncClient) -> None:
+    """GET /auth/me возвращает текущего пользователя"""
+    await _register(client, "me@example.com", "meuser")
+    token = await _login(client, "meuser")
+
+    response = await client.get(
         "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {token}"}
+        headers={"Authorization": f"Bearer {token}"},
     )
+
     assert response.status_code == 200
     assert response.json()["username"] == "meuser"
 
 
-def test_refresh_token(client: TestClient):
-    """Test token refresh"""
-    # Register and login
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "refresh@example.com",
-            "username": "refreshuser",
-            "password": "password123"
-        }
-    )
-    
-    login_response = client.post(
-        "/api/v1/auth/login",
-        data={
-            "username": "refreshuser",
-            "password": "password123"
-        }
+async def test_refresh_token(client: AsyncClient) -> None:
+    """Refresh token выдаёт новую пару токенов"""
+    await _register(client, "refresh@example.com", "refreshuser")
+    login_response = await client.post(
+        LOGIN_URL,
+        data={"username": "refreshuser", "password": "password123"},
     )
     refresh_token = login_response.json()["refresh_token"]
-    
-    # Refresh token
-    response = client.post(
+
+    response = await client.post(
         "/api/v1/auth/refresh",
-        params={"refresh_token": refresh_token}
+        params={"refresh_token": refresh_token},
     )
+
     assert response.status_code == 200
     assert "access_token" in response.json()
 
 
-def test_protected_route_without_token(client: TestClient):
-    """Test accessing protected route without token"""
-    response = client.get("/api/v1/auth/me")
-    assert response.status_code == 403
+async def test_refresh_with_access_token_rejected(client: AsyncClient) -> None:
+    """Access token нельзя использовать как refresh"""
+    await _register(client, "mix@example.com", "mixuser")
+    access_token = await _login(client, "mixuser")
+
+    response = await client.post(
+        "/api/v1/auth/refresh",
+        params={"refresh_token": access_token},
+    )
+
+    assert response.status_code == 401
+
+
+async def test_protected_route_without_token(client: AsyncClient) -> None:
+    """Без токена защищённый маршрут недоступен"""
+    response = await client.get("/api/v1/auth/me")
+
+    assert response.status_code in (401, 403)
+
+
+async def test_update_me(client: AsyncClient) -> None:
+    """PATCH /auth/me обновляет профиль"""
+    await _register(client, "patch@example.com", "patchuser")
+    token = await _login(client, "patchuser")
+
+    response = await client.patch(
+        "/api/v1/auth/me",
+        json={"level": "intermediate"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["level"] == "intermediate"

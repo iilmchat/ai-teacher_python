@@ -1,23 +1,26 @@
 """
 AI Teacher for Python - Main FastAPI Application
 """
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
 from app.api.v1 import auth
+from app.config import settings
+
+logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения"""
-    # Startup
-    print(f"🚀 Starting {settings.app_name} v{settings.version}")
+    logger.info("app_starting", app_name=settings.app_name, version=settings.version)
     yield
-    # Shutdown
-    print(f"👋 Shutting down {settings.app_name}")
+    logger.info("app_stopped", app_name=settings.app_name)
 
 
 app = FastAPI(
@@ -44,7 +47,7 @@ app.include_router(auth.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/health", tags=["Health"])
-async def health_check():
+async def health_check() -> dict[str, Any]:
     """Health check endpoint"""
     return {
         "status": "ok",
@@ -54,7 +57,7 @@ async def health_check():
 
 
 @app.get("/", tags=["Root"])
-async def root():
+async def root() -> dict[str, str]:
     """Root endpoint"""
     return {
         "message": f"Welcome to {settings.app_name}",
