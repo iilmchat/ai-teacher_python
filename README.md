@@ -72,6 +72,7 @@ pnpm dev
 
 Навигация: [docs/README.md](docs/README.md)
 
+- [docs/SPEC.md](docs/SPEC.md) — контракты API, схема БД, критерии приёмки
 - [Design.md](Design.md) — исходный дизайн и решения
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — как устроено сейчас
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md) — инструкция ученику

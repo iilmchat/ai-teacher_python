@@ -1,0 +1,236 @@
+# SPEC — спецификация проекта (источник истины по контрактам)
+
+Документ фиксирует **контракты** системы: API, схему БД, статусы, критерии
+приёмки. Архитектурные обоснования — в [../Design.md](../Design.md) и
+[ARCHITECTURE.md](ARCHITECTURE.md); правила разработки — [RULES.md](RULES.md).
+
+**Версия:** v0.1.0 · **Обновлено:** 2026-10-29
+
+---
+
+## 1. Область и цели
+
+Ассистент-учитель по Python для школьников 10–17 лет. Требования:
+
+| ID | Требование |
+|----|------------|
+| R1 | Три уровня помощи с разной образовательной политикой |
+| R2 | Чат с потоковым ответом и сохранением истории |
+| R3 | Безопасное выполнение кода ученика |
+| R4 | Задачи с автопроверкой и прогрессом |
+| R5 | Роли: ученик, преподаватель, администратор |
+| R6 | Развёртывание в Docker, офлайн-данные в PostgreSQL |
+
+Вне области v0.1.0: мобильное приложение, восстановление пароля, оплата,
+мультиарендность.
+
+---
+
+## 2. Роли и права
+
+| Действие | student | teacher | admin |
+|----------|:-------:|:-------:|:-----:|
+| Чат, песочница | ✅ | ✅ | ✅ |
+| Просмотр/решение задач | ✅ | ✅ | ✅ |
+| Создание/правка задач | ❌ | ✅ | ✅ |
+| Просмотр всех задач (вкл. неактивные) | ❌ | ❌ | ✅ |
+| Список пользователей, смена ролей | ❌ | ❌ | ✅ |
+| Аналитика | ❌ | ❌ | ✅ |
+
+Регистрация всегда создаёт `student` (KI-011). Роль выдаёт только администратор.
+
+---
+
+## 3. API (v1)
+
+Базовый путь: `/api/v1`. Аутентификация: `Authorization: Bearer <access_token>`.
+
+### 3.1 Аутентификация
+
+| Метод | Путь | Тело | Ответ |
+|-------|------|------|-------|
+| POST | `/auth/register` | `{email, username, password}` | 201 `User` |
+| POST | `/auth/login` | form: `username`, `password` | 200 `{access_token, refresh_token, token_type, user}` |
+| POST | `/auth/refresh` | query `refresh_token` | 200 `{access_token, refresh_token}` |
+| POST | `/auth/logout` | — | 200 `{message}` |
+| GET | `/auth/me` | — | 200 `User` |
+| PATCH | `/auth/me` | `{email?, username?, level?, settings?}` | 200 `User` |
+
+Ошибки: 400 (дубликат email/username), 401 (неверные данные), 422 (валидация),
+429 (лимит — после подключения KI-007).
+
+### 3.2 Пользователи
+
+| Метод | Путь | Права | Ответ |
+|-------|------|-------|-------|
+| GET | `/users/me` | любой | `User` |
+| GET | `/users/me/level` | любой | `{level, title, description, audience, gives_ready_code}` |
+| PATCH | `/users/me/level` | любой | `User` |
+| GET | `/users/levels` | любой | `{levels: [...]}` |
+| POST | `/users/me/activity` | любой | `{status}` |
+| GET | `/users/{id}` | admin | `User` |
+| PATCH | `/users/{id}/role?role=` | admin | `User` |
+
+### 3.3 Чат
+
+| Метод | Путь | Тело | Ответ |
+|-------|------|------|-------|
+| GET | `/chat/levels` | — | `{levels: [...]}` |
+| POST | `/chat/sessions` | `{level?}` | 201 `ChatSession` |
+| GET | `/chat/sessions?skip&limit` | — | `ChatSession[]` |
+| GET | `/chat/sessions/{id}` | — | `ChatSessionWithMessages` |
+| DELETE | `/chat/sessions/{id}` | — | 204 |
+| POST | `/chat/sessions/{id}/messages` | `{content}` | 201 `{user_message, assistant_message}` |
+
+WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
+
+```
+client → {"type":"chat","content":"..."} | {"type":"ping"}
+server → {"type":"start"} | {"type":"token","content":"…"} |
+         {"type":"done","content":"полный текст"} |
+         {"type":"error","detail":"…"} | {"type":"pong"}
+```
+
+Права: своя сессия — 200; чужая — 403; несуществующая — 404.
+
+### 3.4 Код
+
+| Метод | Путь | Тело | Ответ |
+|-------|------|------|-------|
+| POST | `/code/execute` | `{code, stdin?}` | `ExecutionResult` |
+| POST | `/code/lint` | `{code}` | `LintResponse` |
+| POST | `/code/analyze` | `{code}` | `{issues, stats, summary}` |
+| GET | `/code/history?skip&limit` | — | `ExecutionRecord[]` |
+| GET | `/code/history/{id}` | — | `ExecutionRecord` (своя) |
+| GET | `/code/limits` | — | `{timeout_seconds, memory_limit_mb, max_code_length, allowed_modules}` |
+
+`ExecutionResult`: `{success, output, error, error_type, execution_time, violations}`.
+
+### 3.5 Задачи
+
+| Метод | Путь | Тело | Ответ |
+|-------|------|------|-------|
+| GET | `/tasks?difficulty&category&skip&limit` | — | `TaskListItem[]` |
+| GET | `/tasks/progress` | — | `ProgressSummary` |
+| GET | `/tasks/stats` | — | `TaskStats` |
+| GET | `/tasks/{id}` | — | `TaskDetail` |
+| GET | `/tasks/{id}/hints/{index}` | — | `{index, hint, total}` |
+| POST | `/tasks/{id}/submit` | `{code}` | `SubmitResponse` |
+| POST | `/tasks` | `TaskCreate` | 201 `TaskAdminDetail` (teacher/admin) |
+| PATCH | `/tasks/{id}` | `TaskUpdate` | `TaskAdminDetail` (teacher/admin) |
+| DELETE | `/tasks/{id}` | — | 204 (teacher/admin) |
+
+`SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message}`.
+
+### 3.6 Админка
+
+| Метод | Путь | Параметры | Ответ |
+|-------|------|-----------|-------|
+| GET | `/admin/users` | `role?`, `search?`, `skip`, `limit` | `{total, items[]}` |
+| PATCH | `/admin/users/{id}` | `{role?, level?}` | `AdminUserItem` |
+| DELETE | `/admin/users/{id}` | — | `{deleted: true}` |
+| GET | `/admin/tasks` | `skip`, `limit` | `{total, items[]}` |
+| GET | `/admin/analytics` | — | `{users, tasks, learning, activity, generated_at}` |
+
+Ограничения: 400 — понижение/удаление себя; 403 — не админ; 404 — нет пользователя.
+
+### 3.7 Служебное
+
+`GET /health` → `{status, version, app_name, llm_provider}`
+
+---
+
+## 4. Схема БД (миграции 001–003)
+
+```
+users(id, email*, username*, hashed_password, role, level,
+      created_at, last_active, settings JSONB)
+   role ∈ {student, teacher, admin} · level ∈ {basic, intermediate, advanced}
+
+chat_sessions(id, user_id→users, level, created_at, updated_at, metadata JSONB)
+chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
+              embedding VECTOR(1536), created_at)
+   role ∈ {user, assistant, system}
+
+code_executions(id, user_id→users, code, output, error, success, execution_time,
+                created_at)
+
+tasks(id, title, description, difficulty, category, test_cases JSONB,
+      hints JSONB, solution_template, created_by→users, created_at, is_active)
+   difficulty ∈ {easy, medium, hard}
+
+user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
+                   best_solution, completed_at, updated_at)
+   status ∈ {not_started, in_progress, completed} · UNIQUE(user_id, task_id)
+```
+
+Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс.
+Удаление задачи с прогрессом → мягкое (`is_active=false`).
+
+Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
+`chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
+`tasks(category)`, `user_task_progress(user_id)`.
+
+---
+
+## 5. Песочница: политика
+
+| Параметр | Значение |
+|----------|----------|
+| Разрешённые модули | `math, random, datetime, collections, itertools, functools, string, re, statistics, decimal, fractions, json` |
+| Запрещённые модули | `os, sys, subprocess, socket, shutil, pathlib, importlib, builtins, ctypes, multiprocessing, threading, sqlite3, http, urllib, requests, pickle, marshal` |
+| Запрещённые вызовы | `open, eval, exec, compile, globals, locals, __import__` (прямой) |
+| Dunder-атрибуты | запрещены |
+| Таймаут | `EXECUTOR_TIMEOUT` (5 с), процесс убивается |
+| Размер кода | ≤ 20 000 символов |
+| `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |
+| Память | не ограничена на Windows (KI-009) |
+
+---
+
+## 6. Статусы и переходы
+
+**Прогресс задачи:**
+
+```
+not_started ──submit(неверно)──► in_progress ──submit(верно)──► completed
+      └──────────────────────────submit(верно)──────────────────┘
+```
+
+Задача решена ⇔ все тест-кейсы пройдены. Попытки накапливаются, лимита нет.
+
+**Сессия чата:** создаётся с уровнем (профиля или переданным), живёт до удаления.
+
+---
+
+## 7. Критерии приёмки v0.1.0
+
+- [x] Регистрация/вход/обновление токена; роль всегда `student`
+- [x] Все защищённые эндпоинты возвращают 401/403 без прав
+- [x] Чат: стриминг и REST-ответ дают одинаковый результат
+- [x] Промпт выбранного уровня уходит в модель (проверено тестом)
+- [x] Песочница блокирует `os`/`open`/dunder и убивает бесконечный цикл
+- [x] Задача засчитывается только при прохождении всех тестов
+- [x] Чужой ресурс недоступен (403)
+- [x] Админ не может понизить/удалить себя
+- [x] Автотесты: backend 137, frontend 63; ruff/mypy/typecheck/lint — 0
+- [x] `alembic check` без расхождений
+- [x] Документация: 16 файлов в `docs/`
+
+Не входит в приёмку (осознанно): e2e (KI-012), rate limiting в рантайме
+(KI-007), живые ответы LLM (KI-008), память песочницы (KI-009), офлайн-Monaco
+(KI-013).
+
+---
+
+## 8. Совместимость и версии
+
+| Компонент | Версия |
+|-----------|--------|
+| Python | 3.12 (проверено также на 3.11) |
+| FastAPI / Pydantic | 0.115 / 2.10 |
+| PostgreSQL + pgvector | 17 / образ `pgvector/pgvector:pg17` |
+| Redis | 7 |
+| Node.js / pnpm | 22 / 12 |
+| React / Vite / TypeScript | 19 / 6 / 5.8 |
+| API | v1 (`/api/v1`), обратная совместимость внутри major |
