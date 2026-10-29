@@ -5,8 +5,8 @@
 
 **Версия:** v0.1.0  
 **Последнее обновление:** 2026-10-29  
-**Текущий спринт:** Спринт 4 (Chat Service)  
-**Готово:** Спринты 1–3 (инфраструктура, ядро backend, аутентификация)
+**Текущий спринт:** Спринт 5 (Three Levels)  
+**Готово:** Спринты 1–4 (инфраструктура, ядро backend, аутентификация, чат с LLM)
 
 ---
 
@@ -205,62 +205,63 @@
 
 **Цель:** Реализовать чат-сервис с интеграцией LLM.
 
-### S4-001: LLM Provider Interface
-- [ ] Создать app/services/llm/base.py (абстрактный класс)
-- [ ] Создать app/services/llm/deepseek.py
-- [ ] Создать app/services/llm/lm_studio.py
-- [ ] Добавить конфигурацию провайдеров
-- [ ] **Зависит от:** S2-001, S2-002
-- [ ] **Оценка:** 2 часа
+### S4-001: LLM Provider Interface — ✅
+- [x] Создать app/services/llm/base.py (абстрактный класс, LLMMessage, ошибки)
+- [x] Создать app/services/llm/deepseek.py
+- [x] Создать app/services/llm/lm_studio.py
+- [x] Добавить конфигурацию провайдеров (фабрика create_llm_provider)
+- [x] **Зависит от:** S2-001, S2-002
+- [x] **Оценка:** 2 часа
 
-### S4-002: Chat Service
-- [ ] Создать app/services/chat_service.py
-- [ ] Реализовать создание сессии
-- [ ] Реализовать отправку сообщения
-- [ ] Реализовать получение истории
-- [ ] **Зависит от:** S2-007, S4-001
-- [ ] **Оценка:** 2 часа
+### S4-002: Chat Service — ✅
+- [x] Создать app/services/chat_service.py
+- [x] Реализовать создание сессии
+- [x] Реализовать отправку сообщения (generate + stream_reply)
+- [x] Реализовать получение истории
+- [x] **Зависит от:** S2-007, S4-001
+- [x] **Оценка:** 2 часа
 
-### S4-003: Prompt Management
-- [ ] Создать app/services/llm/prompts/ директорию
-- [ ] Создать базовый промпт
-- [ ] Создать систему подстановки переменных
-- [ ] Добавить версию промптов
-- [ ] **Зависит от:** S4-001
-- [ ] **Оценка:** 1.5 часа
+### S4-003: Prompt Management — ✅
+- [x] Создать app/services/llm/prompts/ директорию
+- [x] Создать базовый промпт (+ intermediate, advanced)
+- [x] Создать систему подстановки переменных (prompt_builder.build_messages)
+- [ ] Версионирование промптов (файлы под git; отдельные версии — в спринте 5)
+- [x] **Зависит от:** S4-001
+- [x] **Оценка:** 1.5 часа
 
-### S4-004: Context Management
-- [ ] Реализовать сбор контекста из истории чата
-- [ ] Добавить truncation для длинных диалогов
-- [ ] Добавить injection системного промпта
-- [ ] **Зависит от:** S4-002
-- [ ] **Оценка:** 1 час
+### S4-004: Context Management — ✅
+- [x] Реализовать сбор контекста из истории чата
+- [x] Добавить truncation (последние 20 сообщений, 4000 символов на сообщение)
+- [x] Добавить injection системного промпта
+- [x] **Зависит от:** S4-002
+- [x] **Оценка:** 1 час
 
-### S4-005: Chat API
-- [ ] Создать app/api/v1/chat.py
-- [ ] POST /api/v1/chat/sessions
-- [ ] GET /api/v1/chat/sessions
-- [ ] GET /api/v1/chat/sessions/{id}
-- [ ] DELETE /api/v1/chat/sessions/{id}
-- [ ] POST /api/v1/chat/sessions/{id}/messages
-- [ ] **Зависит от:** S4-002, S2-006
-- [ ] **Оценка:** 2 часа
+### S4-005: Chat API — ✅
+- [x] Создать app/api/v1/chat.py
+- [x] POST /api/v1/chat/sessions
+- [x] GET /api/v1/chat/sessions
+- [x] GET /api/v1/chat/sessions/{id}
+- [x] DELETE /api/v1/chat/sessions/{id}
+- [x] POST /api/v1/chat/sessions/{id}/messages
+- [x] **Зависит от:** S4-002, S2-006
+- [x] **Оценка:** 2 часа
 
-### S4-006: WebSocket для чата
-- [ ] Создать app/api/websocket.py
-- [ ] Реализовать streaming ответов LLM
-- [ ] Добавить heartbeat
-- [ ] Добавить error handling
-- [ ] **Зависит от:** S4-005
-- [ ] **Оценка:** 2 часа
+### S4-006: WebSocket для чата — ⚠️ частично
+- [x] Создать app/api/websocket.py
+- [x] Реализовать streaming ответов LLM (start/token/done/error)
+- [x] Добавить heartbeat (ping/pong)
+- [x] Добавить error handling
+- [ ] Интеграционный тест полного стриминга (см. KI-006)
+- [x] **Зависит от:** S4-005
+- [x] **Оценка:** 2 часа
 
-### S4-007: Тесты Chat Service
-- [ ] tests/test_chat_sessions.py
-- [ ] tests/test_chat_messages.py
-- [ ] tests/test_llm_providers.py (mock)
-- [ ] tests/test_websocket.py
-- [ ] **Зависит от:** S4-005, S4-006
-- [ ] **Оценка:** 2 часа
+### S4-007: Тесты Chat Service — ⚠️ частично
+- [x] tests/test_chat.py (сессии, сообщения, доступ, контекст)
+- [x] tests/test_prompts.py (промпты, контекст, извлечение кода)
+- [x] tests/test_websocket.py (авторизация WS)
+- [ ] Отдельный файл тестов провайдеров (покрыто фабрикой в test_prompts.py)
+- [x] **Зависит от:** S4-005, S4-006
+- [x] **Оценка:** 2 часа
 
 ---
 

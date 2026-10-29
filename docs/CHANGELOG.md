@@ -23,12 +23,21 @@
 - Эндпоинты `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`,
   `GET/PATCH /auth/me`
 - RBAC через `require_role` и rate limiting middleware на Redis
-- Тесты: 17 (health + auth) на реальном PostgreSQL
+- LLM-слой: контракт `LLMProvider`, провайдеры DeepSeek и LM Studio,
+  фабрика выбора по `LLM_PROVIDER`
+- Промпты трёх уровней в файлах (`prompts/basic|intermediate|advanced.txt`)
+- `ChatService`: сессии, история, контекст (20 сообщений), стриминг ответа
+- Chat API: `POST/GET /chat/sessions`, `GET/DELETE /chat/sessions/{id}`,
+  `POST /chat/sessions/{id}/messages`
+- WebSocket `/api/v1/chat/ws/{session_id}` со стримингом `start/token/done/error`
+- Доменные ошибки `AppError` с единым HTTP-обработчиком
+- Тесты: 53 (health + auth + chat + prompts + websocket) на реальном PostgreSQL
 
 ### Изменено
 - Внешние порты вынесены в ENV: Postgres `5434`, Redis `6381` (KI-001)
 - `Settings` читает `.env` из корня проекта по абсолютному пути
 - Пароли хэшируются напрямую через `bcrypt` вместо `passlib` (KI-005)
+- Healthcheck возвращает `llm_provider`
 
 ### Исправлено
 - Enum-колонки писали имена вместо значений (`STUDENT` вместо `student`) (KI-004)

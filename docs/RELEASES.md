@@ -105,7 +105,54 @@
 - Smoke: register 201 → login 200 → GET /me 200 на реальном сервере
 
 ### Следующие шаги
-- Спринт 4: Chat Service (LLM-провайдеры, сессии, WebSocket)
+- Спринт 5: три уровня ассистента (детализация промптов и API уровней)
+
+---
+
+## Спринт 4: Chat Service
+
+**Период:** 2026-10-29  
+**Статус:** ✅ Завершён (с двумя частичными пунктами)
+
+### Задачи
+- [x] S4-001: LLM Provider Interface (base, deepseek, lm_studio, фабрика)
+- [x] S4-002: Chat Service (сессии, сообщения, stream_reply)
+- [x] S4-003: Prompt Management (промпты в файлах, сборка сообщений)
+- [x] S4-004: Context Management (последние 20 сообщений, 4000 символов)
+- [x] S4-005: Chat API (5 эндпоинтов)
+- [~] S4-006: WebSocket (реализован, полный стриминг не покрыт тестом — KI-006)
+- [~] S4-007: Тесты (36 новых тестов; отдельный тест stream — в KI-006)
+
+### Что сделано
+- `app/services/llm/`: контракт `LLMProvider`, провайдеры DeepSeek и LM Studio,
+  фабрика `create_llm_provider` по `LLM_PROVIDER`
+- `app/services/llm/prompts/`: `basic.txt`, `intermediate.txt`, `advanced.txt`
+  с образовательной политикой уровня
+- `app/services/llm/prompt_builder.py`: загрузка промпта, обрезка истории,
+  системное сообщение
+- `app/services/chat_service.py`: сессии, история, `send_message`,
+  `stream_reply`, извлечение блоков кода
+- `app/api/v1/chat.py`: создание/список/просмотр/удаление сессий,
+  отправка сообщения
+- `app/api/websocket.py`: стриминг `start/token/done/error`, ping/pong,
+  JWT в query-параметре
+- `app/errors.py`: доменные ошибки и единый обработчик `AppError`
+- Тесты: `test_chat.py` (13), `test_prompts.py` (21), `test_websocket.py` (2)
+
+### Проблемы
+- KI-006: нет интеграционного теста полного WS-стриминга
+- KI-007: rate limiting всё ещё не подключён
+- Провайдеры проверены только фабрикой: реальные вызовы требуют API-ключа
+  или запущенного LM Studio
+
+### Метрики
+- Тесты: **53 passed** (`pytest -q`)
+- Ruff: 0 ошибок · MyPy (strict): 0 ошибок
+- Smoke: health отдаёт `llm_provider`, `/chat/sessions` без токена — 403,
+  OpenAPI содержит 9 путей
+
+### Следующие шаги
+- Спринт 5: уровни ассистента (API уровней, переключение, fallback)
 
 ---
 
