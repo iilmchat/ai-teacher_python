@@ -10,6 +10,13 @@
 ## [Unreleased]
 
 ### Добавлено
+- Кабинет учителя: `/teacher/tasks` (CRUD, тест-кейсы, импорт с предпросмотром)
+  и `/teacher/students` (агрегаты и прогресс по задачам)
+- API учителя: `/teacher/tasks`, `/teacher/students`,
+  `/teacher/students/{id}/progress`; импорт файла `/tasks/import/file`
+- Локальный Monaco без CDN: ассеты `public/monaco/vs`, lazy-чанк,
+  `pnpm test:offline` (KI-013)
+- Code splitting всех маршрутов: entry 76.3 kB gzip, vendor-чанки
 - Импорт/экспорт задач: JSON и YAML, `POST /tasks/import`,
   `GET /tasks/export?format=json|yaml`, CLI `scripts/import_tasks.py`
 - `SEED_ON_START=true` — идемпотентное наполнение задач при старте (KI-010)
@@ -60,6 +67,8 @@
 - `/code/limits` отдаёт лимиты памяти, вывода и параллелизма; результат
   выполнения — `memory_limit_enforced` / `output_truncated`
 - Задачи: `tags` в ответах API, `q`/`tag` в каталоге, `PyYAML` в зависимостях
+- Frontend: `@monaco-editor/react` удалён, используется `monaco-editor` с
+  локальными AMD-ассетами и `MonacoEditor` lazy-чанком
 
 ### Исправлено
 - Лимит памяти песочницы на Windows больше не «декоративный»: Job Object

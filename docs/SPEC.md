@@ -136,6 +136,8 @@ violations, memory_limit_enforced, output_truncated}`.
 | GET | `/tasks?tag=&q=` | — | фильтр по тегу и поиск (S14-004) |
 | GET | `/tasks/categories` | — | `{categories[]}` |
 | POST | `/tasks/import` | `{tasks: [...]}` | `{created, skipped, errors[]}` (teacher/admin) |
+| POST | `/tasks/import/preview` | `{content}` | `{tasks, errors[]}` (teacher/admin) |
+| POST | `/tasks/import/file` | multipart `file` | `{created, skipped, errors[]}` (teacher/admin) |
 | GET | `/tasks/export?format=json\|yaml` | — | массив задач (teacher/admin) |
 | POST | `/tasks/generate` | `{topic, difficulty, count≤5}` | `{created[], rejected[], prompt_tokens, completion_tokens}` |
 | GET | `/tasks/{id}/versions` | — | `{items[]}` (teacher/admin) |
@@ -160,7 +162,19 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 Ограничения: 400 — понижение/удаление себя; 403 — не админ; 404 — нет пользователя.
 
-### 3.7 Служебное
+### 3.7 Кабинет учителя
+
+| Метод | Путь | Параметры | Ответ |
+|-------|------|-----------|-------|
+| GET | `/teacher/tasks` | — | `{total, items[]}` (включая неактивные) |
+| GET | `/teacher/tasks/{id}` | — | `TaskAdminDetail` |
+| GET | `/teacher/students` | `search?`, `skip`, `limit` | `{total, items[]}` (агрегаты) |
+| GET | `/teacher/students/{id}/progress` | — | `{student, total_tasks, completed, in_progress, completion_rate, items[]}` |
+
+Доступ: `teacher`/`admin`; ученик получает 403. Не-ученик в
+`/teacher/students/{id}` — 404.
+
+### 3.8 Служебное
 
 `GET /health` → `{status, version, app_name, llm_provider, llm}`
 

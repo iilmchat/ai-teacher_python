@@ -530,8 +530,15 @@ tests/
    (`el?.scrollIntoView?.(...)`), иначе тесты падают на монтировании.
 9. **Правило react-refresh.** Файл с компонентом не должен экспортировать ещё и
    утилиты: `splitCodeFences` вынесена в `lib/markdown.ts`, иначе ESLint даёт warning.
-10. **Monaco в тестах.** `@monaco-editor/react` мокается в `src/test/setup.ts`
-    на `textarea`; в рантайме Monaco грузится с CDN (KI-013).
+10. **Monaco в тестах.** Lazy-компонент `MonacoEditor` мокается в
+    `src/test/setup.ts` на `textarea`; сам Monaco в jsdom не грузим.
+11. **Monaco офлайн.** `@monaco-editor/react` удалён; AMD-ассеты
+    `monaco-editor/min/vs` копируются в `public/monaco/vs` (prebuild/predev),
+    editor — lazy-чанк, worker — через `MonacoEnvironment.getWorkerUrl`.
+    `pnpm test:offline` проверяет отсутствие CDN в `dist/assets`.
+12. **Регистр имён файлов.** `TaskForm.tsx` и `taskForm.ts` на Windows — один
+    файл для tsc, но два для Linux; типы формы вынесены в
+    `taskFormTypes.ts`, чтобы не ловить TS1261.
 11. **`loadMe()` при старте.** Токен в localStorage ещё не значит «пользователь
     загружен»: `App.tsx` вызывает `loadMe()` в `useEffect`, иначе после F5
     `ProtectedRoute` навсегда остаётся в `initializing` (Spinner). Баг найден e2e.
