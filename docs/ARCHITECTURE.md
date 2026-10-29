@@ -146,6 +146,8 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
   `MonacoEditor` грузится lazy, worker — с собственного origin; `pnpm
   test:offline` проверяет отсутствие CDN в бандле.
 - `TeacherRoute` и `AdminRoute` закрывают разделы по роли.
+- Достижения, streak и уведомления: `engagement_service`; уведомления создаются
+  на назначение, достижение и лениво на дедлайн ≤72 ч.
 
 ## 7. Данные
 
@@ -158,7 +160,9 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 | `task_versions` | история правок задач |
 | `classrooms` / `classroom_members` | классы и участники |
 | `assignments` | назначения задач классам |
-| `alembic_version` | миграции (001 → 007) |
+| `achievements` / `user_achievements` | справочник и полученные достижения |
+| `notifications` | in-app уведомления |
+| `alembic_version` | миграции (001 → 008) |
 
 Миграции: `backend/alembic/versions/`. Перед коммитом —
 `alembic upgrade head && alembic check`.

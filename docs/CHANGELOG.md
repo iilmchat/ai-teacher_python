@@ -10,6 +10,12 @@
 ## [Unreleased]
 
 ### Добавлено
+- Достижения (`achievements`, `user_achievements`, миграция 008): 6 правил,
+  выдача при submit, `GET /me/achievements`
+- `GET /me/stats`: решено, серия дней (UTC+3), средние попытки, активность в чате
+- Дашборд `/dashboard`: прогресс-бар, streak, последние задачи, достижения
+- In-app уведомления (`notifications`): назначение, дедлайн ≤72 ч, достижение;
+  `GET /me/notifications` и отметка прочитанным
 - Классы: `classrooms`, `classroom_members`, `assignments` (миграция 007);
   создание, вступление по коду, исключение участника
 - Назначения задач классу с дедлайнами, `/me/assignments`, матрица прогресса
