@@ -1,0 +1,105 @@
+import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+
+import { Alert } from '@/components/ui/Alert';
+import { Card } from '@/components/ui/Card';
+import { Spinner } from '@/components/ui/Spinner';
+import { api } from '@/lib/api';
+import type { MyAssignmentList } from '@/types/api';
+
+export function AssignmentsPage() {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<MyAssignmentList['items']>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .get<MyAssignmentList>('/me/assignments')
+      .then((data) => {
+        if (active) {
+          setItems(data.items);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setError(t('classrooms.assignmentsError'));
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [t]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-xl font-semibold text-slate-900">
+        {t('classrooms.myAssignments')}
+      </h1>
+      {error && <Alert tone="error">{error}</Alert>}
+      {loading ? (
+        <Spinner />
+      ) : (
+        <Card title={t('classrooms.assignments')}>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">{t('teacher.colTask')}</th>
+                  <th className="py-2">{t('classrooms.class')}</th>
+                  <th className="py-2">{t('classrooms.dueAt')}</th>
+                  <th className="py-2">{t('teacher.colStatus')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-t border-slate-100">
+                    <td className="py-2">
+                      <Link
+                        to={`/tasks/${item.task_id}`}
+                        className="font-medium text-indigo-700 hover:underline"
+                      >
+                        {item.title}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-slate-600">{item.classroom_name}</td>
+                    <td className="py-2 text-slate-600">
+                      {item.due_at
+                        ? new Date(item.due_at).toLocaleString('ru-RU')
+                        : '—'}
+                    </td>
+                    <td className="py-2">
+                      {item.overdue ? (
+                        <span className="rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-700">
+                          {t('classrooms.overdue')}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600">
+                          {t(`tasks.status.${item.status}`)}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-slate-500">
+                      {t('classrooms.noMyAssignments')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}

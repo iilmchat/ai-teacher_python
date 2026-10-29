@@ -320,3 +320,79 @@ export interface TaskImportReport {
   skipped: number;
   errors: { index: number; title?: string | null; message: string }[];
 }
+
+// --- Classrooms & assignments (S16) ------------------------------------
+
+export interface Classroom {
+  id: string;
+  name: string;
+  owner_id: string;
+  join_code: string;
+  created_at: string;
+  members_count: number;
+}
+
+export interface ClassroomList {
+  items: Classroom[];
+}
+
+export interface ClassroomMember {
+  user_id: string;
+  username: string;
+  email: string;
+  role: string;
+  joined_at: string;
+}
+
+export interface ClassroomDetail extends Classroom {
+  members: ClassroomMember[];
+}
+
+export interface Assignment {
+  id: string;
+  task_id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  due_at: string | null;
+  created_at: string;
+  completed_count: number;
+  total_members: number;
+}
+
+export interface AssignmentList {
+  items: Assignment[];
+}
+
+export interface MyAssignment {
+  id: string;
+  classroom_id: string;
+  classroom_name: string;
+  task_id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  due_at: string | null;
+  status: TaskStatus;
+  overdue: boolean;
+}
+
+export interface MyAssignmentList {
+  items: MyAssignment[];
+}
+
+export interface ClassProgress {
+  students: { id: string; username: string }[];
+  tasks: { id: string; title: string }[];
+  cells: {
+    student_id: string;
+    task_id: string;
+    status: TaskStatus;
+    attempts: number;
+  }[];
+  completion_rate: number;
+  problem_tasks: {
+    task_id: string;
+    title: string;
+    attempts: number;
+    completed: number;
+  }[];
+}

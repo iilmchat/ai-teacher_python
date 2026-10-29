@@ -6,6 +6,7 @@
 """
 
 from app.models.chat import ChatMessage, ChatSession, MessageRole
+from app.models.classroom import Assignment, Classroom, ClassroomMember, ClassroomRole
 from app.models.code import CodeExecution
 from app.models.task import (
     Task,
@@ -17,8 +18,12 @@ from app.models.task import (
 from app.models.user import User, UserLevel, UserRole
 
 __all__ = [
+    "Assignment",
     "ChatMessage",
     "ChatSession",
+    "Classroom",
+    "ClassroomMember",
+    "ClassroomRole",
     "CodeExecution",
     "MessageRole",
     "Task",
