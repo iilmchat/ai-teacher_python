@@ -2,8 +2,8 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.1.0  
-**Текущий спринт:** Спринт 4 (Chat Service)
+**Текущая версия:** v0.1.0 (выпущена)  
+**Текущий спринт:** этап v0.1.0 завершён; следующий — спринт 11 по [TODO_V0.2.md](../TODO_V0.2.md)
 
 ---
 
@@ -12,6 +12,14 @@
 - [Спринт 1: Project Setup](#спринт-1-project-setup)
 - [Спринт 2: Backend Core](#спринт-2-backend-core)
 - [Спринт 3: Authentication](#спринт-3-authentication)
+- [Спринт 4: Chat Service](#спринт-4-chat-service)
+- [Спринт 5: Three Levels](#спринт-5-three-levels)
+- [Спринт 6: Code Execution](#спринт-6-code-execution)
+- [Спринт 7: Task System](#спринт-7-task-system)
+- [Спринт 8: Frontend Base](#спринт-8-frontend-base)
+- [Спринт 9: Frontend Features](#спринт-9-frontend-features)
+- [Спринт 10: Admin & Polish — релиз v0.1.0](#спринт-10-admin--polish--релиз-v010)
+- [Следующий этап: v0.2.0](#следующий-этап-v020-classroom-планируется)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
 ---
@@ -408,6 +416,28 @@
 - Локальный Monaco bundle (KI-013)
 - Живая валидация ответов LLM по методике LLM_EVAL (KI-008)
 - Лимит памяти песочницы (KI-009)
+
+---
+
+## Следующий этап: v0.2.0 «Classroom» (планируется)
+
+**План:** [../TODO_V0.2.md](../TODO_V0.2.md) — спринты 11–20, ~24 дня.
+
+| Спринт | Тема | Закрывает |
+|--------|------|-----------|
+| 11 | Quality Gates & E2E | KI-001, KI-002, KI-006, KI-007, KI-012 |
+| 12 | LLMOps | KI-008 |
+| 13 | Sandbox Hardening | KI-009 |
+| 14 | Tasks v2 | KI-010 |
+| 15 | Teacher Console | — |
+| 16 | Classrooms & Assignments | — |
+| 17 | Engagement | — |
+| 18 | UX, A11y & Design System | — |
+| 19 | Performance & Scale | KI-013 |
+| 20 | Security Audit & Release | — |
+
+Порядок обязателен: спринты 11–13 закрывают технический долг, только затем
+добавляется функциональность (14–18) и оптимизации (19–20).
 
 ---
 

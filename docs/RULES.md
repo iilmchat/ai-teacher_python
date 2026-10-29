@@ -207,11 +207,20 @@ tests/
 ### 5.1. Что и где
 
 - **`Design.md`** — единственный источник истины по архитектуре.
-- **`TODO.md`** — порядок работ и зависимости.
+- **`docs/SPEC.md`** — контракты: API, схема БД, статусы, критерии приёмки.
+- **`TODO.md`** — план завершённого этапа v0.1.0 (спринты 1–10).
+- **`TODO_V0.2.md`** — план текущего этапа v0.2.0 (спринты 11–20); следующий
+  этап получает свой файл `TODO_VX.Y.md`.
 - **`docs/RULES.md`** — этот документ.
 - **`docs/GETTING_STARTED.md`** — как развернуть за 20 минут.
 - **`docs/USER_GUIDE.md`** — как пользоваться.
+- **`docs/ASSISTANT_LEVELS.md`** — уровни помощи.
 - **`docs/ARCHITECTURE.md`** — как это устроено.
+- **`docs/MANUAL_TESTING_GUIDE.md`** — ручные кейсы и чек-лист приёмки.
+- **`docs/PROMPT_CURRENT.md`** — инструкции ассистента и метрики.
+- **`docs/LLM_EVAL.md`** — оценка качества ответов LLM.
+- **`docs/DESIGN_ADMIN_AND_OPS.md`** — админка, LLMOps, FinOps, guardrails.
+- **`docs/README.md`** — навигационный хаб.
 - **`docs/RELEASES.md`** — журнал спринтов.
 - **`docs/CHANGELOG.md`** — по [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
 - **`docs/KNOWN_ISSUES.md`** — реестр проблем (`KI-NNN`).
@@ -229,9 +238,14 @@ tests/
 
 ### 6.1. Планирование
 
-- Итерация = один спринт из `TODO.md`.
+- Итерация = один спринт из плана этапа: `TODO.md` (v0.1.0) или
+  `TODO_V0.2.md` (v0.2.0 и далее).
+- **Один этап — один файл плана.** `TODO.md` содержит завершённые спринты
+  1–10; новый этап начинается отдельным файлом `TODO_VX.Y.md`, чтобы история
+  не смешивалась с текущими задачами.
 - В начале спринта — план в `docs/RELEASES.md`: задачи, порядок, риски.
-- Если задача оказалась больше — разбей на подзадачи (`S-N-NNNa`, `S-N-NNNb`).
+- Если задача оказалась больше — разбей на подзадачи (`S-N-NNNa`, `S-N-NNNb`)
+  и обнови зависимости в файле плана текущего этапа.
 
 ### 6.2. Выполнение
 
@@ -244,13 +258,25 @@ tests/
 
 Спринт завершён, когда:
 
-1. Все задачи закрыты (`[x]` в `TODO.md`), или явно перенесены в `KNOWN_ISSUES.md`.
-2. `ruff check .`, `mypy app`, `pytest -q` — зелёные.
-3. `pnpm --dir frontend typecheck && pnpm --dir frontend build` — зелёные.
+1. Все задачи закрыты (`[x]` в плане этапа), или явно перенесены в
+   `KNOWN_ISSUES.md` с `KI-NNN`.
+2. `ruff check app tests`, `mypy app`, `pytest -q` — зелёные.
+3. `pnpm --dir frontend typecheck && pnpm --dir frontend lint && pnpm --dir frontend test && pnpm --dir frontend build` — зелёные.
 4. CI — зелёный.
-5. Отчёт в `docs/RELEASES.md` заполнен.
+5. Отчёт в `docs/RELEASES.md` заполнен + `docs/reports/sprint-N/SPRINT-N.md`.
 6. `docs/CHANGELOG.md` обновлён.
 7. PR в `main` создан и смержен.
+
+### 6.4. Планирование следующего этапа
+
+Перед стартом нового этапа (vX.Y):
+
+1. Собрать открытые `KI-NNN` и разложить их по спринтам (сначала долг, потом фичи).
+2. Создать `TODO_VX.Y.md` со структурой: цели этапа, карта KI → спринты,
+   спринты с задачами/зависимостями/оценками, сквозной DoD, риски.
+3. Обновить `docs/RELEASES.md` (таблица будущих спринтов) и `docs/README.md`
+   (ссылка на новый план).
+4. Согласовать порядок спринтов: закрытие долга идёт первым.
 
 ---
 
@@ -545,7 +571,9 @@ curl -s http://localhost:8000/api/v1/health | python -m json.tool
 ## Приложение B. Ссылки
 
 - [Design.md](../Design.md) — источник истины по архитектуре.
-- [TODO.md](../TODO.md) — порядок работ.
+- [SPEC.md](SPEC.md) — контракты API и БД.
+- [TODO.md](../TODO.md) — завершённый этап v0.1.0.
+- [TODO_V0.2.md](../TODO_V0.2.md) — текущий план (спринты 11–20).
 - [CHANGELOG.md](CHANGELOG.md) — история версий.
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md) — реестр проблем.
 - [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
