@@ -41,7 +41,16 @@
 - Code API: `POST /code/execute`, `/code/lint`, `/code/analyze`,
   `GET /code/history`, `/code/limits`
 - Модель `CodeExecution` и миграция `002`
-- Тесты: 101 (health, auth, chat, prompts, levels, websocket, executor, linter, code API)
+- Система задач: модели `Task`/`UserTaskProgress`, миграция `003`, seed из 6 задач
+- Проверка решений по тест-кейсам: `stdin` → `input()`, сравнение с нормализацией
+- Task API: каталог с фильтрами, карточка, подсказки, submit, CRUD для преподавателей
+- Прогресс: `GET /tasks/progress`, `GET /tasks/stats` (попытки, completion rate,
+  разбивка по сложности)
+- Тесты: 126 (health, auth, chat, prompts, levels, websocket, executor, linter,
+  code API, tasks, runner)
+
+### Безопасность
+- Регистрация больше не принимает `role`: эскалация до admin/teacher закрыта (KI-011)
 
 ### Изменено
 - Внешние порты вынесены в ENV: Postgres `5434`, Redis `6381` (KI-001)

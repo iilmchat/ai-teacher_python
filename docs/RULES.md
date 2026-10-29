@@ -415,6 +415,13 @@ tests/
    не видят расхождений с Alembic. Перед коммитом — `alembic check` (KI-002).
 6. После любой правки миграции: `alembic upgrade head`, `alembic check`,
    `alembic downgrade base && alembic upgrade head`.
+7. **Lazy-relationship в async — `MissingGreenlet`.** Обращение вида
+   `if task.progress:` внутри async-сервиса падает. Используйте
+   `selectinload` или отдельный запрос (`exists_for_task`), как в
+   `TaskService.delete_task`.
+8. **Данные для разработки — отдельный скрипт.** Учебные задачи добавляет
+   `backend/scripts/seed_tasks.py` (идемпотентно, по заголовку), а не миграция
+   (KI-010).
 
 ### 11.6. Пароли и bcrypt
 
