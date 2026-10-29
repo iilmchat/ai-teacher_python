@@ -10,6 +10,11 @@
 ## [Unreleased]
 
 ### Добавлено
+- Тёмная тема: переключатель в шапке/профиле, `localStorage`, Monaco `vs-dark`
+- Дизайн-система: токены, `Modal`, `Toast`, `Tabs`, `Table`, `Badge`,
+  `Skeleton`; dev-страница `/dev/ui` вне прод-бандла
+- Доступность: skip-link, aria-разметка, `vitest-axe` на входе/регистрации
+- Мобильное меню и drawer сессий чата
 - Достижения (`achievements`, `user_achievements`, миграция 008): 6 правил,
   выдача при submit, `GET /me/achievements`
 - `GET /me/stats`: решено, серия дней (UTC+3), средние попытки, активность в чате

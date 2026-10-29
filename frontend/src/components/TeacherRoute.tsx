@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { useAuthStore } from '@/store/auth';
@@ -9,17 +10,20 @@ interface TeacherRouteProps {
 
 /** Доступ преподавателю и администратору (ProtectedRoute уже проверил вход) */
 export function TeacherRoute({ children }: TeacherRouteProps) {
+  const { t } = useTranslation();
   const user = useAuthStore((state) => state.user);
 
   if (!user || (user.role !== 'teacher' && user.role !== 'admin')) {
     return (
       <div className="flex flex-col items-center gap-3 py-16 text-center">
-        <p className="text-4xl">🔒</p>
+        <p className="text-4xl" aria-hidden="true">
+          🔒
+        </p>
         <h1 className="text-lg font-semibold text-slate-900">
-          Доступ только для преподавателя
+          {t('access.teacherOnly')}
         </h1>
         <Link to="/" className="text-sm text-indigo-700 hover:underline">
-          На главную
+          {t('access.home')}
         </Link>
       </div>
     );

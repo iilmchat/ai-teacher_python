@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuthStore } from '@/store/auth';
 import type { UserLevel } from '@/types/api';
 
@@ -46,6 +47,16 @@ export function ProfilePage() {
             <dd className="font-medium text-slate-900">{t(`profile.roles.${user.role}`)}</dd>
           </div>
         </dl>
+      </Card>
+
+      <Card
+        title={t('profile.appearance')}
+        description={t('profile.appearanceHint')}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-slate-700">{t('theme.label')}</span>
+          <ThemeToggle />
+        </div>
       </Card>
 
       <Card title={t('profile.level')} description={t('profile.levelHint')}>

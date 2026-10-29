@@ -1,7 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, expect, vi } from 'vitest';
+import * as axeMatchers from 'vitest-axe/matchers';
+
+expect.extend(axeMatchers);
 
 // Monaco загружается lazy-чанком: подменяем его до импорта страницы
 vi.mock('@/components/code-editor/MonacoEditor', () => ({

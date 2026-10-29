@@ -34,7 +34,7 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md) — как система устроена сейчас: модули, потоки, контракты
 - [RULES.md](RULES.md) — правила кода, тестов, коммитов, окружения
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
-- [../TODO_V0.2.md](../TODO_V0.2.md) — **план этапа v0.2.0** (спринты 11–20; 11–17 закрыты, 19 — частично)
+- [../TODO_V0.2.md](../TODO_V0.2.md) — **план этапа v0.2.0** (спринты 11–20; 11–18 закрыты, 19 — частично)
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
 ### Для QA и продукта
@@ -60,12 +60,12 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Спринты | 1–17 завершены (19 — частично) |
+| Спринты | 1–18 завершены (19 — частично) |
 | Тесты backend | 271 (pytest, реальный PostgreSQL; +1 skip на Windows) |
-| Тесты frontend | 76 unit + 12 e2e (Playwright) |
+| Тесты frontend | 80 unit + 12 e2e (Playwright) |
 | Покрытие | backend 80%, frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
-| Размер фронтенда | entry 78 kB gzip, initial ~112 kB |
+| Размер фронтенда | entry 79 kB gzip, initial ~113 kB |
 | Открытые проблемы | 1 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---

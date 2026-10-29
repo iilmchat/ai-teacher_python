@@ -28,6 +28,7 @@ export function ChatPage() {
 
   const [level, setLevel] = useState<UserLevel>(userLevel);
   const [creating, setCreating] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
 
   const sessionId = active?.id ?? null;
   const { send, connected } = useChatSession(sessionId);
@@ -53,8 +54,35 @@ export function ChatPage() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-      <aside className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3">
-        <h2 className="text-sm font-semibold text-slate-700">{t('chat.sessions')}</h2>
+      {sessionsOpen && (
+        <button
+          type="button"
+          aria-label={t('chat.closeSessions')}
+          onClick={() => setSessionsOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+        />
+      )}
+      <aside
+        id="sessions-panel"
+        className={`${
+          sessionsOpen
+            ? 'fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] overflow-y-auto'
+            : 'hidden'
+        } flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:static lg:z-auto lg:flex lg:w-auto`}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">
+            {t('chat.sessions')}
+          </h2>
+          <button
+            type="button"
+            onClick={() => setSessionsOpen(false)}
+            aria-label={t('chat.closeSessions')}
+            className="rounded p-1 text-slate-500 hover:bg-slate-100 lg:hidden"
+          >
+            ✕
+          </button>
+        </div>
 
         <LevelSelector value={level} onChange={setLevel} disabled={creating} />
 
@@ -67,7 +95,10 @@ export function ChatPage() {
             <li key={session.id} className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => void openSession(session.id)}
+                onClick={() => {
+                  void openSession(session.id);
+                  setSessionsOpen(false);
+                }}
                 aria-current={active?.id === session.id ? 'true' : undefined}
                 className={`flex-1 truncate rounded-lg px-2 py-1.5 text-left text-xs ${
                   active?.id === session.id
@@ -94,9 +125,21 @@ export function ChatPage() {
 
       <section className="flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
         <header className="flex items-center justify-between border-b border-slate-200 px-4 py-2">
-          <h2 className="text-sm font-semibold text-slate-700">
-            {active ? t('chat.title') : t('chat.noSession')}
-          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSessionsOpen(true)}
+              aria-label={t('chat.openSessions')}
+              aria-controls="sessions-panel"
+              aria-expanded={sessionsOpen}
+              className="rounded-lg px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 lg:hidden"
+            >
+              ☰
+            </button>
+            <h2 className="text-sm font-semibold text-slate-700">
+              {active ? t('chat.title') : t('chat.noSession')}
+            </h2>
+          </div>
           {active && (
             <span
               className={`text-xs ${connected ? 'text-emerald-600' : 'text-amber-600'}`}
