@@ -33,6 +33,12 @@ class UserUpdate(BaseModel):
     settings: dict[str, Any] | None = None
 
 
+class LevelUpdateRequest(BaseModel):
+    """Смена уровня помощи (S5-002)"""
+
+    level: UserLevel
+
+
 class UserResponse(UserBase):
     """Схема ответа с пользователем"""
 

@@ -5,7 +5,7 @@ Chat API endpoints (S4-005).
 в тестах он подменяется на фейковый без обращения к сети.
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, status
@@ -23,6 +23,7 @@ from app.schemas.chat import (
     ChatTurnResponse,
 )
 from app.services.chat_service import ChatService
+from app.services.levels import list_levels
 from app.services.llm import LLMProvider, create_llm_provider
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
@@ -45,6 +46,23 @@ def get_chat_service(db: DbSession, provider: LLMProviderDep) -> ChatService:
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+
+
+@router.get("/levels")
+async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
+    """Информация об уровнях ассистента (S5-004)"""
+    return {
+        "levels": [
+            {
+                "level": info.level.value,
+                "title": info.title,
+                "description": info.description,
+                "audience": info.audience,
+                "gives_ready_code": info.gives_ready_code,
+            }
+            for info in list_levels()
+        ]
+    }
 
 
 @router.post(

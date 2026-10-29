@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import websocket
-from app.api.v1 import auth, chat
+from app.api.v1 import auth, chat, users
 from app.config import settings
 from app.errors import AppError
 
@@ -60,6 +60,7 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
 
 # Include routers
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(websocket.router)
 

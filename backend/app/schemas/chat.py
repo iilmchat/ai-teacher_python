@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.models.chat import MessageRole
+from app.models.user import UserLevel
 
 
 class ChatSessionBase(BaseModel):
@@ -16,8 +17,14 @@ class ChatSessionBase(BaseModel):
     level: str = Field(default="basic", pattern="^(basic|intermediate|advanced)$")
 
 
-class ChatSessionCreate(ChatSessionBase):
-    """Схема для создания сессии чата"""
+class ChatSessionCreate(BaseModel):
+    """Схема для создания сессии чата.
+
+    `level` необязателен: если не передан, сессия наследует уровень профиля
+    пользователя (S5-002). Поэтому здесь нет дефолта "basic".
+    """
+
+    level: UserLevel | None = None
 
 
 class ChatSessionResponse(ChatSessionBase):

@@ -16,6 +16,7 @@ from app.db.repositories.chat import ChatMessageRepository, ChatSessionRepositor
 from app.errors import AccessDeniedError, NotFoundError, ValidationError
 from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.user import User, UserLevel
+from app.services.levels import resolve_level
 from app.services.llm.base import LLMMessage, LLMProvider
 from app.services.llm.prompt_builder import build_messages
 
@@ -53,10 +54,15 @@ class ChatService:
     async def create_session(
         self, user: User, level: str | UserLevel | None = None
     ) -> ChatSession:
-        """Создать сессию чата для пользователя"""
+        """Создать сессию чата для пользователя.
+
+        Уровень нормализуется и проверяется на наличие промпта (fallback
+        на базовый уровень из S5-003).
+        """
+        requested = parse_level(level or user.level)
         session = ChatSession(
             user_id=user.id,
-            level=parse_level(level or user.level).value,
+            level=resolve_level(requested).value,
         )
         return await self.sessions.create(session)
 
@@ -119,7 +125,7 @@ class ChatService:
         # его передаём в build_messages отдельно, чтобы не дублировать
         history = await self.get_history(session.id)
         llm_messages = build_messages(
-            parse_level(session.level),
+            resolve_level(parse_level(session.level)),
             self._history_for_llm(history),
             text,
         )
@@ -147,7 +153,7 @@ class ChatService:
         )
         history = await self.get_history(session.id)
         llm_messages = build_messages(
-            parse_level(session.level),
+            resolve_level(parse_level(session.level)),
             self._history_for_llm(history),
             text,
         )
