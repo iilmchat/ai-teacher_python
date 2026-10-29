@@ -12,8 +12,23 @@ import { useAuthStore } from '@/store/auth';
 const AdminPage = lazy(() =>
   import('@/pages/AdminPage').then((module) => ({ default: module.AdminPage })),
 );
+const AssignmentsPage = lazy(() =>
+  import('@/pages/AssignmentsPage').then((module) => ({
+    default: module.AssignmentsPage,
+  })),
+);
 const ChatPage = lazy(() =>
   import('@/pages/ChatPage').then((module) => ({ default: module.ChatPage })),
+);
+const ClassroomsPage = lazy(() =>
+  import('@/pages/ClassroomsPage').then((module) => ({
+    default: module.ClassroomsPage,
+  })),
+);
+const ClassroomDetailPage = lazy(() =>
+  import('@/pages/ClassroomDetailPage').then((module) => ({
+    default: module.ClassroomDetailPage,
+  })),
 );
 const CodePage = lazy(() =>
   import('@/pages/CodePage').then((module) => ({ default: module.CodePage })),
@@ -99,6 +114,30 @@ export function App() {
               element={
                 <ProtectedRoute>
                   <TasksPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="classrooms"
+              element={
+                <ProtectedRoute>
+                  <ClassroomsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="classrooms/:classroomId"
+              element={
+                <ProtectedRoute>
+                  <ClassroomDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="assignments"
+              element={
+                <ProtectedRoute>
+                  <AssignmentsPage />
                 </ProtectedRoute>
               }
             />

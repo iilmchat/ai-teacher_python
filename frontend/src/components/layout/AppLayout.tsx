@@ -47,6 +47,34 @@ export function AppLayout() {
                 {t(item.labelKey)}
               </NavLink>
             ))}
+            {user && (
+              <>
+                <NavLink
+                  to="/classrooms"
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`
+                  }
+                >
+                  {t('nav.classrooms')}
+                </NavLink>
+                <NavLink
+                  to="/assignments"
+                  className={({ isActive }) =>
+                    `rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                      isActive
+                        ? 'bg-indigo-50 text-indigo-700'
+                        : 'text-slate-600 hover:bg-slate-100'
+                    }`
+                  }
+                >
+                  {t('nav.assignments')}
+                </NavLink>
+              </>
+            )}
             {(user?.role === 'teacher' || user?.role === 'admin') && (
               <NavLink
                 to="/teacher/tasks"
