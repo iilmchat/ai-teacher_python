@@ -4,7 +4,7 @@
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
 **Последнее обновление:** 2026-10-29 (спринт 12)  
-**Всего проблем:** 13 (активных: 4, закрытых: 9)
+**Всего проблем:** 14 (активных: 5, закрытых: 9)
 
 ---
 
@@ -50,6 +50,24 @@ Workaround: временное решение (если есть)
 `cd backend && python scripts/run_llm_eval.py --provider deepseek`, сохранить
 ответы в `docs/reports/llm-eval/<date>/`, оценить по рубрике
 `docs/LLM_EVAL.md`, зафиксировать баллы в отчёте спринта.
+
+**Создано:** 2026-10-29 · **Обновлено:** 2026-10-29 (спринт 12)
+
+---
+
+### KI-014 · Open · High · CI · GitHub Actions не запускает job'ы (биллинг)
+
+**Описание:** при push ветки `sprint/12-llmops` job'ы `Lint (Backend)` и
+`Frontend` завершаются за 2 с без выполнения шагов. Аннотация GitHub:
+«The job was not started because recent account payments have failed or your
+spending limit needs to be increased». Код, workflow и локальные проверки ни
+при чём: ruff/mypy/pytest и pnpm-проверки зелёные.
+
+**Workaround:** локальные прогоны (см. отчёт спринта 12); PR остаётся
+открытым до восстановления Actions.
+
+**План закрытия:** проверить GitHub → Settings → Billing & plans, пополнить
+или поднять лимит Actions, затем перезапустить CI (`gh run rerun <id>`).
 
 **Создано:** 2026-10-29 · **Обновлено:** 2026-10-29 (спринт 12)
 

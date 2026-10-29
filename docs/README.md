@@ -66,7 +66,7 @@
 | Покрытие | backend 83%, frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | Размер фронтенда | ~120 kB gzip |
-| Открытые проблемы | 4 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
+| Открытые проблемы | 5 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---
 
