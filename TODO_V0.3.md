@@ -146,7 +146,10 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
       включая порядок импорта приватного репо и GitFlic-пилот
 - [x] **Зависит от:** — · **Оценка:** 3 ч
 
-### S21-002: Пилот GitFlic — импорт и агент — [ ]
+### S21-002: Пилот GitFlic — импорт и агент — [~] (подготовка выполнена, ждёт импорт/токены)
+- [x] Подготовить `gitflic-ci.yaml` и рунбук агентов (`docs/GITFLIC_RUNNER.md`);
+      локально проверить все Docker/PowerShell-команды job'ов (frontend, lint,
+      test, e2e, docker — PASS, см. `docs/CI.md` §8)
 - [ ] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
       репозиторий из GitHub (PAT `repo`), сверить ветки/теги/коммиты, `main`
 - [ ] Установить PowerShell-агент на машину проекта (Java 11 + Git, тег
@@ -159,13 +162,13 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
       переноса origin (S21-003), при неудаче — GitHub + runner
 - [ ] **Зависит от:** S21-001 · **Оценка:** 6 ч
 
-### S21-003: Портирование CI на выбранную платформу — [ ]
+### S21-003: Портирование CI на выбранную платформу — [~]
 - [ ] GitHub-путь: self-hosted runner, существующие job'ы, кэш `pip`/`pnpm`/
       Playwright, таймауты
-- [ ] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
-      `security`) в `gitflic-ci.yaml`; `docker build` — DinD-сервис или
-      PowerShell-агент; кэш и артефакты
-- [ ] `pip-audit`, `gitleaks`, `pnpm audit` — как job'ы; SAST GitFlic не
+- [x] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
+      `security`) в `gitflic-ci.yaml`; `docker build` — на PowerShell-агенте;
+      кэш и артефакты (live-проверка — в S21-002)
+- [x] `pip-audit`, `gitleaks`, `pnpm audit` — как job'ы; SAST GitFlic не
       использовать (платно)
 - [ ] **Зависит от:** S21-002 · **Оценка:** 6 ч
 
