@@ -1,0 +1,578 @@
+# =============================================================================
+# gitflic-ci.yaml — CI-пайплайн для GitFlic (пилот S21-002/S21-003, v0.3.0)
+#
+# Порт .github/workflows/ci.yml: GitHub Actions недоступен (KI-014, биллинг),
+# поэтому пайплайн переезжает на GitFlic. Соответствие job'ов:
+#
+#   GitHub job        GitFlic job'ы                                  агент
+#   ----------------- -------------------------------------------------- ------------
+#   lint              lint                                            docker
+#   test              test                                            docker
+#   frontend          frontend                                        docker
+#   security          security-backend / security-frontend / gitleaks  docker
+#   e2e               e2e                                             windows-dev
+#   docker            docker                                          windows-dev
+#   (manual release)  .release (черновик, закомментирован)            docker
+#
+# ВАЖНО ПРО GITFLIC (проверено по docs.gitflic.ru, 2026-10-30):
+#   * `runs-on`/`uses` не существуют: checkout делает сам агент, вместо
+#     actions — обычные shell-команды в образе; выбор агента — через `tags`;
+#     `image`/`services` исполняет только Docker-агент, PowerShell-агент
+#     запускает скрипты прямо на Windows-хосте (без image);
+#   * у `services` нет `options`/healthcheck, у job нет `timeout` — готовность
+#     Postgres/Redis ждём retry-циклом в `before_script`, а лимит времени и
+#     перезапуск задач задаются в настройках CI/CD проекта;
+#   * переменные, созданные в CI/CD проекта, ПЕРЕКРЫВАЮТ `variables` из YAML
+#     (docs: «CI/CD variable override order»), поэтому job `test` явно
+#     фиксирует адреса сервисов, а e2e задаёт свои значения в скрипте;
+#   * cloud-агенты у GitFlic по умолчанию выключены — используется свой агент
+#     (см. docs/GITFLIC_RUNNER.md).
+#
+# Секретов в файле нет: SECRET_KEY/POSTGRES_PASSWORD — переменные CI/CD проекта
+# (маскируются). В YAML только заведомо несекретные тестовые значения и они
+# совпадают с allowlist .gitleaks.toml.
+# =============================================================================
+
+stages:
+  - lint
+  - test
+  - security
+  - e2e
+  - docker
+  - release
+
+# --- Условия создания пайплайна ---------------------------------------------
+# Аналог GitHub `on:`: MR-пайплайн, push в main, теги. Ветки sprint/** оставлены
+# на время пилота (в GitHub это on.push.branches) — после пилота убрать.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      when: always
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: always
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME =~ /^sprint/
+      when: always
+    - if: $CI_PIPELINE_TYPE == "tag_pipeline" && $CI_COMMIT_TAG
+      when: always
+    - when: never
+
+# --- Глобальные переменные ---------------------------------------------------
+variables:
+  # Кэш pip обязан лежать внутри рабочего каталога проекта (cache:paths — только
+  # относительные пути). Относительный путь резолвится от корня клона: все
+  # команды pip запускаются из корня репозитория.
+  PIP_CACHE_DIR: ".pip-cache"
+  PYTHONUNBUFFERED: "1"
+
+# Кэш: `cache.key` у GitFlic — СПИСОК строк (не строка, как в GitLab).
+# Кэш локальный (на агенте), пути — только относительные от корня проекта.
+
+# =============================================================================
+# 1. LINT — ruff + mypy (аналог GitHub job `lint`)
+# =============================================================================
+lint:
+  stage: lint
+  image: python:3.12-slim
+  tags:
+    - docker
+  cache:
+    key:
+      - pip
+    paths:
+      - .pip-cache
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install ruff mypy
+  script:
+    - echo "==> ruff check backend/"
+    - ruff check backend/
+    # Конфиг mypy лежит в корневом pyproject.toml — передаём его явно,
+    # иначе strict-правила не применятся (RULES §11.4).
+    - echo "==> mypy app --config-file ../pyproject.toml"
+    - cd backend && mypy app --config-file ../pyproject.toml
+
+# =============================================================================
+# 2. TEST — pytest на реальном PostgreSQL/pgvector + Redis (аналог `test`)
+#
+# Сервисы запускаются в одной сети с job'ом и доступны по alias. Порт
+# публикуется только внутри сети, поэтому host — `postgres`/`redis`, а не
+# 127.0.0.1 (в GitHub-версии сервисы публиковались на хост).
+# =============================================================================
+test:
+  stage: test
+  image: python:3.12-slim
+  tags:
+    - docker
+  needs:
+    - lint
+  services:
+    # pgvector-образ обязателен: миграции создают тип VECTOR (KI-003).
+    # `alias` задаём явно — это hostname сервиса в сети job'а.
+    - name: pgvector/pgvector:pg17
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  cache:
+    key:
+      - pip
+    paths:
+      - .pip-cache
+  variables:
+    # Дефолты тестовой БД. Пароль намеренно несекретный (как в GitHub CI);
+    # в CI/CD проекта POSTGRES_PASSWORD перекроет его и для job'а, и для
+    # сервиса — тогда оба используют одно значение и аутентификация сходится.
+    POSTGRES_HOST: "postgres"
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: "test_user"
+    POSTGRES_PASSWORD: "test_pass"
+    POSTGRES_DB: "test_db"
+    REDIS_HOST: "redis"
+    REDIS_PORT: "6379"
+    SECRET_KEY: "ci_secret_key_do_not_use_in_production"
+    RATE_LIMIT_ENABLED: "false"
+  before_script:
+    - |
+      set -eu
+
+      # Адреса сервисов фиксируем явно: переменная проекта POSTGRES_HOST
+      # (например, 127.0.0.1 для e2e) иначе перекрыла бы YAML. USER/DB/PASSWORD
+      # не переопределяем — сервис и клиент должны видеть одинаковые значения.
+      export POSTGRES_HOST=postgres
+      export POSTGRES_PORT=5432
+      export REDIS_HOST=redis
+      export REDIS_PORT=6379
+
+      echo "==> Установка зависимостей backend (pip cache: ${PIP_CACHE_DIR})"
+      python -m pip install --upgrade pip
+      pip install -r backend/requirements.txt
+
+      # У services нет healthcheck: ждём готовности сами (лимит 60 с).
+      echo "==> Ожидание PostgreSQL (до 60 с)"
+      python - <<'PY'
+      import os
+      import socket
+      import sys
+      import time
+
+      import psycopg2
+
+      host = os.environ["POSTGRES_HOST"]
+      port = int(os.environ["POSTGRES_PORT"])
+
+
+      def tcp_open() -> bool:
+          try:
+              with socket.create_connection((host, port), timeout=2):
+                  return True
+          except OSError:
+              return False
+
+
+      deadline = time.monotonic() + 60
+      while time.monotonic() < deadline:
+          if tcp_open():
+              break
+          time.sleep(2)
+      else:
+          sys.exit(f"PostgreSQL {host}:{port} не открылся за 60 с")
+
+      # Проверяем не только порт, но и вход: если env сервиса не применились
+      # (см. примечание к services ниже), здесь будет понятная ошибка.
+      try:
+          psycopg2.connect(
+              host=host,
+              port=port,
+              user=os.environ["POSTGRES_USER"],
+              password=os.environ["POSTGRES_PASSWORD"],
+              dbname=os.environ["POSTGRES_DB"],
+          ).close()
+      except Exception as exc:  # noqa: BLE001 - нужен понятный текст
+          sys.exit(f"PostgreSQL открыт, но вход не удался ({host}:{port}): {exc}")
+      print(f"PostgreSQL готов: {host}:{port}")
+      PY
+
+      echo "==> Ожидание Redis (до 60 с)"
+      python - <<'PY'
+      import os
+      import sys
+      import time
+
+      import redis
+
+      host = os.environ["REDIS_HOST"]
+      port = int(os.environ["REDIS_PORT"])
+      deadline = time.monotonic() + 60
+      while time.monotonic() < deadline:
+          try:
+              if redis.Redis(host=host, port=port, socket_connect_timeout=2).ping():
+                  break
+          except Exception:  # noqa: BLE001 - сервис ещё поднимается
+              time.sleep(2)
+      else:
+          sys.exit(f"Redis {host}:{port} недоступен за 60 с")
+      print(f"Redis готов: {host}:{port}")
+      PY
+  script:
+    - echo "==> alembic upgrade head"
+    - cd backend && alembic upgrade head
+    - echo "==> alembic check (модели == миграции, RULES §11.5)"
+    - cd backend && alembic check
+    - echo "==> pytest"
+    - cd backend && pytest -v --cov=app --cov-report=xml
+
+# =============================================================================
+# 3. FRONTEND — typecheck / lint / unit / build (аналог `frontend`)
+#
+# dist в артефакты не кладём: бандл крупный и пересобирается за ~20 с, а
+# артефакты GitFlic тратят квоту. Нужен dist — добавить artifacts только для
+# default-ветки отдельным job'ом.
+# =============================================================================
+frontend:
+  stage: test
+  # needs: [] — не ждать lint: как независимый job `Frontend` в GitHub
+  # (документированный приём «пустой needs»). На одном Docker-агенте задачи
+  # всё равно пойдут последовательно, но статус lint не блокирует frontend.
+  needs: []
+  image: node:22-alpine
+  tags:
+    - docker
+  cache:
+    key:
+      - pnpm
+      - frontend
+    paths:
+      - frontend/.pnpm-store
+  before_script:
+    # pnpm 12: corepack из Node 22; настройки build-скриптов — в
+    # frontend/pnpm-workspace.yaml (RULES §11.10). `prepare` — основной способ
+    # закрепить версию, `install --global` — fallback для новых corepack.
+    - corepack enable
+    - corepack prepare pnpm@12 --activate || corepack install --global pnpm@12
+    - pnpm --version
+  script:
+    - echo "==> pnpm install"
+    - cd frontend && pnpm install --frozen-lockfile --allow-build=esbuild --store-dir .pnpm-store
+    - echo "==> typecheck"
+    - cd frontend && pnpm typecheck
+    - echo "==> lint"
+    - cd frontend && pnpm lint
+    - echo "==> unit tests (vitest)"
+    - cd frontend && pnpm test
+    - echo "==> build"
+    - cd frontend && pnpm build
+
+# =============================================================================
+# 4. SECURITY — три независимых job'а (в GitHub это один job `security`)
+# =============================================================================
+security-backend:
+  stage: security
+  # Независимая проверка (в GitHub job `Security` без needs): не ждём test,
+  # стартуем сразу; пустой needs — документированный приём.
+  needs: []
+  image: python:3.12-slim
+  tags:
+    - docker
+  cache:
+    key:
+      - pip
+    paths:
+      - .pip-cache
+  before_script:
+    - python -m pip install --upgrade pip
+    - pip install pip-audit
+  script:
+    - |
+      set -eu
+      echo "==> pip-audit (backend/requirements.txt)"
+      # --ignore-vuln: принятые residual-риски (KI-015/KI-016), синхронизировано
+      # с .github/workflows/ci.yml и docs/reports/sprint-20/SECURITY_AUDIT.md §8.
+      # После апгрейда starlette/pytest игноры удалить, иначе они скроют новые ID.
+      pip-audit -r backend/requirements.txt --strict --desc \
+        --ignore-vuln PYSEC-2026-161 \
+        --ignore-vuln PYSEC-2026-1941 \
+        --ignore-vuln PYSEC-2026-1942 \
+        --ignore-vuln PYSEC-2026-2280 \
+        --ignore-vuln PYSEC-2026-2281 \
+        --ignore-vuln PYSEC-2026-248 \
+        --ignore-vuln PYSEC-2026-249 \
+        --ignore-vuln PYSEC-2026-1845
+
+security-frontend:
+  stage: security
+  needs: []
+  image: node:22-alpine
+  tags:
+    - docker
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@12 --activate || corepack install --global pnpm@12
+  script:
+    # dev-only moderate не блокируют (как в GitHub), high/critical — блокируют.
+    - echo "==> pnpm audit --audit-level=high"
+    - cd frontend && pnpm audit --audit-level=high
+
+gitleaks:
+  stage: security
+  needs: []
+  # entrypoint переопределяем пустым: у образа gitleaks своя entrypoint,
+  # а нам нужен shell, чтобы выполнить команду job'а.
+  image:
+    name: zricethezav/gitleaks:latest
+    entrypoint: [""]
+  tags:
+    - docker
+  script:
+    # Сканируется вся доступная история клона. Если агент клонирует shallow,
+    # проверка ограничена глубиной клона — для полного скана нужен full clone
+    # (настройка агента/стратегии git) или self-hosted интеграция gitleaks.
+    - echo "==> gitleaks git ."
+    - gitleaks git . --config .gitleaks.toml --redact --verbose
+
+# =============================================================================
+# 5. E2E — Playwright (аналог `e2e`)
+#
+# Выполняется НА WINDOWS-ХОСТЕ через PowerShell-агент (tags: windows-dev):
+# нужны установленные Node/pnpm/Playwright-браузеры и доступ к локальным
+# Postgres/Redis из docker compose. image не указываем — shell-агент его
+# игнорирует.
+#
+# Docs-only изменения не гоняют e2e/docker: правила ниже перечисляют пути
+# кода; если ни один не изменён, job в пайплайн не попадает (S21-004).
+# =============================================================================
+e2e:
+  stage: e2e
+  tags:
+    - windows-dev
+  needs:
+    - lint
+    - test
+  rules:
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      changes:
+        paths:
+          - "backend/**/*"
+          - "frontend/**/*"
+          - "scripts/**/*"
+          - "pyproject.toml"
+          - "docker-compose.yml"
+          - "docker-compose.prod.yml"
+          - "gitflic-ci.yaml"
+          - ".gitleaks.toml"
+      when: on_success
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      when: never
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "backend/**/*"
+          - "frontend/**/*"
+          - "scripts/**/*"
+          - "pyproject.toml"
+          - "docker-compose.yml"
+          - "docker-compose.prod.yml"
+          - "gitflic-ci.yaml"
+          - ".gitleaks.toml"
+      when: on_success
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline"
+    - if: $CI_PIPELINE_TYPE == "tag_pipeline"
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+
+      # PowerShell-агент запускает скрипты прямо на хосте; работаем из корня клона.
+      $repoRoot = if ($env:CI_PROJECT_DIR) { $env:CI_PROJECT_DIR } else { (Get-Location).Path }
+      Set-Location $repoRoot
+      Write-Host "==> Рабочий каталог: $repoRoot"
+
+      function Assert-Step([string]$Name) {
+          if ($LASTEXITCODE -ne 0) {
+              throw "Шаг '$Name' завершился с кодом $LASTEXITCODE"
+          }
+      }
+
+      # PyPI на этой машине заблокирован (KI-017), поэтому backend-зависимости
+      # берём из уже установленного venv. В клоне агента venv нет — путь к
+      # интерпретатору задаётся переменной проекта E2E_PYTHON
+      # (docs/GITFLIC_RUNNER.md, раздел про переменные).
+      if (-not $env:E2E_PYTHON) {
+          throw "E2E_PYTHON не задан. Добавьте переменную проекта E2E_PYTHON = <путь>\backend\venv\Scripts\python.exe"
+      }
+      if (-not (Test-Path -LiteralPath $env:E2E_PYTHON)) {
+          throw "E2E_PYTHON указывает на несуществующий файл: $env:E2E_PYTHON"
+      }
+      Write-Host "E2E_PYTHON = $env:E2E_PYTHON"
+
+      # CI=true: Playwright не переиспользует уже запущенные серверы, делает
+      # 1 retry и html-репорт (см. frontend/playwright.config.ts).
+      $env:CI = 'true'
+      $env:RATE_LIMIT_ENABLED = 'false'
+      $env:LLM_PROVIDER = 'echo'
+      $env:DEBUG = 'false'
+      $env:E2E_DB_NAME = 'ai_teacher_e2e'
+      $env:E2E_BACKEND_PORT = '8001'
+      $env:E2E_FRONTEND_PORT = '3100'
+
+      # Локальные Postgres/Redis из docker compose. Порты 5434/6381 — не
+      # канонические (KI-001); при других значениях задайте переменные проекта
+      # E2E_POSTGRES_PORT / E2E_REDIS_PORT / E2E_POSTGRES_USER / E2E_POSTGRES_DB.
+      $env:POSTGRES_HOST = '127.0.0.1'
+      $env:POSTGRES_PORT = if ($env:E2E_POSTGRES_PORT) { $env:E2E_POSTGRES_PORT } else { '5434' }
+      $env:POSTGRES_USER = if ($env:E2E_POSTGRES_USER) { $env:E2E_POSTGRES_USER } else { 'ai_teacher' }
+      $env:POSTGRES_DB = if ($env:E2E_POSTGRES_DB) { $env:E2E_POSTGRES_DB } else { 'ai_teacher' }
+      $env:REDIS_HOST = '127.0.0.1'
+      $env:REDIS_PORT = if ($env:E2E_REDIS_PORT) { $env:E2E_REDIS_PORT } else { '6381' }
+
+      # POSTGRES_PASSWORD приходит из CI/CD проекта (маскируется) и должен
+      # совпадать с паролем локального compose-кластера.
+      if (-not $env:POSTGRES_PASSWORD) {
+          throw "POSTGRES_PASSWORD не задан в CI/CD переменных проекта — e2e не подключится к локальной БД"
+      }
+      if (-not $env:SECRET_KEY) {
+          $env:SECRET_KEY = 'ci_secret_key_do_not_use_in_production'
+      }
+
+      Write-Host '==> Установка frontend-зависимостей (pnpm)'
+      Set-Location (Join-Path $repoRoot 'frontend')
+      pnpm install --frozen-lockfile --allow-build=esbuild
+      Assert-Step 'pnpm install'
+
+      # Backend и Vite поднимает webServer в playwright.config.ts:
+      # prepare_e2e_db.py -> alembic upgrade head -> seed_tasks.py ->
+      # uvicorn 127.0.0.1:8001 с LLM_PROVIDER=echo; Vite — на 3100.
+      Write-Host '==> Playwright e2e'
+      pnpm exec playwright test
+      Assert-Step 'playwright test'
+  artifacts:
+    # Репорт нужен даже при падении — иначе разбор e2e невозможен.
+    paths:
+      - frontend/playwright-report
+    when: always
+    expire_in: 7 days
+
+# =============================================================================
+# 6. DOCKER — сборка образов на хосте через Docker Desktop (windows-dev)
+#
+# Почему НЕ DinD: для docker:dind нужен privileged-агент (docker.privileged=true)
+# и Linux-хост; на Windows-машине проще и надёжнее использовать уже запущенный
+# Docker Desktop. Плюс проверяется ровно тот Docker, которым пользуются
+# разработчики. Ограничение: агент должен иметь доступ к npipe Docker Desktop
+# (см. docs/GITFLIC_RUNNER.md — запуск не из-под сервисного аккаунта).
+# =============================================================================
+docker:
+  stage: docker
+  tags:
+    - windows-dev
+  needs:
+    - lint
+    - test
+  rules:
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      changes:
+        paths:
+          - "backend/**/*"
+          - "frontend/**/*"
+          - "scripts/**/*"
+          - "pyproject.toml"
+          - "docker-compose.yml"
+          - "docker-compose.prod.yml"
+          - "gitflic-ci.yaml"
+          - ".gitleaks.toml"
+      when: on_success
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      when: never
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "backend/**/*"
+          - "frontend/**/*"
+          - "scripts/**/*"
+          - "pyproject.toml"
+          - "docker-compose.yml"
+          - "docker-compose.prod.yml"
+          - "gitflic-ci.yaml"
+          - ".gitleaks.toml"
+      when: on_success
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline" && $CI_COMMIT_REF_NAME == $CI_DEFAULT_BRANCH
+      when: never
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline"
+    - if: $CI_PIPELINE_TYPE == "tag_pipeline"
+  script:
+    - |
+      $ErrorActionPreference = 'Stop'
+      $repoRoot = if ($env:CI_PROJECT_DIR) { $env:CI_PROJECT_DIR } else { (Get-Location).Path }
+      Set-Location $repoRoot
+
+      function Assert-Step([string]$Name) {
+          if ($LASTEXITCODE -ne 0) {
+              throw "Шаг '$Name' завершился с кодом $LASTEXITCODE"
+          }
+      }
+
+      if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+          throw "docker CLI не найден в PATH у пользователя агента (Docker Desktop не установлен/не в PATH)"
+      }
+      Write-Host '==> Проверка Docker daemon'
+      docker info --format '{{.ServerVersion}}' | Out-Null
+      Assert-Step 'docker info (Docker Desktop запущен?)'
+
+      Write-Host '==> Сборка backend-образа'
+      docker build -t ai-teacher-backend ./backend
+      Assert-Step 'docker build ./backend'
+
+      # В GitHub у frontend-сборки был continue-on-error: сохраняем поведение —
+      # падение не валит job, но печатается предупреждение.
+      Write-Host '==> Сборка frontend-образа (неблокирующая, как continue-on-error в GitHub)'
+      docker build -t ai-teacher-frontend ./frontend
+      if ($LASTEXITCODE -ne 0) {
+          Write-Warning "docker build ./frontend завершился с кодом $LASTEXITCODE — job продолжается (continue-on-error)"
+      }
+
+      # Валидация prod-compose (без запуска). Секреты обязательны для `:?` в
+      # docker-compose.prod.yml: берём из CI/CD, иначе — заведомо несекретные
+      # заглушки, чтобы проверить только синтаксис/подстановки.
+      if (-not $env:POSTGRES_PASSWORD) { $env:POSTGRES_PASSWORD = 'change_me_password' }
+      if (-not $env:SECRET_KEY) { $env:SECRET_KEY = 'ci_secret_key_do_not_use_in_production' }
+      Write-Host '==> docker compose -f docker-compose.prod.yml config --quiet'
+      docker compose -f docker-compose.prod.yml config --quiet
+      Assert-Step 'docker compose config'
+
+# =============================================================================
+# 7. RELEASE — ЧЕРНОВИК ДЛЯ ПИЛОТА (S21-005), НЕ ВКЛЮЧЁН
+#
+# GitFlic поддерживает `release:` только на Docker-агенте с образом gcli
+# (registry.gitflic.ru/company/gitflic/gcli). Включить после проверки пилота:
+# снять комментарии, проверить, что тег создаётся в GitFlic, notes брать из
+# docs/RELEASES.md через `gcli`/API (gh недоступен).
+# =============================================================================
+# .release: &release_draft
+#   stage: release
+#   image: registry.gitflic.ru/company/gitflic/gcli:latest
+#   tags:
+#     - docker
+#   rules:
+#     - if: $CI_COMMIT_TAG
+#   release:
+#     name: "$CI_COMMIT_TAG"
+#     description: "Релиз $CI_COMMIT_TAG (notes: docs/RELEASES.md)"
+#     tag_name: "$CI_COMMIT_TAG"
+#   script:
+#     - echo "Pilot TODO (S21-005): gcli release create ..."
+
+# =============================================================================
+# Примечания по эксплуатации (то, чего нет в YAML):
+#   * timeout/перезапуск job'ов — «Task Restart Timeout» в CI/CD настройках
+#     проекта (по документации GitFlic отдельного timeout-ключа нет);
+#   * MR-пайплайн включается флажком «Enable Merge Request Pipeline» в
+#     CI/CD настройках проекта; merge-result pipeline — отдельный флажок;
+#   * `services` в GitFlic не документируют env/healthcheck. Контейнеры
+#     Postgres/Redis получают POSTGRES_*/REDIS_* как переменные job'а (как в
+#     GitLab). Это ПЕРВОЕ, что проверяется на живом пилоте: если сервис
+#     стартует без POSTGRES_PASSWORD, before_script test упадёт с понятной
+#     ошибкой «Postgres открыт, но вход не удался»;
+#   * кэш хранится локально на агенте: первый прогон холодный (pip/pnpm),
+#     ручной сброс — в UI (Administrator+). Для e2e/docker на PowerShell-агенте
+#     кэш не используется (механизм кэша описан для Docker-агента);
+#   * секреты — только в CI/CD проекта (маска), не в этом файле.
+# =============================================================================
