@@ -7,9 +7,64 @@
 
 ---
 
-## [Unreleased]
+## [0.2.0] - 2026-10-30
+
+Релиз «Classroom»: классы и назначения, достижения и дашборд, UX/тёмная
+тема, производительность (S19) и безопасность/эксплуатация (S20).
 
 ### Добавлено
+
+**Производительность и масштаб (S19)**
+
+- Redis-кэш справочников (`/chat/levels`, `/tasks/categories`) и каталога
+  задач (`/tasks`): TTL 60 с, ключ включает пользователя и все фильтры,
+  инвалидация при CRUD/импорте/seed/откате версии; fail-open и 10-секундное
+  «остывание» после сбоя Redis; метрики `cache` в `/admin/analytics`
+- Пагинация `GET /classrooms`, `GET /me/notifications`, `GET /teacher/tasks`
+  (`total` — по всей таблице, а не по странице); N+1 в классах устранены
+  одним агрегирующим запросом
+- Индексы миграции 0009 под каталог/учеников/уведомления/дедлайны/историю
+  сообщений; HNSW-индекс `chat_messages.embedding` (миграция 0010)
+- Поиск по истории чата `GET /chat/search` (RAG-lite): семантический режим
+  (pgvector, HNSW) за флагом `RAG_ENABLED`, ILIKE-фолбэк, только свои
+  сообщения; best-effort эмбеддинги — сбой провайдера не ломает чат
+- Нагрузочный тест S19-006 (httpx-генератор вместо k6/locust — PyPI с хоста
+  заблокирован): `health` 50 RPS — p95 **6.3 мс**, каталог 20 RPS — p95
+  **25.4 мс** (0 ошибок, PASS); `submit` — knee ≈2 RPS, целевые 5 RPS не
+  достигнуты (факт 2.5 RPS, p95 2219.7 мс при бюджете 2000 мс) — ограничение
+  песочницы, **KI-022**, рекомендации в `reports/sprint-19/LOAD_TEST.md`
+- Локальный Monaco без CDN: ассеты `public/monaco/vs`, lazy-чанк,
+  `pnpm test:offline` (KI-013)
+- Code splitting всех маршрутов: vendor-чанки; entry — 76.3 kB gzip на S19-002,
+  **78.71 kB gzip** после финальной сборки v0.2.0 (лимит 80)
+
+**Безопасность и эксплуатация (S20)**
+
+- Аудит зависимостей: `pnpm audit` — **0** уязвимостей; backend — **0
+  critical**, остаточные записи (`starlette`, dev `pytest`) приняты и
+  задокументированы (KI-015, KI-016)
+- `python-jose` удалён → **PyJWT 2.15.1**; `python-multipart` 0.0.17 → **0.0.31**
+- RestrictedPython 7.4 → **8.5**: закрыты 3 high-обхода песочницы; `.format()`
+  и `string.Formatter` теперь запрещены с понятной подсказкой
+  (`error_type=RestrictedFeatureError`)
+- `.gitleaks.toml` + CI job `Security` (`pip-audit`, `gitleaks`,
+  `pnpm audit`); `.github/dependabot.yml` (pip/npm/github-actions, weekly)
+- nginx: CSP + `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy`, `HSTS`; `server_tokens off`;
+  `ALLOWED_ORIGINS` в prod-compose — из ENV
+- `scripts/backup.sh` и `scripts/restore.sh`: бэкап через
+  `docker exec pg_dump` + gzip + sha256, retention, guard от перезаписи
+  рабочей БД; smoke — 14/14 таблиц восстановлено
+- `backend/scripts/audit_python_deps.py` — офлайн-аудит по GitHub Advisory
+  API для машины без PyPI (лимит 60 запросов/час, кэш, `--resume`)
+- `/tasks/{id}/hints/{index}` требует аутентификации (S20-003, находка F1);
+  автотест матрицы доступа `backend/tests/test_access_matrix.py` — **35 тестов,
+  IDOR не найден** (отчёт `docs/reports/sprint-20/ACCESS_MATRIX.md`)
+- Финальная документация v0.2.0: SPEC, CHANGELOG, RELEASES, KNOWN_ISSUES,
+  RULES §11.18–11.19, MANUAL_TESTING_GUIDE, отчёты sprint-19/sprint-20
+
+**Функциональность и UX (S11–S18)**
+
 - Тёмная тема: переключатель в шапке/профиле, `localStorage`, Monaco `vs-dark`
 - Дизайн-система: токены, `Modal`, `Toast`, `Tabs`, `Table`, `Badge`,
   `Skeleton`; dev-страница `/dev/ui` вне прод-бандла
@@ -29,9 +84,6 @@
   и `/teacher/students` (агрегаты и прогресс по задачам)
 - API учителя: `/teacher/tasks`, `/teacher/students`,
   `/teacher/students/{id}/progress`; импорт файла `/tasks/import/file`
-- Локальный Monaco без CDN: ассеты `public/monaco/vs`, lazy-чанк,
-  `pnpm test:offline` (KI-013)
-- Code splitting всех маршрутов: entry 76.3 kB gzip, vendor-чанки
 - Импорт/экспорт задач: JSON и YAML, `POST /tasks/import`,
   `GET /tasks/export?format=json|yaml`, CLI `scripts/import_tasks.py`
 - `SEED_ON_START=true` — идемпотентное наполнение задач при старте (KI-010)
@@ -70,10 +122,6 @@
 - Пороги покрытия: backend 70% (факт 81), frontend 70/60/70 (факт 74/78/84)
 - Job `e2e` в CI (Playwright + отдельная БД)
 
-### Исправлено
-- После перезагрузки страницы защищённые маршруты висели на Spinner:
-  `loadMe()` теперь вызывается при старте приложения
-
 ### Изменено
 - WS-протокол вынесен в `serve_chat_socket`; эндпоинт получает сессию и
   провайдера через `Depends` (тестируемость)
@@ -84,16 +132,63 @@
 - Задачи: `tags` в ответах API, `q`/`tag` в каталоге, `PyYAML` в зависимостях
 - Frontend: `@monaco-editor/react` удалён, используется `monaco-editor` с
   локальными AMD-ассетами и `MonacoEditor` lazy-чанком
+- `/admin/analytics` расширен секцией `cache` (hits/misses/hit_rate/sets/
+  invalidations/errors)
+- Списочные эндпоинты получили аддитивную пагинацию (`skip`/`limit`),
+  дефолты сохраняют прежнее поведение
+- Песочница: RestrictedPython 8.5; для ограниченных возможностей возвращается
+  `error_type=RestrictedFeatureError` вместо сырого `NotImplementedError`
+- nginx: заголовки безопасности на уровне `server`, кэш `/assets/` через
+  `expires` (без `add_header`, чтобы не отключать наследование)
+- CI: job `Security`; prod-compose берёт `ALLOWED_ORIGINS` из ENV
 
 ### Исправлено
+- После перезагрузки страницы защищённые маршруты висели на Spinner:
+  `loadMe()` теперь вызывается при старте приложения
 - Лимит памяти песочницы на Windows больше не «декоративный»: Job Object
   реально ограничивает committed memory (KI-009)
 - Промпт среднего уровня: примеры — на других данных, при просьбе «напиши
   программу» — только каркас и шаги; версия промпта intermediate = 2
   (по итогам живого прогона, KI-008)
+- `GET /tasks/{id}/hints/{index}` больше не анонимный: требуется токен
+  (S20-003, найдено аудитом доступа)
+- Prod-Docker: backend-контейнер применяет миграции при старте
+  (`docker-entrypoint.sh` → `alembic upgrade head`, отключается
+  `SKIP_MIGRATIONS=true`); на чистой БД API больше не падает с
+  `UndefinedTableError` (S20-006)
+- `.dockerignore` для backend/frontend: venv, кэши, `node_modules`, `dist` и
+  ассеты Monaco больше не попадают в контекст сборки (S20-006)
+- Каталог задач больше не «протекает» между учениками: ключ кэша включает
+  `user_id` и все фильтры (S19-003)
 
-### Не сделано
-- Живой прогон LLM_EVAL (KI-008 Blocked: нет `DEEPSEEK_API_KEY`, LM Studio не запущен)
+### Безопасность
+- Удалён `python-jose 3.3.0` (2 critical + 1 moderate; транзитивные `ecdsa`/
+  `rsa` тоже ушли), JWT переведён на **PyJWT 2.15.1** (закрыты все известные
+  GHSA: 2.10.0 → 2.15.1)
+- `python-multipart` 0.0.17 → **0.0.31** (GHSA-wp53-j4wj-2cfg,
+  GHSA-pp6c-gr5w-3c5g, GHSA-5rvq-cxj2-64vf, GHSA-v9pg-7xvm-68hf)
+- RestrictedPython 7.4 → **8.5**: GHSA-gmj9-h825-chq2 (`try/except*` type
+  confusion), GHSA-ffg3-p8fm-mjx2 (shadowing guard-хуков),
+  GHSA-hp3v-5vw7-fx9w (`string.Formatter` field resolution) — 3 high обхода
+  песочницы закрыты; побочный эффект — `.format()`/`format_map()`/
+  `string.Formatter` запрещены (KI-018), f-строки и `%` работают
+- Frontend: `vitest`/`@vitest/coverage-v8` 3.2.7 → **4.1.12**
+  (tinypool GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr — 2 critical +
+  3 moderate dev-зависимостей закрыты; `pnpm audit` — 0)
+- nginx CSP без `unsafe-eval` (Monaco и worker'ы работают), HSTS,
+  `frame-ancestors 'none'`; секреты в prod-compose обязательны (`:?`),
+  `DEBUG=false`, БД/Redis не публикуются
+- `gitleaks` 8.30.1: 0 утечек на 42 коммитах; правила под проект
+  (`deepseek-api-key`, `postgres-password-in-url`, `jwt-secret-assignment`)
+- Остаточные риски приняты и отслеживаются: KI-015 (starlette 0.41.3 —
+  транзитивно от `fastapi 0.115.5`, неиспользуемые векторы), KI-016
+  (dev-only `pytest 8.3.3`); `pip-audit` — 0 critical, CI-команда с 8
+  временными `--ignore-vuln` (7 starlette + 1 pytest) даёт
+  «No known vulnerabilities found, 16 ignored», exit 0
+
+### Удалено
+- `python-jose` (и транзитивные `ecdsa`, `rsa`) — заменён на PyJWT
+- `@monaco-editor/react` — заменён на локальный `monaco-editor` (S19-001)
 
 ---
 

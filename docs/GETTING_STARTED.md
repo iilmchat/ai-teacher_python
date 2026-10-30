@@ -90,6 +90,11 @@ pip install -r requirements.txt
 .\venv\Scripts\pytest.exe -q
 ```
 
+> **PyPI с хоста может быть заблокирован** (KI-017). Тогда `pip install`/
+> `pip-audit` локально не работают: аудит backend — в контейнере
+> `python:3.12-slim`, локальный fallback — `backend/scripts/audit_python_deps.py`
+> (см. [reports/sprint-20/SECURITY_AUDIT.md](reports/sprint-20/SECURITY_AUDIT.md)).
+
 ---
 
 ## 5. Frontend (≈5 мин)
@@ -108,6 +113,7 @@ pnpm dev
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test && pnpm build
+pnpm test:offline                      # нет CDN-ссылок: Monaco локальный
 ```
 
 ---
@@ -141,6 +147,59 @@ Production-конфиг (без публикации БД наружу):
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+Проверка после запуска: `GET /` отдаёт SPA, `curl -I http://127.0.0.1:3000/` —
+все security-заголовки (CSP, `nosniff`, `DENY`, HSTS и др. — см.
+[SPEC.md §6.1](SPEC.md#61-заголовки-безопасности-nginx-s20-002)); WS-чат
+работает через nginx. Секреты (`POSTGRES_PASSWORD`, `SECRET_KEY`) обязательны —
+compose не стартует с дефолтами (`:?`).
+
+**Миграции применяются автоматически (S20-006).** Backend-контейнер запускает
+`alembic upgrade head` в `docker-entrypoint.sh` до старта uvicorn, поэтому
+чистая БД не даёт `UndefinedTableError`. Выкатить миграции отдельным job'ом
+можно с `SKIP_MIGRATIONS=true` (см. `backend/docker-entrypoint.sh`).
+
+---
+
+## 8. Бэкап и восстановление БД (S20-004)
+
+Скрипты работают через `docker exec` в контейнер `ai_teacher_postgres`,
+поэтому локальный `pg_dump` не нужен. Запуск — из корня репозитория
+в Git Bash / Linux / macOS (Windows: `bash scripts/backup.sh`).
+
+```bash
+# Бэкап: backups/<db>_<UTC>.dump.gz + .sha256, retention 14 дней
+bash scripts/backup.sh
+
+# Свои параметры
+bash scripts/backup.sh -o /backups -r 30
+```
+
+Скрипт проверяет, что контейнер запущен (иначе дамп мог бы уйти в чужую БД —
+KI-001), делает `pg_dump -Fc`, сжимает gzip, проверяет архив через
+`pg_restore -l`, пишет sha256 и удаляет бэкапы старше retention.
+
+Восстановление — **в отдельную БД**, рабочую `ai_teacher` скрипт перезапишет
+только с `--force`:
+
+```bash
+# Smoke-проверка на scratch-БД: создать, восстановить, показать счётчики
+bash scripts/restore.sh -f backups/ai_teacher_20261030T075746Z.dump.gz \
+     -t ai_teacher_restore_check --create -y --verify
+
+# Удалить scratch-БД после проверки
+docker exec ai_teacher_postgres dropdb -U ai_teacher ai_teacher_restore_check
+```
+
+`restore.sh` требует подтверждения (`yes`) без `-y`, запрещает восстановление
+в `postgres`/`template0`/`template1`, умеет `--create` (создать БД) и
+`--clean` (очистить объекты перед восстановлением). Коды возврата: `0` —
+успех, `1` — ошибка, `2` — отказ/неверные аргументы.
+
+Проверено 2026-10-30: бэкап dev-БД, восстановление в
+`ai_teacher_restore_check` — 14 таблиц, счётчики строк совпали с источником
+(users=5, tasks=6, chat_sessions=2, chat_messages=2); retention удаляет
+бэкапы старше N дней. Детали — `docs/reports/sprint-20/SECURITY_AUDIT.md`.
+
 ---
 
 ## Типичные проблемы
@@ -153,6 +212,10 @@ docker compose -f docker-compose.prod.yml up -d --build
 | `404` при заходе на `/tasks` в Docker | nginx без SPA-fallback | проверьте `frontend/nginx.conf` (`try_files`) |
 | Чат отвечает 503 | не задан `DEEPSEEK_API_KEY` и LM Studio не запущен | задать ключ или `LLM_PROVIDER=lm_studio` |
 | `alembic check` показывает расхождения | модели и миграции разошлись | `alembic revision --autogenerate`, проверить дифф |
+| `restore.sh`: «рабочая БД. Используйте отдельную БД или --force» | защита от перезаписи `ai_teacher` | восстановить в scratch-БД (`-t ... --create`) |
+| `.format()` в песочнице → `RestrictedFeatureError` | RestrictedPython 8.5 блокирует `str.format` (KI-018) | использовать f-строки `f"{x}"` или `%` |
+| `pip install` падает с connection reset / timeout | PyPI с хоста заблокирован (KI-017) | ставить/аудитить через Docker; локальный аудит — `audit_python_deps.py` |
+
 
 ---
 
@@ -160,4 +223,5 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 - [../docs/ARCHITECTURE.md](ARCHITECTURE.md) — как устроено
 - [../docs/RULES.md](RULES.md) — правила разработки
-- [../TODO.md](../TODO.md) — что дальше по плану
+- [../TODO_V0.2.md](../TODO_V0.2.md) — этап v0.2.0 (спринты 11–20, завершён)
+- [../docs/KNOWN_ISSUES.md](KNOWN_ISSUES.md) — известные проблемы и принятые риски

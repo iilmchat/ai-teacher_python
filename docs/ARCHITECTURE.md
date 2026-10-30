@@ -20,14 +20,14 @@ nginx (frontend-контейнер)
 FastAPI (backend)
   ├─ /api/v1/auth      — JWT, bcrypt
   ├─ /api/v1/users     — профиль, уровень, RBAC-эндпоинты
-  ├─ /api/v1/chat      — сессии, сообщения, WebSocket
+  ├─ /api/v1/chat      — сессии, сообщения, поиск, WebSocket
   ├─ /api/v1/code      — песочница, линтер, история
   ├─ /api/v1/tasks     — каталог, submit, прогресс
   ├─ /api/v1/admin     — пользователи, задачи, аналитика
   └─ /api/v1/health
   │
-  ├─ PostgreSQL 17 + pgvector   (данные, эмбеддинги сообщений)
-  ├─ Redis                      (rate limiting, fail-open при недоступности)
+  ├─ PostgreSQL 17 + pgvector   (данные, эмбеддинги + HNSW-индекс сообщений)
+  ├─ Redis                      (rate limiting, кэш справочников; fail-open)
   └─ LLM: DeepSeek API | LM Studio (локально), fallback между ними
 ```
 
@@ -35,9 +35,11 @@ FastAPI (backend)
 
 ```
 app/api/v1/*        HTTP-слой: валидация схем, коды ответов
-app/services/*      бизнес-логика: ChatService, TaskService, AnalyticsService
+app/services/*      бизнес-логика: ChatService, TaskService, AnalyticsService,
+                    cache (Redis-кэш справочников), rag (поиск по истории)
 app/services/llm/*  провайдеры LLM: база, deepseek, lm_studio, echo,
-                    fallback, health, metrics, policy, prompt_builder
+                    fallback, health, metrics, policy, prompt_builder;
+                    embeddings — провайдер эмбеддингов для RAG-lite
 app/db/repositories Repository-паттерн: SQLAlchemy-запросы
 app/models/*        ORM-модели (SQLAlchemy 2.0, Mapped)
 app/schemas/*       Pydantic v2: вход/выход API
@@ -93,6 +95,11 @@ dunder-атрибуты.
 Слой 2 — RestrictedPython (`compile_restricted`) + ограниченные builtins +
 собственный `__import__` с белым списком модулей.
 
+Используется RestrictedPython **8.5** (S20-001b): закрыты 3 high-обхода
+(`try/except*`, shadowing guard-хуков, `string.Formatter`). Побочный эффект —
+`str.format`/`format_map`/`string.Formatter` запрещены; ошибка переводится в
+`error_type=RestrictedFeatureError` с подсказкой про f-строки и `%` (KI-018).
+
 Слой 3 — изоляция процесса: код выполняется в отдельном интерпретаторе
 (`subprocess`), по таймауту процесс убивается.
 
@@ -116,7 +123,7 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
                                     max_output_chars, max_concurrency, ...}
 ```
 
-Ограничения снято: Monaco работает офлайн, ассеты локальные (S19-001, KI-013
+Ограничение снято: Monaco работает офлайн, ассеты локальные (S19-001, KI-013
 закрыт).
 
 ## 6. Задачи и прогресс
@@ -153,12 +160,84 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 - Дизайн-система: `components/ui/*` (Modal, Toast, Tabs, Table, Badge,
   Skeleton); `/dev/ui` собирается только в dev (`import.meta.env.DEV`).
 
+## 6.2 Кэш справочников (S19-003)
+
+```
+GET /chat/levels      → cache:chat:levels        (TTL 60 c)
+GET /tasks/categories → cache:tasks:categories   (TTL 60 c)
+GET /tasks            → cache:tasks:list:<user>:<filters> (TTL 60 c)
+```
+
+- Слой — `app/services/cache.py`; Redis-клиент берётся лениво из
+  `app/db/redis.py`, как у rate limiting.
+- **Ключ списка задач включает пользователя** (в ответе есть его прогресс) и
+  все фильтры: `difficulty`, `category`, `tag`, `q`, `skip`, `limit`.
+- **Инвалидация** — namespace `cache:tasks:*` через SCAN + DEL при создании,
+  правке, удалении/деактивации, импорте, восстановлении версии и seed.
+  `GET /chat/levels` статический, его инвалидация не нужна.
+- **Fail-open.** Redis недоступен → запрос обслуживается без кэша; после сбоя
+  кэш «остывает» 10 c, чтобы не платить таймаутом соединения на каждом
+  запросе.
+- **Метрики** — hits/misses/sets/errors в памяти процесса, секция `cache`
+  в `GET /admin/analytics`; события `cache_hit`/`cache_miss`/`cache_set`/
+  `cache_invalidated` в structlog.
+- Флаг `CACHE_ENABLED` (по умолчанию `true`); в тестах выключен autouse-
+  фикстурой, тесты кэша подставляют in-memory FakeRedis.
+
+## 6.3 Поиск по истории чата (RAG-lite, S19-005)
+
+```
+GET /api/v1/chat/search?q=<текст>&limit=<1..50>
+→ {query, mode: "semantic" | "ilike", items: [{id, session_id, role,
+   content, created_at, score}], total}
+```
+
+- Изоляция: репозиторий `ChatMessageRepository.search_*` всегда фильтрует по
+  `chat_sessions.user_id` — чужие сообщения не попадают в выдачу никогда.
+- **semantic** (при `RAG_ENABLED=true` и доступном провайдере): эмбеддинг
+  запроса → `ORDER BY embedding <=> $1 LIMIT k` по HNSW-индексу
+  `idx_chat_messages_embedding_hnsw` (`vector_cosine_ops`); `score = 1 - distance`.
+- **ilike** — fallback, доступный всегда: подстрока без учёта регистра. Он же
+  используется, если провайдер не настроен/упал, размерность вектора не
+  совпала или семантическая выдача пуста.
+- Эмбеддинги новых сообщений (вопрос и ответ) считаются **best-effort** при
+  сохранении: `ChatService.send_message`/`stream_reply` оборачивают вызов
+  провайдера в try/except, ошибка не мешает ответу. `embedding` nullable.
+- Провайдер — `app/services/llm/embeddings.py` (LM Studio, OpenAI-совместимый
+  `/embeddings`, модель `RAG_EMBEDDING_MODEL`, таймаут
+  `RAG_EMBEDDING_TIMEOUT`). Размерность — `RAG_EMBEDDING_DIM` (1536).
+- В тестах провайдер подменяется фейком — сеть не используется.
+
+## 6.4 Оптимизация запросов и пагинация (S19-004)
+
+Найденные и устранённые N+1 (по code review ключевых экранов):
+
+| Место | Было | Стало |
+|-------|------|-------|
+| `GET /classrooms` | `members_count` на каждый класс | один `JOIN … GROUP BY` + пагинация |
+| `GET /classrooms/{id}/assignments` | count на каждое назначение | один `GROUP BY task_id` |
+| `GET /classrooms/{id}` | лишний `selectinload(members)` | участники читаются один раз |
+
+Пагинация (additive, дефолты сохраняют прежнее поведение):
+`GET /tasks` (`skip`/`limit` были), `GET /classrooms`,
+`GET /me/notifications` (`skip`, `limit`), `GET /teacher/tasks`
+(`skip`, `limit`, `total` по всей таблице).
+
+Индексы миграции **0009** (модели описаны так же, `alembic check` зелёный):
+`tasks(is_active, created_at)`, `users(role, last_active)`,
+`notifications(user_id, created_at)`, `assignments(due_at)`,
+`chat_messages(session_id, created_at)`. Существующие индексы
+(`classrooms.owner_id`, `classrooms.join_code`, `classroom_members.user_id`,
+`notifications(user_id, read_at)`, `task_versions.task_id`) не дублируются.
+Миграция **0010** добавляет HNSW-индекс `chat_messages.embedding`
+(`ADD COLUMN IF NOT EXISTS` — страховка, колонка есть с 001).
+
 ## 7. Данные
 
 | Таблица | Назначение |
 |---------|------------|
 | `users` | аккаунты, роль, уровень, настройки |
-| `chat_sessions` / `chat_messages` | диалоги, `embedding` (pgvector, 1536) |
+| `chat_sessions` / `chat_messages` | диалоги, `embedding` (pgvector, 1536) + HNSW |
 | `code_executions` | история запусков кода |
 | `tasks` / `user_task_progress` | задачи и прогресс |
 | `task_versions` | история правок задач |
@@ -166,7 +245,7 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 | `assignments` | назначения задач классам |
 | `achievements` / `user_achievements` | справочник и полученные достижения |
 | `notifications` | in-app уведомления |
-| `alembic_version` | миграции (001 → 008) |
+| `alembic_version` | миграции (001 → 010) |
 
 Миграции: `backend/alembic/versions/`. Перед коммитом —
 `alembic upgrade head && alembic check`.
@@ -176,19 +255,77 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 Всё через `app/config.py` (pydantic-settings). `.env` читается по абсолютному
 пути от корня проекта — при запуске из `backend/` настройки не «теряются».
 
-Ключевые переменные: `POSTGRES_*`, `REDIS_*`, `SECRET_KEY`, `LLM_PROVIDER`,
-`LLM_FALLBACK_PROVIDER`, `DEEPSEEK_API_KEY`, `EXECUTOR_TIMEOUT`,
-`RATE_LIMIT_ENABLED`.
+Ключевые переменные: `POSTGRES_*`, `REDIS_*`, `SECRET_KEY`, `ALLOWED_ORIGINS`
+(CORS, CSV/JSON; в prod — из ENV), `DEBUG`, `LLM_PROVIDER`,
+`LLM_FALLBACK_PROVIDER`, `DEEPSEEK_API_KEY`, `LM_STUDIO_URL`/`LM_STUDIO_MODEL`,
+`EXECUTOR_*`, `RATE_LIMIT_ENABLED`, `SEED_ON_START`, `CACHE_ENABLED`,
+`CACHE_TTL_SECONDS`, `RAG_ENABLED`, `RAG_TOP_K`, `RAG_EMBEDDING_DIM`,
+`RAG_EMBEDDING_MODEL`, `RAG_EMBEDDING_TIMEOUT`.
 
-## 9. Docker
+Скрипты бэкапа читают своё окружение: `POSTGRES_CONTAINER`, `POSTGRES_DB`,
+`POSTGRES_USER`, `BACKUP_DIR`, `BACKUP_RETENTION_DAYS` (§9.3).
+
+## 9. Безопасность и деплой (S20)
+
+### 9.1. Заголовки безопасности
+
+nginx-контейнер отдаёт SPA и проксирует `/api`, WebSocket. На уровне `server`
+заданы: CSP (`script-src 'self'`, `worker-src 'self' blob:`, без
+`unsafe-eval`), `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy`, `Permissions-Policy`, HSTS; `server_tokens off`.
+`index.html` — `Cache-Control: no-cache`, статика `/assets/` — `expires`.
+
+Обоснование CSP: Vite собирает внешние хэшированные бандлы (inline-скриптов
+нет), Monaco работает с локальных `/monaco/vs` (S19-001), worker'ы — `blob:`,
+`style-src 'unsafe-inline'` нужен React/Tailwind/Monaco. Проверено
+Playwright: Monaco грузится под CSP без `unsafe-eval`.
+
+### 9.2. Аудит зависимостей и секреты
+
+- **CI job `Security`:** `pip-audit` (backend), `gitleaks` по всей истории,
+  `pnpm audit --audit-level=high`. Временно `--ignore-vuln` для
+  задокументированных остатков (starlette 0.41.3 — KI-015, dev pytest —
+  KI-016): job должен ловить **новые** уязвимости, а не повторять известные.
+- **Локально:** PyPI с хоста заблокирован (KI-017) → аудит в Docker-контейнере
+  или `backend/scripts/audit_python_deps.py` (GitHub Advisory API, лимит
+  60/час, кэш, `--resume`, exit 2 при неполном прогоне).
+- **Секреты:** `.gitleaks.toml` (встроенные + проектные правила, allowlist —
+  только плейсхолдеры), `.env`/`backups/` вне git; prod-compose требует
+  `POSTGRES_PASSWORD`/`SECRET_KEY` (`:?`), `DEBUG=false`, БД/Redis не
+  публикуются, `ALLOWED_ORIGINS` — из ENV (не `*`).
+- **Dependabot** (`.github/dependabot.yml`): pip/npm/github-actions, weekly.
+- **Итог v0.2.0:** frontend — 0 уязвимостей; backend — 0 critical, остаточные
+  записи — принятые риски KI-015/KI-016. Закрыты: `python-jose` (→ PyJWT
+  2.15.1), `python-multipart` 0.0.31, `RestrictedPython` 8.5, frontend
+  `vitest` 4.1.12.
+
+### 9.3. Бэкапы и восстановление
+
+`scripts/backup.sh` делает `pg_dump -Fc` через `docker exec` в контейнер
+БД, сжимает gzip, пишет `.sha256`, проверяет архив `pg_restore -l`, чистит
+старые по retention (14 дней по умолчанию). `scripts/restore.sh`
+восстанавливает в scratch-БД (`--create`/`--clean`/`--verify`), не
+перезаписывает рабочую БД без `--force`, запрещает системные БД. Подробно —
+[GETTING_STARTED.md](GETTING_STARTED.md) §8 и
+[DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) §6/§7.
+
+## 10. Docker
 
 - `docker-compose.yml` — dev: публикует БД и Redis на loopback, монтирует код backend.
 - `docker-compose.prod.yml` — prod: БД/Redis без публикации портов, только
   frontend наружу; nginx проксирует `/api` и WebSocket.
 - `frontend/Dockerfile` — node (build) → nginx (serve + reverse proxy).
 
-## 10. Что ещё не сделано
+## 11. Что ещё не сделано
 
-- Живые ответы LLM не валидировались на живой модели — KI-008 Blocked:
-  нет ключа/LM Studio (инструмент прогона готов).
-- Лимит памяти песочницы не enforced на Windows (KI-009).
+- **RAG-lite:** нет backfill эмбеддингов для сообщений, сохранённых до
+  включения RAG, и нет порога релевантности (`RAG_MIN_SCORE`); semantic-режим
+  видит только новые сообщения. Живая embedding-модель не валидировалась —
+  провайдер покрыт фейком (SPRINT-19 §5).
+- **Кэш:** метрики в памяти процесса (не общие между воркерами); каталог
+  после `submit` обновляется с задержкой до TTL (60 с).
+- **Зависимости:** координированный апгрейд `fastapi`/`starlette` отложен
+  (KI-015, v0.3.0), dev-апгрейд `pytest` 9.x — KI-016; PyPI с хоста
+  заблокирован (KI-017).
+- **CI:** GitHub Actions не запускает job'ы (KI-014, биллинг) — проверки
+  выполняются локально/эквивалентными командами.

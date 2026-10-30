@@ -148,6 +148,13 @@ Healthcheck кэшируется на 60 с и не раскрывает клю�
 - JWT: access 30 мин, refresh 7 дней; при 401 клиент обновляет токен один раз.
 - Чужой ресурс → 403 (чат, история запусков, задачи).
 - В LLM не уходят email, username и id — только текст вопроса и история диалога.
+- Frontend отдаётся nginx с security-заголовками (CSP, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS) — S20-002.
+  CSP разрешает только свой origin; единственное ослабление — `style-src
+  'unsafe-inline'` (React/Tailwind/Monaco используют style-атрибуты).
+  Заголовки не применяются к API-ответам только в том смысле, что им они не
+  нужны; прокси `/api/` отдаёт их с того же server-блока.
+- Секреты сканируются gitleaks (`.gitleaks.toml`, CI job `Security`).
 
 ### Ограничения, которые нужно знать
 
@@ -181,7 +188,59 @@ Healthcheck кэшируется на 60 с и не раскрывает клю�
 
 ---
 
-## 6. Дорожная карта Ops
+## 6. Бэкапы и восстановление (S20-004)
+
+Скрипты: `scripts/backup.sh`, `scripts/restore.sh` (bash, Git Bash на Windows).
+
+### Что делает backup.sh
+
+1. Проверяет, что контейнер `ai_teacher_postgres` запущен (иначе дамп уйдёт в
+   чужую БД — KI-001).
+2. `docker exec <container> pg_dump -U ai_teacher -d ai_teacher -Fc
+   --no-owner --no-privileges | gzip` → `backups/<db>_<UTC>.dump.gz`.
+3. Проверяет архив через `pg_restore -l`, пишет `.sha256`.
+4. Retention: удаляет дампы этой БД старше `-r N` дней (по умолчанию 14).
+
+Параметры: `-c CONTAINER`, `-d DB`, `-u USER`, `-o DIR`, `-r DAYS`; ENV:
+`POSTGRES_CONTAINER`, `POSTGRES_DB`, `POSTGRES_USER`, `BACKUP_DIR`,
+`BACKUP_RETENTION_DAYS`.
+
+### Что делает restore.sh
+
+- `-f FILE` — дамп, `-t DB` — целевая БД (по умолчанию
+  `ai_teacher_restore_check`), `--create` — создать её, `--clean` — очистить
+  объекты, `--verify` — напечатать число таблиц и строк.
+- Защита: восстановление поверх рабочей БД (`POSTGRES_DB`) — только с
+  `--force`; служебные `postgres`/`template0`/`template1` запрещены;
+  подтверждение вводом `yes`, если не указан `-y`.
+- `gzip -dc FILE | docker exec -i pg_restore ... --single-transaction`.
+
+### Smoke-проверка
+
+```bash
+bash scripts/backup.sh -o backups
+bash scripts/restore.sh -f backups/ai_teacher_<stamp>.dump.gz \
+     -t ai_teacher_restore_check --create -y --verify
+docker exec ai_teacher_postgres dropdb -U ai_teacher ai_teacher_restore_check
+```
+
+Проверено 2026-10-30 на dev-БД (14 таблиц): счётчики восстановленной БД
+совпали с источником (users=5, tasks=6, chat_sessions=2, chat_messages=2,
+code_executions=2), retention удалил тестовый бэкап старше 14 дней.
+Детали и evidence — `docs/reports/sprint-20/SECURITY_AUDIT.md`.
+
+### Ограничения
+
+- Бэкапится только БД. Файлы вне БД (если появятся загрузки) и `.env` нужно
+  хранить отдельно (секреты — в Vault/секретах CI).
+- Расписания в репозитории нет: запуск вручную/через внешний cron или
+  планировщик; для production — добавить регулярный job и off-site копию.
+- Дампы содержат персональные данные (email) — хранить с ограниченным
+  доступом, не коммитить (`backups/` в `.gitignore`).
+
+---
+
+## 7. Дорожная карта Ops
 
 1. ~~Подключить rate limiting (KI-007)~~ — сделано в S11-003.
 2. ~~Добавить e2e-тесты и прогон в CI (KI-012)~~ — сделано в S11-001/002.
@@ -189,4 +248,6 @@ Healthcheck кэшируется на 60 с и не раскрывает клю�
 4. ~~Метрики: токены, латентность, ошибки провайдера — в админку и логи~~ —
    сделано в S12-001…003 (память процесса).
 5. Автоматическое наполнение задачами при первом запуске (KI-010).
-6. Экспорт метрик в Prometheus/OTel и алерты — после v0.2.0.
+6. ~~Скрипты бэкапа/восстановления (S20-004)~~ — сделано в S20-004.
+7. Автоматические бэкапы по расписанию + off-site копия — после v0.2.0.
+8. Экспорт метрик в Prometheus/OTel и алерты — после v0.2.0.
