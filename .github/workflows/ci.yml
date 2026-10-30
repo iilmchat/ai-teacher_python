@@ -1,17 +1,20 @@
 name: CI
 
+# GitHub-hosted job'ы не запускаются с 2026-10-29: биллинг Actions (KI-014) —
+# job падает за 2–4 с без шагов с аннотацией «recent account payments have
+# failed or your spending limit needs to be increased» (docs/CI.md §1).
+# Поэтому workflow переведён в ручной режим и не висит красным на каждом PR:
+# PR-гейты даёт .github/workflows/ci-selfhosted.yml (те же команды, тот же
+# набор job'ов, self-hosted runner). Вернуть push/pull_request сюда — после
+# восстановления биллинга GitHub (KI-014) или при переезде на GitFlic
+# (gitflic-ci.yaml уже содержит полный порт).
 on:
-  push:
-    branches: [main, 'sprint/**']
-    # Path-фильтры (S21-004): docs-only изменение не гоняет тесты, e2e и docker.
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Причина ручного запуска (для истории)'
+        required: false
+        type: string
 
 jobs:
   lint:
