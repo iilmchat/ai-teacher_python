@@ -12,12 +12,14 @@ export PIP_RETRIES="${PIP_RETRIES:-5}"
 WORKSPACE=/workspace
 mkdir -p "$WORKSPACE"
 cd /src
+# Копируем и файлы, которые читают тесты инструментов релиза (S21-005):
+# docs/RELEASES.md (заметки) и frontend/package.json (сверка версий).
 tar --exclude=backend/venv \
     --exclude=backend/.mypy_cache \
     --exclude=backend/.pytest_cache \
     --exclude=backend/.ruff_cache \
     --exclude=backend/.coverage \
-    -cf - backend pyproject.toml | tar -xf - -C "$WORKSPACE"
+    -cf - backend pyproject.toml docs/RELEASES.md frontend/package.json | tar -xf - -C "$WORKSPACE"
 cd "$WORKSPACE"
 
 # Адреса сервисов фиксируем явно: переменная проекта с тем же именем иначе

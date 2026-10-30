@@ -148,6 +148,12 @@ jobs:
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          # Порты локального compose-кластера (KI-001: канон 5434/6381 занят
+          # чужими контейнерами). Пустые значения → дефолты скрипта.
+          E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
+          E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
+          E2E_POSTGRES_USER: ${{ vars.E2E_POSTGRES_USER }}
+          E2E_POSTGRES_DB: ${{ vars.E2E_POSTGRES_DB }}
         run: pwsh -NoProfile -File ./scripts/ci/e2e.ps1
       - name: Загрузить Playwright-отчёт
         if: always()

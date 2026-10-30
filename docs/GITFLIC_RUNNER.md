@@ -1,12 +1,14 @@
 # GitFlic Runner (агент) — установка и настройка пилота
 
 > Спринт 21 (v0.3.0), S21-002/S21-003. Инструкция для **Windows-машины проекта**
-> (`C:\Projects\AI\ai-teacher_python`), на которой уже есть Docker Desktop,
+> (`K:\Projects\AI\ai-teacher_python`), на которой уже есть Docker Desktop,
 > Node/pnpm и Playwright-браузеры. Настраивает Lead/владелец проекта — учётной
 > записи GitFlic у CI-инженера нет, и логиниться он не должен.
 >
 > **Статус: пилот, не production.** Пайплайн `gitflic-ci.yaml` и эта инструкция
 > ещё не проверены на живом GitFlic: первый прогон — это и есть проверка.
+> Пока CI работает на self-hosted runner'е GitHub (`docs/CI.md` §9), а живой
+> пилот и MR-гейт заблокированы доступом владельца (KI-023).
 > Честные ограничения и known-unknowns — в §10.
 
 ---
@@ -27,7 +29,7 @@
 | `gitleaks` | Docker-агент, tag `docker` | `zricethezav/gitleaks:latest` |
 | `e2e` | **PowerShell-агент**, tag `windows-dev` | Windows-хост: Node/pnpm/Playwright, локальные Postgres/Redis |
 | `docker` | **PowerShell-агент**, tag `windows-dev` | Windows-хост: Docker Desktop (`docker build`, compose config) |
-| `.release` | черновик, закомментирован | Docker-агент + образ gcli |
+| `release` | Docker-агент, tag `docker` | только тег-пайплайн: проверка заметок из `docs/RELEASES.md` (создание релиза — после live-проверки) |
 
 **Нужны оба агента.** Job'ы с `image`/`services` умеет исполнять только
 Docker-агент (PowerShell-агент `image` игнорирует и запускает скрипты прямо на
@@ -380,7 +382,7 @@ at npipe:////./pipe/docker_engine» или `docker info` возвращает о
    |-----|----------|------|-------|
    | `SECRET_KEY` | случайная строка ≥ 32 символов | **да** | JWT в тестах и e2e |
    | `POSTGRES_PASSWORD` | пароль локального compose-Postgres (из `.env`) | **да** | `test` (сервис+job) и `e2e` (локальная БД) |
-   | `E2E_PYTHON` | `C:\Projects\AI\ai-teacher_python\backend\venv\Scripts\python.exe` | нет | e2e: backend-интерпретатор с зависимостями (PyPI на хосте заблокирован) |
+   | `E2E_PYTHON` | `K:\Projects\AI\ai-teacher_python\backend\venv\Scripts\python.exe` | нет | e2e: backend-интерпретатор с зависимостями (PyPI на хосте заблокирован); venv создан из Python 3.12, колёса — из wheelhouse |
    | `E2E_POSTGRES_PORT` | `5434` | нет | опционально: порт локального Postgres (KI-001) |
    | `E2E_REDIS_PORT` | `6381` | нет | опционально: порт локального Redis |
    | `E2E_POSTGRES_USER` | `ai_teacher` | нет | опционально, если отличается в `.env` |
@@ -397,6 +399,28 @@ at npipe:////./pipe/docker_engine» или `docker info` возвращает о
    (CI/CD → Pipelines → Create Pipeline) — `workflow:rules` разрешает
    branch-пайплайны для `sprint/**` на время пилота. Смотреть, какие job'ы
    захвачены агентами, и разбирать ошибки по §9.
+
+### 5.1. MR-гейт (S21-004): красный конвейер блокирует merge
+
+GitHub Free/private не даёт required checks (403), поэтому гейт переносится на
+GitFlic. Порядок:
+
+1. **CI/CD → Enable Merge Request Pipeline** — MR-пайплайн должен появиться на
+   тестовом MR (не на push ветки).
+2. **Настройки проекта → ветки**: `main` — запрет прямых PUSH, запрет
+   force-push (Protected branches).
+3. Найти опцию **«Проверять статус последнего конвейера при слиянии запроса»**
+   (Project settings → Merge requests / CI-CD) и включить её.
+4. **Проверка на тестовом MR:** намеренно сломать job (например, добавить
+   `exit 1` в `scripts/ci/backend-lint.sh` во временной ветке), убедиться, что:
+   - MR-пайплайн красный;
+   - кнопка merge недоступна (или мерж отклоняется API/UI).
+5. Если гейт не работает (баг/тариф): резервный путь — webhook на пайплайн,
+   который ставит label `ci-failed` и снимает approval; результат и ограничение
+   записать в `docs/CI.md` §10.3 и в KI-023.
+
+Пока гейт не включён, действует правило RULES §10: мерж только при зелёном
+`CI (self-hosted fallback)` — проверка глазами.
 
 ---
 

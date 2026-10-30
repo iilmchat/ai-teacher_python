@@ -28,7 +28,21 @@ if (-not $env:POSTGRES_PASSWORD) {
     throw "POSTGRES_PASSWORD не задан (secret репозитория) — e2e не подключится к локальной БД"
 }
 
-Write-Host '==> Проверка локального Postgres/Redis (docker compose)'
+# Порты резолвим ДО compose: на машине проекта канон 5434/6381 занят чужими
+# контейнерами (KI-001), поэтому значения приходят из переменных репозитория
+# E2E_POSTGRES_PORT / E2E_REDIS_PORT и должны совпасть у compose и у тестов.
+$pgPort = if ($env:E2E_POSTGRES_PORT) { $env:E2E_POSTGRES_PORT } else { '5434' }
+$redisPort = if ($env:E2E_REDIS_PORT) { $env:E2E_REDIS_PORT } else { '6381' }
+$pgUser = if ($env:E2E_POSTGRES_USER) { $env:E2E_POSTGRES_USER } else { 'ai_teacher' }
+$pgDb = if ($env:E2E_POSTGRES_DB) { $env:E2E_POSTGRES_DB } else { 'ai_teacher' }
+
+Write-Host "==> Локальный Postgres/Redis: $pgPort/$redisPort (docker compose)"
+# compose читает .env, но в clone'е runner'а его нет (файл в .gitignore) —
+# поэтому пробрасываем значения явно через окружение процесса.
+$env:POSTGRES_PORT = $pgPort
+$env:REDIS_PORT = $redisPort
+$env:POSTGRES_USER = $pgUser
+$env:POSTGRES_DB = $pgDb
 docker compose up -d postgres redis
 Assert-Step 'docker compose up -d postgres redis'
 
@@ -42,11 +56,7 @@ $env:E2E_BACKEND_PORT = '8001'
 $env:E2E_FRONTEND_PORT = '3100'
 
 $env:POSTGRES_HOST = '127.0.0.1'
-$env:POSTGRES_PORT = if ($env:E2E_POSTGRES_PORT) { $env:E2E_POSTGRES_PORT } else { '5434' }
-$env:POSTGRES_USER = if ($env:E2E_POSTGRES_USER) { $env:E2E_POSTGRES_USER } else { 'ai_teacher' }
-$env:POSTGRES_DB = if ($env:E2E_POSTGRES_DB) { $env:E2E_POSTGRES_DB } else { 'ai_teacher' }
 $env:REDIS_HOST = '127.0.0.1'
-$env:REDIS_PORT = if ($env:E2E_REDIS_PORT) { $env:E2E_REDIS_PORT } else { '6381' }
 
 Write-Host '==> frontend: pnpm install'
 Set-Location (Join-Path $env:GITHUB_WORKSPACE 'frontend')
