@@ -4,6 +4,13 @@
 # не писали в смонтированный read-only репозиторий.
 set -euo pipefail
 
+# PyPI с self-hosted runner'а нестабилен (KI-017): TLS-хендшейк иногда
+# «залипает». Увеличиваем таймаут/ретраи; кэш pip переиспользуется между
+# прогонами (named volume `ai-teacher-pip-cache` в workflow), иначе каждый job
+# качает одни и те же колёса заново.
+export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
+export PIP_RETRIES="${PIP_RETRIES:-5}"
+
 WORKSPACE=/workspace
 mkdir -p "$WORKSPACE"
 cd /src

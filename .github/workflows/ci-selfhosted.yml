@@ -55,8 +55,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ruff + MyPy в python:3.12-slim
         run: |
-          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" python:3.12-slim `
-            bash /src/scripts/ci/backend-lint.sh
+          # Кэш pip — named volume: PyPI с runner'а нестабилен (KI-017), без
+          # кэша каждый прогон качает одни и те же колёса заново.
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pip-cache:/root/.cache/pip `
+            python:3.12-slim bash /src/scripts/ci/backend-lint.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   test:
@@ -79,6 +82,7 @@ jobs:
               redis:7-alpine | Out-Null
             docker run --rm --network $net `
               -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+              -v ai-teacher-pip-cache:/root/.cache/pip `
               -e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 `
               -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_pass `
               -e POSTGRES_DB=test_db -e REDIS_HOST=redis -e REDIS_PORT=6379 `
@@ -100,8 +104,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: typecheck / lint / test / build в node:22-alpine
         run: |
-          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" node:22-alpine `
-            sh /src/scripts/ci/frontend.sh
+          # pnpm-store — named volume: npm-реестр тоже нестабилен, а без кэша
+          # каждый прогон качает ~100 МБ зависимостей заново.
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pnpm-store:/workspace/frontend/.pnpm-store `
+            node:22-alpine sh /src/scripts/ci/frontend.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   security:
@@ -112,8 +119,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: pip-audit (backend)
         run: |
-          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" python:3.12-slim `
-            bash /src/scripts/ci/security-backend.sh
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pip-cache:/root/.cache/pip `
+            python:3.12-slim bash /src/scripts/ci/security-backend.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: pnpm audit (frontend)
         run: |

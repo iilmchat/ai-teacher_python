@@ -5,6 +5,10 @@
 # (workflow/GitFlic job). Здесь — только ожидание готовности и прогон.
 set -euo pipefail
 
+# См. backend-lint.sh: нестабильный PyPI (KI-017) — таймауты, ретраи, кэш pip.
+export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
+export PIP_RETRIES="${PIP_RETRIES:-5}"
+
 WORKSPACE=/workspace
 mkdir -p "$WORKSPACE"
 cd /src
