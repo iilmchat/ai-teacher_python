@@ -31,7 +31,7 @@
 + scripts/ci/security-frontend.sh                — pnpm audit --audit-level=high
 + scripts/ci/e2e.ps1                             — Playwright e2e на Windows-хосте
 + scripts/ci/docker.ps1                          — docker build + prod-compose config
-+ scripts/ci/install-python-deps.sh              — wheelhouse → PyPI → зеркала
++ scripts/ci/install-python-deps.sh              — wheelhouse → зеркала → pypi.org
 + scripts/ci/build-wheelhouse.ps1                — офлайн-wheelhouse (Linux-колёса)
 + scripts/ci/protect-branch.ps1                  — required checks + force-push
 + scripts/gitflic/setup.ps1                      — переменные, агент, конвейер (API)
@@ -86,6 +86,9 @@
 | CI `CI (self-hosted fallback)` | **6/6 success**, run
 [41122794849](https://github.com/iilmchat/ai-teacher_python/actions/runs/41122794849),
 11 мин 53 с |
+| Release dry-run (живой, из тега) | **success**, run
+[41126158359](https://github.com/iilmchat/ai-teacher_python/actions/runs/41126158359):
+гейты 6/6 → версия 0.2.0 согласована → заметки собраны → «DRY-RUN» |
 | `pip-audit` (wheelhouse/зеркало + OSV) | «No known vulnerabilities found, 16 ignored», exit 0 |
 | `pnpm audit --audit-level=high` | 0 |
 | `alembic upgrade head` + `alembic check` | OK, миграции до `010` |
@@ -118,6 +121,11 @@ Build: 0 ошибок / 0 предупреждений (typecheck+build). Tests:
 6. Локальная репетиция релиза: `check_version.py` → OK (0.2.0 во всех файлах),
    `release_notes.py --version 0.2.0` → заметки из журнала,
    `release_notes.py --version 9.9.9` → exit 1 + список доступных релизов.
+7. **Живой release dry-run:** тег `v0.2.0-dryrun` (push → workflow читает файл
+   из тега) → run 41126158359: гейты 6/6, «Версия: 0.2.0, dry-run: true»,
+   «OK: версия 0.2.0 согласована во всех источниках», «Заметки собраны»,
+   «DRY-RUN: тег и Release НЕ создаются». Тег после проверки удалён; реальный
+   тег/релиз не создавались.
 
 ---
 
@@ -138,10 +146,12 @@ Build: 0 ошибок / 0 предупреждений (typecheck+build). Tests:
    настройка CI/CD, агент и MR-пайплайн требуют доступа владельца. Локально
    прогнаны команды всех job'ов; `services`, маскировка и поведение MR на
    платформе не подтверждены.
-4. **Release dry-run на GitHub ещё не запускался живьём:** `workflow_dispatch`
-   требует наличия файла в `default`-ветке, а реальный тег мы не создаём до
-   релиза. Репетиция запланирована сразу после мержа спринта: тег
-   `v0.2.0-dryrun` (всегда dry-run) или `gh workflow run release.yml`.
+4. **Release dry-run выполнен, но только «из тега».** `workflow_dispatch`
+   требует наличия файла в `default`-ветке, поэтому репетиция шла тегом
+   `v0.2.0-dryrun` (push → workflow читает файл из тега): run 41126158359 —
+   зелёный, тег и Release не создавались. Живой `workflow_dispatch` станет
+   доступен после мержа в `main`; отдельной проверки требуют ветка «реальный
+   релиз» (создание тега + `gh release create`) — её прогонит S30.
 5. **Hosted `ci.yml` отключён от PR** (ручной режим): иначе каждый PR висит с
    красным workflow из-за биллинга. Возврат — одна правка `on:` после оплаты
    (KI-014, `docs/CI.md` §9).

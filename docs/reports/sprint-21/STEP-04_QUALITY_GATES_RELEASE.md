@@ -40,7 +40,7 @@
 8. **Офлайн-путь зависимостей CI (KI-017):** wheelhouse в named volume
    `ai-teacher-wheelhouse` (`scripts/ci/build-wheelhouse.ps1`,
    Linux-колёса из зеркала) + `scripts/ci/install-python-deps.sh`
-   (wheelhouse → pypi.org → зеркала aliyun/tsinghua) + кэши pip/pnpm
+   (wheelhouse → зеркала aliyun/tsinghua → pypi.org последним) + кэши pip/pnpm
    (named volumes). PyPI с машины стал недоступен (TLS-таймауты), job `lint`
    до этого залипал в `pip install` на 20+ минут.
 9. **Runner восстановлен:** прежний `C:\actions-runner` был во временном
@@ -69,6 +69,7 @@
 | `release_notes.py --version 9.9.9` | локально | exit 1 + список доступных релизов |
 | CI (self-hosted), 6 job'ов | run 41122794849 (commit `d4b5d6e`) | **6/6 success**, 11 мин 53 с |
 | E2E (локально, как job) | `e2e.ps1` с `E2E_PYTHON`/`E2E_POSTGRES_PORT=5436` | **12/12** за 42.6 с |
+| **Release dry-run (живой)** | тег `v0.2.0-dryrun` → run 41126158359 | **success**: гейты 6/6 → версия 0.2.0 согласована → заметки собраны → «DRY-RUN: тег и Release НЕ создаются» |
 
 ---
 
@@ -146,11 +147,13 @@
 
 ## 6. Что дальше
 
-1. Дождаться зелёного PR-CI (6/6) на ветке спринта → мерж `sprint/21-ci` в
-   `main` (PR #27).
-2. После мержа: `gh workflow run release.yml -f version=0.2.0` (dry-run) —
-   живая проверка релиз-пайплайна; затем тег `v0.2.0-dryrun` как репетиция
-   «из тега».
+1. Живой dry-run **выполнен** (run
+   [41126158359](https://github.com/iilmchat/ai-teacher_python/actions/runs/41126158359)):
+   тег `v0.2.0-dryrun` → гейты 6/6 → сверка версии → заметки → dry-run; тег
+   после проверки удалён. Реальный релиз — `workflow_dispatch` с
+   `dry_run=false` (перед релизом поднять версию в трёх файлах и добавить
+   раздел в `docs/RELEASES.md`).
+2. Мерж `sprint/21-ci` в `main` (PR #27) — PR в статусе ready for review.
 3. Владельцу: GitFlic access token + Java 11 и agent registration → пилот
    (S21-002) → MR-гейт (S21-004) → закрытие KI-023.
 4. Спринт 22: контрактные тесты (S22-001) → `fastapi`/`starlette` (KI-015),

@@ -370,6 +370,14 @@ git tag v0.3.0-dryrun && git push origin v0.3.0-dryrun           # та же р�
 Почему тег `-dryrun`: репетиция проверяется на живом runner'е, а «настоящий»
 тег не порождает второй прогон гейтов. Реальный релиз — только ручной запуск.
 
+**Проверено живьём (2026-10-30):** тег `v0.2.0-dryrun` → run
+[41126158359](https://github.com/iilmchat/ai-teacher_python/actions/runs/41126158359) —
+гейты 6/6, «Версия: 0.2.0, dry-run: true», «OK: версия 0.2.0 согласована»,
+«Заметки собраны», «DRY-RUN: тег и Release НЕ создаются». Тег после проверки
+удалён. Ветка «реальный релиз» (создание тега и `gh release create`) впервые
+будет пройдена на v0.3.0 (S30-004) — до этого её не тренируем на настоящих
+номерах.
+
 **GitFlic.** Job `release` (stage `release`, правило `if: $CI_COMMIT_TAG`)
 включён в `gitflic-ci.yaml`: tag-пайплайн, проверка notes тем же скриптом,
 `release:` — ключевое слово GitFlic. Ветку/MR он не затрагивает, поэтому его
@@ -430,13 +438,26 @@ gh run cancel <run_id>             # отменить (например, зал�
 
 ### 12.5. Если PyPI недоступен (KI-017)
 
+Порядок установки зависимостей в job'ах (`scripts/ci/install-python-deps.sh`,
+`security-backend.sh`):
+
+1. `wheelhouse` (named volume `/wheelhouse`) — офлайн, основной путь;
+2. зеркала `mirrors.aliyun.com` → `pypi.tuna.tsinghua.edu.cn`;
+3. `pypi.org` — последним: когда он недоступен, pip «залипает» на TLS-таймаутах
+   (наблюдалось 20+ минут на job `lint`).
+
+`pip-audit` дополнительно переключается на advisory-сервис OSV
+(`api.osv.dev`), если `pypi.org` не отвечает — набор находок совпадает
+(16 ignored, exit 0).
+
 Симптом: job `lint`/`test` висит на `pip install`, в логе — таймауты TLS.
 Что делать:
 
 1. `gh run cancel <id>`, затем `gh run rerun <id>` — сеть восстанавливается;
-2. скрипты уже используют `PIP_DEFAULT_TIMEOUT=60` и `PIP_RETRIES=5`;
-3. если не помогает — собрать зависимости из локального wheelhouse
-   (`docs/RULES.md` §11.19, `scripts/wheelhouse.py` в S22-005) и повторить;
+2. скрипты уже используют короткие таймауты (`PIP_DEFAULT_TIMEOUT=30`,
+   `PIP_RETRIES=2`) и сначала идут на зеркала;
+3. если не помогает — пересобрать wheelhouse
+   (`pwsh scripts/ci/build-wheelhouse.ps1`) и повторить;
 4. авторитетный «чистый» прогон — GitFlic/облачный агент, где PyPI доступен.
 
 ### 12.6. Параметры этой машины (2026-10-30)

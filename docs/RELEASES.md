@@ -1132,16 +1132,18 @@ S21-002/S21-004 закрыты частично
   секретов и MR-пайплайн на платформе не подтверждены — KI-023.
 - **Автоматический merge-gate** (S21-004): GitHub Free/private → required checks
   403; GitFlic даёт гейт бесплатно, но его проверка — после пилота — KI-023.
-- **Живой release dry-run на GitHub** — workflow файла нет в `default`-ветке до
-  мержа спринта; после мержа: `gh workflow run release.yml -f version=0.3.0`
-  (или тег `v0.3.0-dryrun`). Локально проверены скрипты версии и заметок.
+- **Живой `workflow_dispatch`-релиз** — файла нет в `default`-ветке до мержа
+  спринта; репетиция выполнена тегом `v0.2.0-dryrun` (run 41126158359, зелёный).
+  Ветка «реальный релиз» (тег + `gh release create`) впервые пройдёт на v0.3.0.
 - **Playwright-кэш в CI** не выделен отдельным томом: браузеры стоят в профиле
   пользователя runner'а и между прогонами не пересоздаются.
 
 ### Метрики
-- CI (self-hosted): **6/6 job'ов success**, 12 мин 10 с; Lint 2.4 мин,
-  Test 3.8 (341 passed + 1 skip в контейнере), Frontend 1.0 (80/80, build),
-  Security 1.5 (pip-audit/pnpm audit/gitleaks), E2E 2.2 (**12/12**), Docker 1.0
+- CI (self-hosted): **6/6 job'ов success**, run 41122794849 — 11 мин 53 с;
+  Frontend 50 с, Security 1 мин 17 с, Lint 32 с, Test 1 мин 56 с (354 passed
+  + 1 skip), Docker build 5 мин 55 с (pip внутри Dockerfile — PyPI), E2E
+  1 мин 5 с (**12/12**)
+- Release dry-run: run 41126158359 — 6/6 гейтов + `Tag & Release` success
 - Backend: +13 тестов (`tests/test_release_tools.py`), ruff 0 (скоуп
   `app tests scripts`), mypy strict 0
 - Frontend: 80/80 unit, entry **78.71 kB gzip** (без изменений в коде)
@@ -1161,9 +1163,9 @@ S21-002/S21-004 закрыты частично
 ### DoD
 - ⚠️ Красный PR не мержится **автоматически** — невозможно на GitHub
   Free/private и в ожидании GitFlic (KI-023); правило RULES §10 действует.
-- ✅ 6 job'ов CI зелёные (run 41070317162); локальные гейты v0.3.0 не сломаны.
-- ⚠️ Release dry-run: скрипты и workflow готовы, живой прогон — после мержа
-  спринта (файл должен быть в `default`-ветке).
+- ✅ 6 job'ов CI зелёные (run 41122794849); локальные гейты v0.3.0 не сломаны.
+- ✅ Release dry-run выполнен живьём (run 41126158359, тег `v0.2.0-dryrun`);
+  реальная ветка релиза — на v0.3.0 (S30-004).
 - ✅ `docs/CI.md` описывает процессы и решение; KI-014 → `Resolved`; KI-023
   заведена с планом.
 
