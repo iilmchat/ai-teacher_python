@@ -15,9 +15,11 @@ tar --exclude=backend/venv \
     -cf - backend pyproject.toml | tar -xf - -C "$WORKSPACE"
 cd "$WORKSPACE"
 
-echo "==> установка линтеров (pinned: unpinned ruff ломал lint, см. docs/CI.md §8)"
+echo "==> установка зависимостей (mypy нужны импортируемые пакеты, иначе"
+echo "    'Cannot find implementation ... fastapi/sqlalchemy' — найдено на self-hosted run)"
 python -m pip install --upgrade pip >/dev/null
-pip install "ruff==0.8.1" "mypy==1.13.0" >/dev/null
+pip install -r "$WORKSPACE/backend/requirements.txt" >/dev/null
+# ruff/mypy уже закреплены в requirements.txt (dev): ruff==0.8.1, mypy==1.13.0
 
 cd "$WORKSPACE/backend"
 echo "==> ruff check app tests scripts"

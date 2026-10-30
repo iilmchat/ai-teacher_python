@@ -17,12 +17,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
-      - name: Install linters
+      - name: Install dependencies (mypy нужны импортируемые пакеты)
         run: |
           python -m pip install --upgrade pip
-          # Версии пиним: unpinned ruff ломал lint (54 новых правила upstream)
-          pip install "ruff==0.8.1" "mypy==1.13.0"
+          # ruff/mypy закреплены в requirements.txt (dev), unpinned ruff ломал lint
+          pip install -r backend/requirements.txt
 
       - name: Run Ruff
         run: |

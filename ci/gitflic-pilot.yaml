@@ -53,7 +53,10 @@ lint:
       - .pip-cache
   before_script:
     - python -m pip install --upgrade pip
-    - pip install "ruff==0.8.1" "mypy==1.13.0"
+    # Ставим весь requirements.txt: mypy нужны импортируемые пакеты
+    # (на self-hosted прогоне иначе 295 import-not-found ошибок). ruff/mypy
+    # в requirements закреплены (ruff==0.8.1, mypy==1.13.0).
+    - pip install -r backend/requirements.txt
   script:
     - echo "==> ruff check app tests scripts"
     - cd backend && ruff check app tests scripts

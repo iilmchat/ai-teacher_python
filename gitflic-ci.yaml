@@ -82,10 +82,11 @@ lint:
       - .pip-cache
   before_script:
     - python -m pip install --upgrade pip
-    # Версии ПИНИМ: unpinned `pip install ruff` уже ломал lint в проверке
-    # от 2026-10-30 (новые правила upstream: 54 ошибки на том же коде, локально
-    # с 0.8.1 — 0). Держим в синхроне с requirements.txt (dev).
-    - pip install "ruff==0.8.1" "mypy==1.13.0"
+    # Ставим весь requirements.txt: mypy нужны импортируемые пакеты
+    # (`Cannot find implementation for fastapi/sqlalchemy` — найдено на
+    # self-hosted прогоне 2026-10-30). ruff/mypy в requirements закреплены
+    # (ruff==0.8.1, mypy==1.13.0): unpinned ruff ломал lint (54 новых правила).
+    - pip install -r backend/requirements.txt
   script:
     - echo "==> ruff check app tests scripts"
     # Скоуп как в RULES §3.1/§10: app + tests + scripts; `backend/` целиком
