@@ -6,9 +6,12 @@
 # из docs/CI.md: проверки идут на self-hosted runner'е (`actions/runner`,
 # labels: self-hosted, windows, ai-teacher), поэтому не расходуют минуты.
 #
-# ВАЖНО: запуск только вручную (workflow_dispatch). В required checks НЕ
-# включён и на push/PR не подписан — до решения по платформе (S21-002/S21-004).
-# Включать как обязательный — после стабилизации (см. docs/CI.md §5).
+# Триггеры: PR (кроме docs-only), push в main, ручной запуск. Required checks на
+# GitHub Free/private недоступны (403, нужен Pro) — гейт мержа описан в
+# docs/CI.md §10 и отслеживается в KI-023.
+#
+# Также вызывается из release.yml (`workflow_call`) как набор гейтов перед
+# тегом/релизом — release не дублирует команды, а переиспользует эти job'ы.
 #
 # Требования к машине-runner'у: Docker Desktop, Node/pnpm, Playwright-браузеры,
 # локальный compose-Postgres/Redis (для e2e), переменная репозитория E2E_PYTHON,
@@ -18,16 +21,19 @@ name: CI (self-hosted fallback)
 
 on:
   workflow_dispatch:
-  # PR-проверки и main: fallback-CI работает, даже когда GitHub-hosted минуты
-  # заблокированы (KI-014). Required checks на GitHub Free/private недоступны,
-  # поэтому это видимый, но не блокирующий гейт (см. docs/CI.md §8).
+  # Path-фильтры (S21-004): docs-only PR не гоняет ни e2e, ни docker, ни
+  # остальные job'ы. '**.md' покрывает README/CHANGELOG/TODO/отчёты.
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   push:
     branches: [main]
-  # Временно, пока sprint/21-ci не влит в main: проверки на ветке спринта.
-  # После мержа — удалить эту ветку из триггеров.
-  # (workflow_dispatch требует наличия файла в default-ветке.)
-  # см. также: sprint/21-ci
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  # Вызов из release.yml (S21-005): гейты — те же job'ы, что в PR.
+  workflow_call:
 
 permissions:
   contents: read
