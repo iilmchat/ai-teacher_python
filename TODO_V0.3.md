@@ -56,7 +56,7 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 
 | KI | Severity | Суть | Спринт | План |
 |----|----------|------|--------|------|
-| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 21 | восстановить Actions (billing) **или** self-hosted runner / зеркало; required checks |
+| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 21 | диагностика billing; **пилот GitFlic** (SaaS/self-hosted) или self-hosted runner; required checks на выбранной платформе |
 | KI-015 | High | `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) | 22 | координированный апгрейд `fastapi` + `starlette`, `pip-audit` без игнора |
 | KI-016 | Low | dev-only advisory `pytest 8.3.3` | 22 | `pytest` 9.x + плагины, полный прогон |
 | KI-017 | Low | PyPI недоступен с хоста разработки | 22 | `scripts/wheelhouse.py` (офлайн-установка из Docker), документация |
@@ -94,52 +94,102 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 предсказуемо. Закрывает KI-014.
 
 **Зависит от:** v0.2.0  
-**Оценка:** 2 дня
+**Оценка:** 2.5 дня (включая пилот GitFlic)
 
-### S21-001: Диагностика и решение по биллингу — [ ]
+### 21.0. Варианты CI-платформы (решение принимается по итогам S21-002)
+
+| Вариант | Плюсы | Минусы | Стоимость для нас |
+|---------|-------|--------|-------------------|
+| **GitHub Actions + self-hosted runner** на машине проекта | нулевая миграция, PR checks и `gh`-скрипты остаются, привычный CI | зависимость от GitHub (биллинг/санкции), машина должна быть включена | 0 ₽ |
+| **GitFlic SaaS + свой агент** (PowerShell/Docker) | RU-хостинг, реестр отечественного ПО, CI/CD в бесплатном плане (приватный репо ≤5 человек, 4 ГБ), GitLab-подобный `gitflic-ci.yaml` (services/DinD/cache/artifacts/MR-пайплайны/release), импорт с GitHub, зеркала PULL/PUSH | облачные агенты по умолчанию выключены; зеркало в облаке обновляется раз в сутки и создаётся по запросу в поддержку; MR/issues/wiki не переносятся; встроенный Gitleaks — только self-hosted; SAST/merge trains/аудит — платные тарифы | 0 ₽ (свой агент); Company — от 750 ₽/чел/мес |
+| **GitFlic Self-hosted Community** | полный контроль, RU, неограниченно пользователей, CI/CD и агенты, LDAP/SSO OIDC | нужен сервер (1 ядро/2 ГБ/10 ГБ, Java 11, PostgreSQL 11+, Redis 6+) и его эксплуатация | 0 ₽ (Community); Pro — от 243 000 ₽/год |
+| **GitLab CE self-hosted** / GitLab.com | зрелый CI, полный перенос MR/issues (CE) | тяжёлая эксплуатация; санкционные/доступностные риски облака | сервер |
+| **Только локальные гейты** | ничего не нужно | нет required checks, регресс в `main` | 0 ₽ |
+
+**Факты по GitFlic (проверено по документации и тарифам, 2026-10-30):**
+
+- Тарифы: SaaS Free — публичные репозитории безлимитно, приватные до 5 человек,
+  4 ГБ/репо, коммит 100 МБ; CI/CD, реестр контейнеров/пакетов, API/webhooks,
+  MR-approvals, RBAC. Company — от 750 ₽/чел/мес.
+- Self-hosted Community — бесплатно, неограниченно пользователей, CI/CD, LDAP/SSO.
+- `gitflic-ci.yaml`: `stages`, `image`, `services` (Postgres/Redis; `docker:dind`
+  для Docker-in-Docker при privileged-агенте), `cache`, `artifacts`, `rules`/
+  `only`/`except`, `needs`, `extends`/anchors, `trigger`, `release`,
+  `environment`, шаблоны, компоненты, планировщик конвейеров.
+- MR-пайплайны включаются в настройках CI/CD проекта; конвейер результата
+  слияния — отдельный флажок. Насколько «красный конвейер блокирует merge» —
+  проверяем в пилоте (в GitHub это required checks).
+- Агенты: Shell (UNIX), PowerShell (Windows; нужны Java 11 + Git), Docker
+  (DinD), Kuber (beta). Кэш: локально на агенте, распределённый — S3 (до 5 ГБ).
+- Секреты: переменные проекта с маскировкой в логах; Vault/StarVault.
+- Импорт GitHub: PAT со scope `repo`; переносятся файлы, коммиты, ветки, теги
+  (MR/issues/wiki — нет). Зеркала: PULL/PUSH, в облаке — обновление раз в сутки.
+- Gitleaks: встроенный коннектор только в self-hosted (pre-receive hook); на
+  SaaS — обычный job с образом gitleaks.
+- Релизы: ключевое слово `release:` в CI + REST API/webhooks; GitFlic CLI
+  вместо `gh`.
+
+**Предварительная рекомендация:** не блокировать v0.3.0 миграцией. В спринте 21
+сделать (1) диагностику GitHub billing, (2) **параллельный пилот GitFlic**
+(импорт + агент + 2 job'а), (3) решение по итогам. Если паритет CI и удобство
+подтвердятся — перенести origin в GitFlic в спринте 22, GitHub оставить зеркалом;
+если нет — GitHub + self-hosted runner.
+
+### S21-001: Диагностика GitHub и выбор пути — [ ]
 - [ ] Проверить GitHub → Settings → Billing & plans (Actions minutes/spending limit)
 - [ ] Если лимит можно поднять — поднять и перезапустить run (`gh run rerun <id>`)
-- [ ] Если нет — зафиксировать альтернативу (self-hosted runner на машине проекта
-      **или** зеркало в GitLab CI), оформить решением в `docs/CI.md`
+- [ ] Зафиксировать варианты из §21.0 (GitHub runner / GitFlic SaaS / GitFlic
+      self-hosted) и критерии решения в `docs/CI.md`
 - [ ] **Зависит от:** — · **Оценка:** 3 ч
 
-### S21-002: Required checks и защита ветки — [ ]
-- [ ] Branch protection `main`: required checks `lint`, `test`, `frontend`, `e2e`,
-      `security`; запрет force-push; require PR review
-- [ ] `concurrency` с `cancel-in-progress`, `timeout-minutes` на job'ы
-- [ ] Path-фильтры: docs-only PR не гоняет e2e/docker (экономия минут)
-- [ ] **Зависит от:** S21-001 · **Оценка:** 3 ч
+### S21-002: Пилот GitFlic — импорт и агент — [ ]
+- [ ] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
+      репозиторий из GitHub (PAT `repo`), сверить ветки/теги/коммиты, `main`
+- [ ] Установить PowerShell-агент на машину проекта (Java 11 + Git, тег
+      `windows-dev`) **или** Docker-агент; проверить захват задач
+- [ ] Минимальный `gitflic-ci.yaml`: `lint` (ruff/mypy) и `test` (pytest +
+      `services` postgres/redis); измерить время и стабильность
+- [ ] Проверить: маскировка секретов, кэш, MR-пайплайн, поведение при падении
+      job'а, ограничения Free-тарифа
+- [ ] Записать результат и решение (ADR) в `docs/CI.md`; при успехе — план
+      переноса origin (S21-003), при неудаче — GitHub + runner
+- [ ] **Зависит от:** S21-001 · **Оценка:** 6 ч
 
-### S21-003: Ускорение CI — [ ]
-- [ ] Кэш `pip` (по `requirements.txt`) и `pnpm` (по `pnpm-lock.yaml`), Playwright
-      browsers cache
-- [ ] Разделить `lint` и `test`; `test` — только `pytest -q` без `--cov` в PR,
-      coverage — в nightly
-- [ ] Оценить время: PR ≤ 10 мин, nightly ≤ 20 мин; зафиксировать в `docs/CI.md`
-- [ ] **Зависит от:** S21-001 · **Оценка:** 4 ч
+### S21-003: Портирование CI на выбранную платформу — [ ]
+- [ ] GitHub-путь: self-hosted runner, существующие job'ы, кэш `pip`/`pnpm`/
+      Playwright, таймауты
+- [ ] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
+      `security`) в `gitflic-ci.yaml`; `docker build` — DinD-сервис или
+      PowerShell-агент; кэш и артефакты
+- [ ] `pip-audit`, `gitleaks`, `pnpm audit` — как job'ы; SAST GitFlic не
+      использовать (платно)
+- [ ] **Зависит от:** S21-002 · **Оценка:** 6 ч
 
-### S21-004: E2E, security и docker в обязательных проверках — [ ]
-- [ ] `e2e` job: Playwright, артефакт отчёта, retries=1 для флаков
-- [ ] `security` job: `pip-audit` (без игноров после спринта 22 — пока с 8),
-      `gitleaks`, `pnpm audit --audit-level=high`
-- [ ] `docker` job: сборка backend/frontend образов, `docker compose config` для prod
-- [ ] **Зависит от:** S21-001 · **Оценка:** 4 ч
+### S21-004: Required checks и защита ветки — [ ]
+- [ ] GitHub: branch protection с 5 required checks; запрет force-push; review
+- [ ] GitFlic: правила слияния/одобрения + MR-пайплайн; **проверить на тестовом
+      MR, что красный конвейер блокирует merge** (если нет — gate через
+      webhook/скрипт и запись в `docs/CI.md`)
+- [ ] Path-фильтры: docs-only PR не гоняет e2e/docker
+- [ ] **Зависит от:** S21-003 · **Оценка:** 3 ч
 
 ### S21-005: Автоматизация релиза — [ ]
-- [ ] `workflow_dispatch` «release»: полные гейты → проверка `CHANGELOG` → tag →
-      GitHub Release (notes из `RELEASES.md`)
-- [ ] Dry-run на тестовом теге, инструкция в `docs/CI.md`
-- [ ] **Зависит от:** S21-002, S21-004 · **Оценка:** 3 ч
+- [ ] GitHub: `workflow_dispatch` release (гейты → tag → Release)
+- [ ] GitFlic: job с `release:` + API/CLI (notes из `RELEASES.md`), dry-run
+- [ ] Инструкция в `docs/CI.md`; при зеркалировании — порядок «тег в origin,
+      зеркало догоняет»
+- [ ] **Зависит от:** S21-003 · **Оценка:** 3 ч
 
-### S21-006: Документация и бейджи — [ ]
-- [ ] `docs/CI.md`: jobs, кэш, required checks, как перезапустить, как выпустить релиз
+### S21-006: Документация, бейджи, KI-014 — [ ]
+- [ ] `docs/CI.md`: платформа, jobs, required checks, кэш, перезапуск, релиз,
+      зеркала/откат
 - [ ] `docs/RULES.md` §10: обязательность зелёного CI (снять оговорку KI-014)
-- [ ] README: бейдж CI и покрытия
-- [ ] **Зависит от:** S21-001…S21-005 · **Оценка:** 2 ч
+- [ ] README: бейдж CI/покрытия; `CHANGELOG`
+- [ ] **Зависит от:** S21-001…S21-005 · **Оценка:** 3 ч
 
-**DoD:** PR с зелёным CI (5 required job'ов); release-workflow проходит dry-run;
-`docs/CI.md` описывает процессы; KI-014 → `Resolved` (или `Blocked` с планом,
-если биллинг не решается в этом спринте).
+**DoD:** на выбранной платформе красный PR не мержится (проверено тестовым PR);
+5 job'ов зелёные; release dry-run; `docs/CI.md` описывает процессы и решение;
+KI-014 → `Resolved` (или `Blocked` с планом, если биллинг и пилот не решаются).
 
 **Найдено попутно (v0.2.0):** GitHub Actions job'ы падали за 2 с без шагов —
 это биллинг, а не код; локальные гейты были зелёными.
@@ -534,7 +584,7 @@ email-уведомления включаются флагом и не лома�
 
 | Спринт | Тема | Оценка |
 |--------|------|--------|
-| 21 | CI & Quality Gates | 2 дня |
+| 21 | CI & Quality Gates (вкл. пилот GitFlic) | 2.5 дня |
 | 22 | Dependency Modernization | 2.5 дня |
 | 23 | Sandbox Throughput | 2.5 дня |
 | 24 | Sandbox Runner Isolation | 3 дня |
@@ -544,7 +594,7 @@ email-уведомления включаются флагом и не лома�
 | 28 | Teacher & Classroom v3 | 2.5 дня |
 | 29 | UX, A11y & i18n Completion | 2 дня |
 | 30 | Release v0.3.0 | 2 дня |
-| **Итого** | | **~22.5 дня** |
+| **Итого** | | **~23 дня** |
 
 **Порядок для минимального релиза (если сроки сжимаются):** 21 → 22 → 23 → 25 → 30.
 Остальные спринты (24, 26, 27, 28, 29) можно переносить на v0.3.x/v0.4.0 без
@@ -582,13 +632,18 @@ email-уведомления включаются флагом и не лома�
 ## Как начинать спринт
 
 1. Ветка `sprint/NN-<slug>` (см. RULES §2.1).
-2. Прочитать раздел спринта, уточнить зависимости; для 21 — доступ к GitHub billing/runner.
+2. Прочитать раздел спринта, уточнить зависимости; для 21 — доступ к GitHub
+   billing/runner и аккаунт GitFlic (Free) для пилота S21-002.
 3. Взять первые 2–3 задачи, реализовать, прогнать проверки.
 4. Отчёт `docs/reports/sprint-NN/SPRINT-NN.md` + обновление журналов.
 5. PR в `main`, зелёный CI, мерж.
 
 **Перед спринтом 21:** проверить `gh auth status` и права на Settings → Billing;
-если биллинг не решается — выбрать self-hosted runner и добавить шаг регистрации
-в онбординг.
+зарегистрировать аккаунт/компанию GitFlic (Free, ≤5 участников) и проверить
+Java 11 (нужна PowerShell-агенту; на машине проекта Java пока **не** установлена).
+Если биллинг не решается — решить по итогам пилота S21-002: GitFlic (origin) +
+зеркало GitHub **или** GitHub + self-hosted runner. Для GitFlic заранее
+запросить в поддержке права на зеркала (в облаке создание зеркала требует
+разрешения).
 
 © 2026 RuChating (iilmchat)
