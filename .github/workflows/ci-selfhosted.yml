@@ -123,6 +123,7 @@ jobs:
         run: |
           docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
             -v ai-teacher-pip-cache:/root/.cache/pip `
+            -v ai-teacher-wheelhouse:/wheelhouse:ro `
             python:3.12-slim bash /src/scripts/ci/security-backend.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: pnpm audit (frontend)

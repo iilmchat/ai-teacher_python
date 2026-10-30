@@ -41,21 +41,23 @@ if [ -d "$WHEELHOUSE" ] && compgen -G "$WHEELHOUSE/*.whl" > /dev/null; then
     echo "   fallback: индекс PyPI (сеть)"
 fi
 
-echo "==> зависимости из pypi.org"
-if pip install -r "$REQUIREMENTS" > /dev/null; then
-    echo "==> pypi.org OK"
-    exit 0
-fi
-
+# pypi.org — последняя попытка: когда он недоступен, pip «залипает» на TLS-
+# таймаутах (KI-017), поэтому сначала зеркала, потом он.
 for index in "$MIRROR" "$MIRROR_FALLBACK"; do
     [ -n "$index" ] || continue
-    echo "==> pypi.org недоступен, пробуем зеркало: $index"
     host="$(printf '%s' "$index" | sed -E 's#^https?://([^/]+).*#\1#')"
+    echo "==> зависимости из зеркала: $host"
     if pip install -r "$REQUIREMENTS" --index-url "$index" --trusted-host "$host" > /dev/null; then
         echo "==> зеркало $host OK"
         exit 0
     fi
 done
 
-echo "!! не удалось поставить зависимости: PyPI и зеркала недоступны (KI-017)" >&2
+echo "==> зависимости из pypi.org (последняя попытка)"
+if pip install -r "$REQUIREMENTS" > /dev/null; then
+    echo "==> pypi.org OK"
+    exit 0
+fi
+
+echo "!! не удалось поставить зависимости: wheelhouse, зеркала и PyPI недоступны (KI-017)" >&2
 exit 1
