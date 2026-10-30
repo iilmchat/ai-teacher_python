@@ -135,12 +135,16 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 подтвердятся — перенести origin в GitFlic в спринте 22, GitHub оставить зеркалом;
 если нет — GitHub + self-hosted runner.
 
-### S21-001: Диагностика GitHub и выбор пути — [ ]
-- [ ] Проверить GitHub → Settings → Billing & plans (Actions minutes/spending limit)
-- [ ] Если лимит можно поднять — поднять и перезапустить run (`gh run rerun <id>`)
-- [ ] Зафиксировать варианты из §21.0 (GitHub runner / GitFlic SaaS / GitFlic
-      self-hosted) и критерии решения в `docs/CI.md`
-- [ ] **Зависит от:** — · **Оценка:** 3 ч
+### S21-001: Диагностика GitHub и выбор пути — [~] (ADR готов, billing — за владельцем)
+- [x] Проверить причину падений: аннотация API run `41063439319` —
+      «The job was not started because recent account payments have failed or
+      your spending limit needs to be increased» (подтверждает KI-014)
+- [ ] Поднять лимит/оплату в GitHub → Settings → Billing & plans (нужен доступ
+      владельца; API billing требует scope `user` — см. `docs/CI.md` §1) и
+      перезапустить run (`gh run rerun <id>`)
+- [x] Зафиксировать варианты из §21.0 и критерии решения в `docs/CI.md` (ADR),
+      включая порядок импорта приватного репо и GitFlic-пилот
+- [x] **Зависит от:** — · **Оценка:** 3 ч
 
 ### S21-002: Пилот GitFlic — импорт и агент — [ ]
 - [ ] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
