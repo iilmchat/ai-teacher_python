@@ -3,7 +3,8 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** спринты 19–20 завершены, этап v0.2.0 закрыт; следующий этап — v0.3.0 ([TODO_V0.3.md](../TODO_V0.3.md), спринты 21–30)
+**Текущий спринт:** 21 (этап v0.3.0 «Ops & Scale», [TODO_V0.3.md](../TODO_V0.3.md)) —
+CI & Quality Gates: CI восстановлен на self-hosted runner'е, merge-gate — KI-023
 
 ---
 
@@ -31,6 +32,7 @@
 - [Спринт 18: UX, A11y & Design System](#спринт-18-ux-a11y--design-system)
 - [Спринт 19: Performance & Scale](#спринт-19-performance--scale)
 - [Спринт 20: Security Audit & Release](#спринт-20-security-audit--release)
+- [Спринт 21: CI & Quality Gates](#спринт-21-ci--quality-gates)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1064,6 +1066,106 @@
 [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) ·
 [reports/sprint-20/SPRINT-20.md](reports/sprint-20/SPRINT-20.md) ·
 [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md)
+
+---
+
+## Спринт 21: CI & Quality Gates
+
+**Период:** 2026-10-30  
+**Статус:** ✅ CI восстановлен (6/6 job'ов на self-hosted runner'е); merge-gate
+на GitHub Free невозможен — GitFlic-пилот ждёт доступа владельца (KI-023),
+S21-002/S21-004 закрыты частично
+
+### Задачи
+- [x] S21-001: Диагностика GitHub (аннотация API, причин — биллинг) и ADR
+- [~] S21-002: Пилот GitFlic — импорт выполнен, конфиги/рунбук/скрипты готовы;
+      живой прогон ждёт access token и агента (Java 11 + регистрация)
+- [x] S21-003: CI работает — 6 job'ов на self-hosted runner'е (GitFlic-порт готов)
+- [~] S21-004: Path-фильтры и скрипт защиты ветки готовы; автоматический
+      required-check гейт невозможен без Pro/публичного репо или GitFlic
+      (KI-023)
+- [x] S21-005: Release-workflow (гейты → тег → GitHub Release), dry-run,
+      заметки из `docs/RELEASES.md`; GitFlic-джоб `release` — тег-пайплайн
+- [x] S21-006: `docs/CI.md`, RULES §10/§11.20, README-бейдж, CHANGELOG,
+      KNOWN_ISSUES, отчёты
+
+### Что сделано
+- **Диагностика (S21-001):** причина падений подтверждена аннотацией API
+  (`check-runs/<job>/annotations`): «recent account payments have failed or your
+  spending limit needs to be increased» — KI-014. Токен `gh` без scope `user`,
+  поэтому billing-API недоступен из CLI (инструкция — `docs/CI.md` §1).
+- **CI (S21-003):** установлен self-hosted runner `ai-teacher-win`
+  (`C:\actions-runner`, labels `self-hosted, windows, ai-teacher`), workflow
+  `CI (self-hosted fallback)` — 6 job'ов, прогон **6/6 зелёный**
+  ([run 41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162),
+  12 мин 10 с). Job'ы используют общие `scripts/ci/*`, кэш pip/pnpm — named
+  volumes, плюс офлайн-wheelhouse (KI-017): PyPI с машины нестабилен.
+- **GitHub-hosted `ci.yml`** переведён в ручной режим: hosted-минуты заблокированы
+  биллингом, красный workflow не должен висеть на каждом PR; возврат — одна
+  правка `on:` после оплаты (KI-014, `docs/CI.md` §9).
+- **GitFlic (S21-002):** проект импортирован
+  (`gitflic.ru/project/ruchating/ai-teacher_python`, `main` = `5a74145`);
+  `gitflic-ci.yaml` — порт 5 job'ов + 3 security-job'а, `e2e`/`docker` на
+  PowerShell-агенте, path-фильтры, тег-джоб `release`; пилотный
+  `ci/gitflic-pilot.yaml` (lint+test с `services`); рунбук
+  `docs/GITFLIC_RUNNER.md`; настройка переменных и агента —
+  `scripts/gitflic/setup.ps1`. Локально команды всех job'ов прогнаны в тех же
+  Docker-образах (§8 `docs/CI.md`): lint/test/frontend/e2e 12/12/docker — PASS.
+- **Гейты (S21-004):** `paths-ignore` (docs-only PR не гоняет e2e/docker);
+  `scripts/ci/protect-branch.ps1` — 6 required checks + запрет force-push,
+  честный exit 3 на 403 Free/private.
+- **Релиз (S21-005):** `.github/workflows/release.yml` переиспользует
+  `ci-selfhosted.yml` через `workflow_call`; версия сверяется в трёх файлах
+  (`backend/scripts/check_version.py`), заметки — раздел «## Релиз vX.Y.Z» из
+  `docs/RELEASES.md` (`backend/scripts/release_notes.py`); dry-run по умолчанию
+  и для тега `v*-dryrun`; реальный релиз — `workflow_dispatch` с
+  `dry_run=false` (тег + `gh release create --verify-tag`).
+- **Документация (S21-006):** `docs/CI.md` (ADR, гейты, релиз, эксплуатация
+  runner'а, офлайн-путь), RULES §2.3/§5.1/§10/§11.19/§11.20, README-бейдж,
+  CHANGELOG `[Unreleased]`, KNOWN_ISSUES (KI-014 → Resolved, KI-023), отчёты
+  `docs/reports/sprint-21/STEP-04_QUALITY_GATES_RELEASE.md` и `SPRINT-21.md`.
+
+### Что не сделано
+- **Живой пилот GitFlic** (S21-002): импорт есть, но CI/CD проекта, агент
+  (нужны Java 11 + registration token) и MR-пайплайн требуют access token
+  владельца. Команды job'ов проверены локально, но `services`, маскировка
+  секретов и MR-пайплайн на платформе не подтверждены — KI-023.
+- **Автоматический merge-gate** (S21-004): GitHub Free/private → required checks
+  403; GitFlic даёт гейт бесплатно, но его проверка — после пилота — KI-023.
+- **Живой release dry-run на GitHub** — workflow файла нет в `default`-ветке до
+  мержа спринта; после мержа: `gh workflow run release.yml -f version=0.3.0`
+  (или тег `v0.3.0-dryrun`). Локально проверены скрипты версии и заметок.
+- **Playwright-кэш в CI** не выделен отдельным томом: браузеры стоят в профиле
+  пользователя runner'а и между прогонами не пересоздаются.
+
+### Метрики
+- CI (self-hosted): **6/6 job'ов success**, 12 мин 10 с; Lint 2.4 мин,
+  Test 3.8 (341 passed + 1 skip в контейнере), Frontend 1.0 (80/80, build),
+  Security 1.5 (pip-audit/pnpm audit/gitleaks), E2E 2.2 (**12/12**), Docker 1.0
+- Backend: +13 тестов (`tests/test_release_tools.py`), ruff 0 (скоуп
+  `app tests scripts`), mypy strict 0
+- Frontend: 80/80 unit, entry **78.71 kB gzip** (без изменений в коде)
+- Артефакты CI: `notes.md` (GitFlic-тег), Playwright-репорт (7 дней)
+
+### Проблемы
+- **KI-023 (High):** merge-gate не обеспечен — GitHub Free/private + GitFlic
+  ждёт доступ. Workaround: RULES §10 (мерж только при зелёном fallback-CI).
+- **KI-017:** PyPI с машины стал ещё нестабильнее — job `lint` залипал в
+  `pip install` на 20+ минут (TLS-таймауты). Решение: wheelhouse (named volume)
+  + кэши pip/pnpm; PyPI — только fallback.
+- **Лишний red-шум:** hosted-`ci.yml` отключён от PR (иначе красный на каждом
+  PR из-за биллинга); при возврате hosted-минут — снять `workflow_dispatch`-only.
+- **Кэш Actions на self-hosted** не используется намеренно (named volumes
+  проще); при переезде в GitFlic кэш — локальный на Docker-агенте.
+
+### DoD
+- ⚠️ Красный PR не мержится **автоматически** — невозможно на GitHub
+  Free/private и в ожидании GitFlic (KI-023); правило RULES §10 действует.
+- ✅ 6 job'ов CI зелёные (run 41070317162); локальные гейты v0.3.0 не сломаны.
+- ⚠️ Release dry-run: скрипты и workflow готовы, живой прогон — после мержа
+  спринта (файл должен быть в `default`-ветке).
+- ✅ `docs/CI.md` описывает процессы и решение; KI-014 → `Resolved`; KI-023
+  заведена с планом.
 
 ---
 

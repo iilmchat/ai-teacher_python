@@ -27,9 +27,8 @@ export POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 export REDIS_HOST="${REDIS_HOST:-redis}"
 export REDIS_PORT="${REDIS_PORT:-6379}"
 
-echo "==> установка зависимостей backend (pip cache: ${PIP_CACHE_DIR:-/workspace/.pip-cache})"
-python -m pip install --upgrade pip >/dev/null
-pip install -r backend/requirements.txt >/dev/null
+echo "==> установка зависимостей backend (wheelhouse -> PyPI, см. install-python-deps.sh)"
+bash /src/scripts/ci/install-python-deps.sh "$WORKSPACE/backend/requirements.txt"
 
 echo "==> ожидание PostgreSQL (до 60 с)"
 python - <<'PY'

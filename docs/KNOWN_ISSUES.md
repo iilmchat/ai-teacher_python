@@ -3,8 +3,8 @@
 > Этот документ содержит список всех известных проблем, ограничений и блокеров.
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
-**Последнее обновление:** 2026-10-30 (спринт 20 / релиз v0.2.0)  
-**Всего проблем:** 22 (активных: 6, закрытых: 16)
+**Последнее обновление:** 2026-10-30 (спринт 21 / v0.3.0 — CI & Quality Gates)  
+**Всего проблем:** 23 (активных: 6, закрытых: 17)
 
 ---
 
@@ -31,28 +31,29 @@ Workaround: временное решение (если есть)
 
 ## Активные проблемы
 
-### KI-014 · Open · High · CI · GitHub Actions не запускает job'ы (биллинг)
+### KI-023 · Open · High · CI · merge-gate не обеспечен: GitHub Free не даёт required checks, GitFlic-пилот ждёт доступа
 
-**Описание:** при push ветки `sprint/12-llmops` job'ы `Lint (Backend)` и
-`Frontend` завершаются за 2 с без выполнения шагов. Аннотация GitHub:
-«The job was not started because recent account payments have failed or your
-spending limit needs to be increased». Код, workflow и локальные проверки ни
-при чём: ruff/mypy/pytest и pnpm-проверки зелёные.
+**Описание:** зелёный CI восстановлен (KI-014), но *заблокировать* мерж красного
+PR нечем: GitHub Free для приватного репозитория отвечает `403 Upgrade to GitHub
+Pro or make this repository public` на `PUT /repos/.../branches/main/protection`
+(проверено 2026-10-30, дважды). GitFlic даёт защиту ветвей и опцию «Проверять
+статус последнего конвейера при слиянии» на бесплатном тарифе, но пилот
+(S21-002) требует access token GitFlic и зарегистрированного агента — это доступ
+владельца, у агента разработки его нет.
 
-**Workaround:** локальные прогоны (см. отчёт спринта 12); PR остаётся
-открытым до восстановления Actions. Владелец проекта разрешил мерж без
-зелёного CI на 5 дней (до 2026-11-03) — решение временное.
+**Что уже готово:** `scripts/ci/protect-branch.ps1` (payload с 6 required
+checks, запрет force-push, `-DryRun`/`-Verify`); `gitflic-ci.yaml` с MR-правилами;
+ADR и инструкции — `docs/CI.md` §10; проверка того, что красный пайплайн
+блокирует merge, описана пошагово.
 
-**План закрытия:** проверить GitHub → Settings → Billing & plans, пополнить
-или поднять лимит Actions, затем перезапустить CI (`gh run rerun <id>`).
+**Workaround:** RULES §10 — мерж только при зелёном `CI (self-hosted fallback)`
+(проверка глазами), зелёный прогон 6/6 известен (run 41070317162).
 
-**Обновлено 2026-10-30 (спринт 20):** добавлен job `Security` (pip-audit,
-gitleaks, pnpm audit), но на GitHub он не запускался — причина прежняя
-(биллинг Actions). Гейты v0.2.0 выполняются локально (ruff, mypy, pytest,
-pnpm, Docker); непройденным остаётся именно CI на GitHub — в отчёте это
-фиксируется как «CI не стартовал», а не «CI зелёный».
+**План закрытия:** (1) владелец выдаёт GitFlic-токен/регистрирует агент →
+прогнать пилот → включить гейт и проверить красным MR; либо (2) GitHub Pro /
+публичный репозиторий → `pwsh scripts/ci/protect-branch.ps1`.
 
-**Создано:** 2026-10-29 · **Обновлено:** 2026-10-30 (спринт 20)
+**Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-10-30
 
 ---
 
@@ -109,7 +110,15 @@ Dependabot; авторитетный результат — CI `Security`.
 **План закрытия:** восстановление доступа к PyPI на рабочей машине
 (прокси/сеть) либо переход на локальное зеркало; до этого — процесс выше.
 
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
+**Обновлено 2026-10-30 (спринт 21):** нестабильность стала заметнее — job
+`lint` на self-hosted runner'е залипал в `pip install` на 20+ минут
+(TLS-хендшейк к `pypi.org` таймаутил, при этом из свежего контейнера PyPI
+отвечал). Для CI добавлен **офлайн-путь**: зависимости ставятся из wheelhouse
+(named volume `ai-teacher-wheelhouse`, `scripts/ci/build-wheelhouse.ps1`), PyPI —
+только fallback; плюс постоянные кэши pip/pnpm (`docs/CI.md` §12.5, RULES
+§11.20). Сам доступ с хоста не восстановлен.
+
+**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30 (спринт 21)
 
 ---
 
@@ -165,6 +174,26 @@ CPU-bound — рост до загрузки ядер); если 5 RPS submit �
 ---
 
 ## Закрытые проблемы
+
+### KI-014 · Resolved · High · CI · GitHub Actions не запускает job'ы (биллинг)
+
+**Описание:** все GitHub-hosted job'ы завершались за 0–4 с без выполнения шагов;
+аннотация API: «The job was not started because recent account payments have
+failed or your spending limit needs to be increased». Код и workflow были ни
+при чём (ruff/mypy/pytest/pnpm/e2e зелёные локально).
+
+**Решение (S21, спринт 21):** CI восстановлен **без hosted-минут** —
+self-hosted runner `ai-teacher-win` (labels `self-hosted, windows, ai-teacher`,
+`C:\actions-runner`) и workflow `CI (self-hosted fallback)`. На нём — все 6
+job'ов (Lint, Test, Frontend, Security, E2E, Docker), прогон **6/6 зелёный**
+(run 41070317162, 12 мин 10 с). Сам биллинг hosted-минут остаётся вопросом
+владельца: `ci.yml` переведён в ручной режим, чтобы не висел красным; после
+оплаты/лимита достаточно вернуть `on: push/pull_request`. Merge-gate —
+отдельная проблема **KI-023** (на Free/private required checks недоступны).
+
+**Создано:** 2026-10-29 · **Закрыто:** 2026-10-30 (спринт 21, S21-003)
+
+---
 
 ### KI-019 · Resolved · Critical · deps/security · python-jose и PyJWT 2.10.0
 

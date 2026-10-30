@@ -184,16 +184,15 @@ job'ов в тех же Docker-образах (§8), готовые конфиг
 
 ---
 
-## 7. Дальнейшие шаги (S21-003…S21-006)
+## 7. Дальнейшие шаги (S21-003…S21-006) — статус
 
-1. **S21-003:** порт 5 job'ов, кэш pip/pnpm/playwright, артефакты; при выборе
-   варианта A — self-hosted runner GitHub.
-2. **S21-004:** required checks / MR-gate, path-фильтры (docs-only), запрет
-   force-push.
-3. **S21-005:** release-workflow (`workflow_dispatch` для GitHub или `release:`
-   job для GitFlic), dry-run.
-4. **S21-006:** бейджи, RULES §10 без оговорки KI-014, отчёт
-   `docs/reports/sprint-21/SPRINT-21.md`, статус KI-014.
+| Задача | Что сделано | Осталось |
+|--------|-------------|----------|
+| S21-003 GitHub-путь | `ci-selfhosted.yml`, 6/6 job'ов зелёные, кэш pip/pnpm (named volumes) | — |
+| S21-003 GitFlic-путь | `gitflic-ci.yaml` (5 job'ов + 3 security), `ci/gitflic-pilot.yaml`, общие `scripts/ci/*` | живой прогон — S21-002 |
+| S21-004 | path-фильтры (GitHub + GitFlic), `scripts/ci/protect-branch.ps1` | required checks на GitHub Free невозможны (403); MR-гейт — GitFlic (§10) |
+| S21-005 | `release.yml` (гейты → тег → Release), dry-run, заметки из `RELEASES.md` | живой dry-run — после мержа/тега (§11) |
+| S21-006 | этот документ, RULES §10, README-бейдж, KI-014/KI-023, отчёт спринта | — |
 
 ---
 
@@ -255,7 +254,194 @@ runtime-зависимостей (295 `import-not-found`), поэтому lint �
 
 ---
 
-## 9. Ссылки
+## 9. Итоговое решение (ADR, 2026-10-30)
+
+**Контекст.** GitHub-hosted минуты заблокированы биллингом (`KI-014`); GitHub
+Free для приватного репозитория не даёт branch protection (403 на API), т.е.
+даже зелёный CI не может *заблокировать* мерж. GitFlic даёт и CI/CD, и защиту
+ветвей на бесплатном тарифе, но требует своего агента и access token
+(внешняя зависимость — у агента разработки их нет).
+
+**Решение.**
+
+1. **Немедленно — вариант A (сделано).** Self-hosted runner
+   (`ai-teacher-win`, labels `self-hosted, windows, ai-teacher`) +
+   переиспользуемые `scripts/ci/*`: `Lint (backend)`, `Test (backend)`,
+   `Frontend`, `Security`, `E2E (Playwright)`, `Docker build`. Прогон 6/6
+   зелёный (run
+   [41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162)).
+   GitHub-hosted `ci.yml` переведён в ручной режим, чтобы не висеть красным.
+2. **Цель — GitFlic как origin (v0.3.0).** `gitflic-ci.yaml` уже содержит порт
+   5 job'ов + 3 security-job'а, MR-пайплайн, path-фильтры и job `release` для
+   тегов; гейт мержа — опция «Проверять статус последнего конвейера при
+   слиянии» (§10.3).
+3. **Переезд origin** — отдельным решением после успешного пилота (§5);
+   GitHub остаётся зеркалом.
+
+**Почему не наоборот.** Платить за GitHub Pro или публиковать код ради гейта —
+решение владельца, а не техническое; наш масштаб укладывается в бесплатные
+тарифы обеих платформ. Гейт на GitHub включается одной командой
+(`scripts/ci/protect-branch.ps1`) сразу после смены тарифа — путь назад открыт.
+
+**Следствие для процесса.** Пока автоматический гейт не включён, зелёный
+`CI (self-hosted fallback)` — обязательное условие мержа по RULES §10
+(проверка глазами), а после S21-002/S21-004 станет автоматическим.
+
+---
+
+## 10. Гейты и защита ветки (S21-004)
+
+### 10.1. Path-фильтры (сделано)
+
+Docs-only изменение не гоняет ни e2e, ни docker, ни остальные job'ы:
+
+- **GitHub:** `paths-ignore: ['docs/**', '**.md']` в `ci-selfhosted.yml`
+  (и в ручном `ci.yml` — на будущее);
+- **GitFlic:** `rules: changes: paths:` у `e2e` и `docker`
+  (`backend/**`, `frontend/**`, `scripts/**`, `pyproject.toml`,
+  `docker-compose*.yml`, `gitflic-ci.yaml`, `.gitleaks.toml`);
+  `lint`/`test`/`frontend`/`security` идут всегда — они дешёвые и проверяют
+  в том числе сам текст (gitleaks).
+
+Проверка: PR, меняющий только `docs/**`, не запускает `CI (self-hosted
+fallback)`; PR с кодом — запускает все 6 job'ов.
+
+### 10.2. GitHub: required checks — заблокировано тарифом
+
+Факт (2026-10-30, повторно):
+
+```text
+GET /repos/iilmchat/ai-teacher_python/branches/main/protection
+→ 403 "Upgrade to GitHub Pro or make this repository public to enable this feature."
+```
+
+То есть на GitHub Free + private нельзя ни включить required checks, ни
+запретить force-push штатными средствами. Скрипт
+`scripts/ci/protect-branch.ps1` содержит готовый набор и умеет:
+
+```powershell
+pwsh scripts/ci/protect-branch.ps1 -DryRun   # показать payload
+pwsh scripts/ci/protect-branch.ps1 -Verify   # текущее состояние (403 → exit 1)
+pwsh scripts/ci/protect-branch.ps1           # применить (403 → exit 3 + подсказка)
+```
+
+Требуемые проверки = имена job'ов fallback-CI: `Lint (backend)`,
+`Test (backend)`, `Frontend`, `Security`, `E2E (Playwright)`, `Docker build`.
+Плюс: PR-review (1 approval), запрет force-push и удаления ветки.
+
+Включить гейт можно так (когда появится Pro или репозиторий станет публичным):
+`pwsh scripts/ci/protect-branch.ps1`; после мержа спринта — заменить
+`ai-teacher-pip-cache`-объёмы в workflow на кэш Actions, если вернёмся на
+hosted-минуты.
+
+### 10.3. GitFlic: MR-гейт (проверяется в пилоте)
+
+1. CI/CD → **Enable Merge Request Pipeline** — MR-пайплайн запускается на
+   изменениях запроса на слияние;
+2. Настройки проекта → ветки: `main` — запрет прямых PUSH и force-push;
+3. **«Проверять статус последнего конвейера при слиянии запроса»** — включить;
+4. Проверить на тестовом MR: с намеренно красным job'ом кнопка merge должна
+   быть недоступна. Если гейт не работает (баг/тариф) — резервный путь:
+   webhook/API-скрипт, который по статусу последнего пайплайна ставит
+   label/approval; результат записать в этот раздел.
+
+Статус: ⏳ ждёт access token/агент владельца — `KI-023`.
+
+---
+
+## 11. Релиз (S21-005)
+
+`.github/workflows/release.yml`:
+
+| Шаг | Что делает |
+|-----|-----------|
+| Гейты | `uses: ./.github/workflows/ci-selfhosted.yml` — те же 6 job'ов, что в PR (команды не дублируются) |
+| Версия | `backend/scripts/check_version.py --expected X.Y.Z` сверяет `pyproject.toml`, `frontend/package.json`, `backend/app/config.py`; в реальном релизе — `--strict` |
+| Заметки | `backend/scripts/release_notes.py` берёт раздел «## Релиз vX.Y.Z» из `docs/RELEASES.md`; нет раздела — job падает |
+| Dry-run | по умолчанию для `workflow_dispatch` и **всегда** для тега `v*-dryrun` |
+| Релиз | `git tag -a vX.Y.Z` + `git push` + `gh release create --notes-file … --verify-tag` |
+
+```bash
+gh workflow run release.yml -f version=0.3.0                    # dry-run
+gh workflow run release.yml -f version=0.3.0 -f dry_run=false    # реальный релиз
+git tag v0.3.0-dryrun && git push origin v0.3.0-dryrun           # та же репетиция из тега
+```
+
+Почему тег `-dryrun`: репетиция проверяется на живом runner'е, а «настоящий»
+тег не порождает второй прогон гейтов. Реальный релиз — только ручной запуск.
+
+**GitFlic.** Job `release` (stage `release`, правило `if: $CI_COMMIT_TAG`)
+включён в `gitflic-ci.yaml`: tag-пайплайн, проверка notes тем же скриптом,
+`release:` — ключевое слово GitFlic. Ветку/MR он не затрагивает, поэтому его
+первая проверка не мешает пилоту. При зеркалировании порядок: тег создаётся в
+origin (GitFlic), зеркало GitHub догоняет.
+
+**Откат.** Тег/релиз удаляются вручную (`gh release delete`, `git push
+--delete`), версия в файлах откатывается коммитом; повторный выпуск с тем же
+номером запрещён (job падает, если тег уже есть).
+
+---
+
+## 12. Эксплуатация CI (S21-006)
+
+### 12.1. Runner
+
+- Установка: `C:\actions-runner` (zip с
+  `github.com/actions/runner/releases`), регистрация:
+  `gh api -X POST repos/iilmchat/ai-teacher_python/actions/runners/registration-token`
+  → `config.cmd --unattended --name ai-teacher-win --labels ai-teacher --replace`.
+- Запуск: `run.cmd` **в сессии пользователя** (не LocalSystem!) — иначе нет
+  доступа к Docker Desktop, Playwright-браузерам и npipe.
+- Проверка: `gh api repos/iilmchat/ai-teacher_python/actions/runners` →
+  `status: online`; процесс `Runner.Listener`.
+- Логи: `C:\actions-runner\_diag\Runner_*.log` и `Worker_*.log`;
+  stdout запуска — `C:\actions-runner\_logs\runner.log`.
+- Машина выключена → job'ы в очереди (`queued`), это не ошибка кода.
+
+### 12.2. Перезапуск и отмена
+
+```bash
+gh run list --limit 5
+gh run rerun <run_id>              # перезапустить весь прогон
+gh run rerun <run_id> --failed     # только упавшие job'ы
+gh run cancel <run_id>             # отменить (например, залипший pip)
+```
+
+`concurrency` в `ci-selfhosted.yml` отменяет устаревшие прогоны той же ветки
+(`cancel-in-progress: true`), поэтому новый push не ждёт старый.
+
+### 12.3. Кэш и стоимость
+
+- pip: named volume `ai-teacher-pip-cache` (`/root/.cache/pip` в контейнере) —
+  PyPI с runner'а нестабилен (KI-017), без кэша каждая job качает колёса заново;
+- pnpm: named volume `ai-teacher-pnpm-store`
+  (`/workspace/frontend/.pnpm-store`);
+- сброс кэша: `docker volume rm ai-teacher-pip-cache ai-teacher-pnpm-store`
+  (следующий прогон — холодный);
+- Playwright-браузеры лежат в профиле пользователя, docker-слои — в Docker
+  Desktop; между прогонами не пересоздаются;
+- self-hosted минуты GitHub не тарифицируются; цена — включённая машина.
+
+### 12.4. Таймауты
+
+Лимиты — `timeout-minutes` у job'ов (`lint` 15, `test` 30, `frontend` 20,
+`security` 20, `e2e` 30, `docker` 25); в GitFlic отдельного ключа нет —
+`Task Restart Timeout` в настройках CI/CD проекта (1800–2400 с).
+
+### 12.5. Если PyPI недоступен (KI-017)
+
+Симптом: job `lint`/`test` висит на `pip install`, в логе — таймауты TLS.
+Что делать:
+
+1. `gh run cancel <id>`, затем `gh run rerun <id>` — сеть восстанавливается;
+2. скрипты уже используют `PIP_DEFAULT_TIMEOUT=60` и `PIP_RETRIES=5`;
+3. если не помогает — собрать зависимости из локального wheelhouse
+   (`docs/RULES.md` §11.19, `scripts/wheelhouse.py` в S22-005) и повторить;
+4. авторитетный «чистый» прогон — GitFlic/облачный агент, где PyPI доступен.
+
+---
+
+## 13. Ссылки
 
 - Тарифы GitFlic: <https://gitflic.ru/price>
 - Справочник `gitflic-ci.yaml`: <https://docs.gitflic.ru/latest/en/cicd/gitflic-ci-yaml/>

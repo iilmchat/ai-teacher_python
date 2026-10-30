@@ -55,10 +55,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Ruff + MyPy в python:3.12-slim
         run: |
-          # Кэш pip — named volume: PyPI с runner'а нестабилен (KI-017), без
-          # кэша каждый прогон качает одни и те же колёса заново.
+          # Кэш pip + офлайн-wheelhouse: PyPI с runner'а нестабилен (KI-017).
+          # Wheelhouse наполняется `pwsh scripts/ci/build-wheelhouse.ps1`.
           docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
             -v ai-teacher-pip-cache:/root/.cache/pip `
+            -v ai-teacher-wheelhouse:/wheelhouse:ro `
             python:3.12-slim bash /src/scripts/ci/backend-lint.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -83,6 +84,7 @@ jobs:
             docker run --rm --network $net `
               -v "${env:GITHUB_WORKSPACE}:/src:ro" `
               -v ai-teacher-pip-cache:/root/.cache/pip `
+              -v ai-teacher-wheelhouse:/wheelhouse:ro `
               -e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 `
               -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_pass `
               -e POSTGRES_DB=test_db -e REDIS_HOST=redis -e REDIS_PORT=6379 `
