@@ -345,6 +345,16 @@ at npipe:////./pipe/docker_engine» или `docker info` возвращает о
 
 ## 5. Настройка проекта GitFlic
 
+> **Быстрый путь через API (если есть access token):**
+> ```powershell
+> $env:GITFLIC_TOKEN = "<access token>"       # scopes: PROJECT_READ/EDIT, REPOSITORY_READ/WRITE, USER_READ, COMPANY_READ
+> pwsh -File scripts/gitflic/setup.ps1 -Company <companyAlias> -RefName sprint/21-ci
+> ```
+> Скрипт проверит токен/проект, создаст недостающие CI/CD-переменные
+> (`SECRET_KEY`, `POSTGRES_PASSWORD` с маской, `E2E_PYTHON`), выведет
+> `registrationUrl`/`registrationToken` агента компании и запустит конвейер.
+> Настройки «путь конфигурации» и флаги MR-пайплайна — только в UI (ниже).
+
 1. **Импорт репозитория** (Lead): GitHub PAT → GitFlic «Импорт проекта»
    (подробно — [CI.md §6](CI.md), в т.ч. отзыв PAT после импорта).
 2. **CI/CD → Configuration File Path**:

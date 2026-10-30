@@ -18,11 +18,16 @@ name: CI (self-hosted fallback)
 
 on:
   workflow_dispatch:
-  # Временно, только для проверки fallback-пайплайна из ветки спринта:
-  # workflow_dispatch доступен лишь после появления файла в default-ветке.
-  # После проверки/мержа оставить `workflow_dispatch` + `pull_request`/`push: main`.
+  # PR-проверки и main: fallback-CI работает, даже когда GitHub-hosted минуты
+  # заблокированы (KI-014). Required checks на GitHub Free/private недоступны,
+  # поэтому это видимый, но не блокирующий гейт (см. docs/CI.md §8).
+  pull_request:
   push:
-    branches: [sprint/21-ci]
+    branches: [main]
+  # Временно, пока sprint/21-ci не влит в main: проверки на ветке спринта.
+  # После мержа — удалить эту ветку из триггеров.
+  # (workflow_dispatch требует наличия файла в default-ветке.)
+  # см. также: sprint/21-ci
 
 permissions:
   contents: read

@@ -227,7 +227,9 @@ labels `self-hosted, windows, ai-teacher`) прогнан на этой маши
 Docker 1.0 (run
 [41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162)).
 Job'ы используют те же команды, что и GitFlic-конфиг (`scripts/ci/*`), поэтому
-это ещё и проверка общего набора скриптов.
+это ещё и проверка общего набора скриптов. Триггеры: `pull_request`,
+`push: main`, `workflow_dispatch` (до мержа спринта — также ветка `sprint/21-ci`,
+см. комментарий в workflow).
 
 Найдены и исправлены по ходу: mypy в lint-job'е требует установленных
 runtime-зависимостей (295 `import-not-found`), поэтому lint ставит
