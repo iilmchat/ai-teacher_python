@@ -1,0 +1,12 @@
+# Контекст сборки backend-образа (S20-006): без этого в образ попадали
+# Windows-venv, кэши и отчёты тестов.
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+tests/

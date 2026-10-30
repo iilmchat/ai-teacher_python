@@ -1,0 +1,73 @@
+# Конфигурация gitleaks для AI Teacher for Python (S20-002)
+#
+# Использование:
+#   gitleaks git . --config .gitleaks.toml --redact --verbose
+#   gitleaks dir . --config .gitleaks.toml --redact --verbose
+#
+# Базовые правила (AWS, GitHub tokens, приватные ключи, generic API keys)
+# наследуются из встроенного конфига gitleaks; ниже — правила под проект.
+# Проверено gitleaks 8.30.1 на всей истории репозитория — утечек нет.
+
+title = "AI Teacher for Python — gitleaks config"
+
+[extend]
+# Встроенные ~150 правил gitleaks (GitHub/AWS/GCP/Stripe/private keys/…)
+useDefault = true
+
+# --- Правила под проект -----------------------------------------------------
+
+[[rules]]
+id = "deepseek-api-key"
+description = "DeepSeek API key (формат sk-…)"
+# Ключи DeepSeek/OpenAI-like: sk- и длинная случайная строка
+regex = '''\bsk-[A-Za-z0-9_-]{20,}\b'''
+keywords = ["sk-"]
+
+
+[[rules]]
+id = "postgres-password-in-url"
+description = "Пароль в строке подключения PostgreSQL"
+# postgresql://user:secret@host:port/db — секрет не должен попадать в git
+regex = '''postgres(?:ql)?(?:\+asyncpg|\+psycopg2)?://[^:\s/]+:([^@\s/]{8,})@'''
+keywords = ["postgres://", "postgresql://"]
+
+
+[[rules]]
+id = "jwt-secret-assignment"
+description = "Похоже на реальный SECRET_KEY для подписи JWT"
+# Значение без плейсхолдеров change_me/example/test; отсекается allowlist ниже
+regex = '''(?i)\b(?:secret_key|jwt_secret|signing_key)\s*[:=]\s*["']?([A-Za-z0-9+/=_-]{24,})["']?'''
+keywords = ["secret_key", "jwt_secret", "signing_key"]
+
+
+# --- Allowlist --------------------------------------------------------------
+# Плейсхолдеры из .env.example, тестовые учётки и сам конфиг не являются
+# утечками. Allowlist не отключает правила: реальные ключи по-прежнему ловятся
+# (см. проверку конфига в docs/reports/sprint-20/SECURITY_AUDIT.md).
+[allowlist]
+description = "Плейсхолдеры, тестовые значения и примеры конфигурации"
+
+paths = [
+  '''(^|/)\.env\.example$''',
+  '''(^|/)\.gitleaks\.toml$''',
+  '''(^|/)frontend/node_modules/''',
+  '''(^|/)frontend/dist/''',
+  '''(^|/)frontend/public/monaco/''',
+  '''(^|/)backend/venv/''',
+  '''(^|/)docs/reports/llm-eval/''',
+]
+
+regexes = [
+  # .env.example / документация: change_me_*, your_*_here
+  '''change_me[0-9A-Za-z_]*''',
+  '''your_[0-9A-Za-z_]*_here''',
+  # Примеры из Design.md §10.2 (не секреты)
+  '''secure_password_here''',
+  '''your_api_key_here''',
+  # Значения из CI и тестов (не секреты)
+  '''ci_secret_key_do_not_use_in_production''',
+  '''do_not_use_in_production''',
+  '''test_pass''',
+  '''test-secret[0-9A-Za-z_-]*''',
+  '''local-model''',
+]

@@ -7,9 +7,9 @@ from typing import Any
 from uuid import UUID
 
 import bcrypt
+import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -72,7 +72,7 @@ def decode_token(token: str) -> dict[str, Any] | None:
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         return dict(payload)
-    except jwt.JWTError:
+    except jwt.PyJWTError:
         return None
 
 

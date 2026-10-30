@@ -34,13 +34,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from RestrictedPython import PrintCollector, compile_restricted
+from RestrictedPython.compile import compile_restricted
+
+# RP 8.x: `__init__` реэкспортирует имена без `__all__` — mypy(strict) считает
+# их неэкспортированными, поэтому импортируем из подмодулей явно.
 from RestrictedPython.Guards import (
     full_write_guard,
     guarded_iter_unpack_sequence,
     guarded_unpack_sequence,
     safer_getattr,
 )
+from RestrictedPython.PrintCollector import PrintCollector
 
 from app.config import settings
 from app.core.sandbox_limits import apply_memory_limit, truncate_output
@@ -217,6 +221,25 @@ def _inplace_var(op: str, left: Any, right: Any) -> Any:
     return operation(left, right)
 
 
+def _restricted_feature_error(exc: Exception) -> tuple[str, str] | None:
+    """Понятное сообщение для ограничений RestrictedPython 8.x (S20-001).
+
+    RP 8.x полностью блокирует `str.format`/`str.format_map` и
+    `string.Formatter`: через них происходил обход песочницы
+    (GHSA-hp3v-5vw7-fx9w, GHSA-ffg3-p8fm-mjx2). Ученику вместо
+    `NotImplementedError: Using the format*() methods of `str` is not safe`
+    показываем подсказку про f-строки и `%`.
+    """
+    message = str(exc)
+    if isinstance(exc, NotImplementedError) and "format" in message.lower():
+        return (
+            "RestrictedFeatureError",
+            "Форматирование через .format()/.format_map() недоступно в "
+            "песочнице: используйте f-строки (f\"{x}\") или оператор %.",
+        )
+    return None
+
+
 def find_violations(code: str) -> list[str]:
     """Статически найти опасные конструкции (без выполнения)"""
     violations: list[str] = []
@@ -326,11 +349,12 @@ def _run_restricted(
             "limits_warning": limits_warning,
         }
     except Exception as exc:  # noqa: BLE001 — RestrictedPython может бросить своё
+        restricted = _restricted_feature_error(exc)
         return {
             "success": False,
             "output": "",
-            "error": str(exc),
-            "error_type": type(exc).__name__,
+            "error": restricted[1] if restricted else str(exc),
+            "error_type": restricted[0] if restricted else type(exc).__name__,
             "violations": violations,
             "memory_limit_enforced": memory_enforced,
             "limits_warning": limits_warning,
@@ -344,11 +368,12 @@ def _run_restricted(
         output, truncated = truncate_output(
             collected_output() + buffer.getvalue(), max_output_chars
         )
+        restricted = _restricted_feature_error(exc)
         return {
             "success": False,
             "output": output,
-            "error": f"{type(exc).__name__}: {exc}",
-            "error_type": type(exc).__name__,
+            "error": restricted[1] if restricted else f"{type(exc).__name__}: {exc}",
+            "error_type": restricted[0] if restricted else type(exc).__name__,
             "execution_time": time.perf_counter() - started,
             "violations": violations,
             "memory_limit_enforced": memory_enforced,
