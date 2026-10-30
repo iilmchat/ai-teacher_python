@@ -190,6 +190,8 @@ Docker (репозиторий копируется в контейнер чер
 | `frontend` | `node:22-alpine`: corepack pnpm@12, `pnpm install --frozen-lockfile`, typecheck/lint/test/build | **PASS**: 80/80 тестов, build 78.71 kB gzip (~3.5 мин) |
 | `lint` | `python:3.12-slim`, `ruff==0.8.1` + `mypy==1.13.0`, `cd backend && ruff check app tests scripts`, `mypy app --config-file ../pyproject.toml` | **PASS** (0/0) |
 | `test` | `python:3.12-slim` + `services` `pgvector/pgvector:pg17` (alias `postgres`) и `redis:7-alpine` (alias `redis`), wait-loops, `alembic upgrade head && alembic check`, `pytest -q` | **PASS**: **341 passed + 1 skipped** (106 с), миграции до `010` |
+| `e2e` | PowerShell-скрипт job'а запущен на этом хосте «как агент»: `CI_PROJECT_DIR`, `E2E_PYTHON`, `POSTGRES_PASSWORD`, порты 5434/6381, Playwright webServer | **PASS**: **12/12** e2e за 55 с; Playwright-репорт создаётся |
+| `docker` | скрипт job'а локально: `docker info`, `docker build` backend/frontend, `docker compose -f docker-compose.prod.yml config --quiet` | **PASS**: оба образа собраны, compose-валидация exit 0 |
 
 **Найденный и исправленный дефект.** В старом CI (`ci.yml` и первичном порте)
 линтеры ставились без версий (`pip install ruff mypy`), а ruff запускался как

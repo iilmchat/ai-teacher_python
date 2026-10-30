@@ -60,6 +60,8 @@
 | Frontend job | `node:22-alpine`: corepack pnpm@12 → install → typecheck/lint/test/build | **PASS**, 80/80, 78.71 kB gzip |
 | Lint job (pinned) | `python:3.12-slim`, `ruff==0.8.1`, `mypy==1.13.0` | **PASS** 0/0 |
 | Backend test job | `python:3.12-slim` + `services` pgvector/redis (aliases), alembic + pytest | **PASS**: 341 passed + 1 skipped, 106 с |
+| E2E job (PowerShell-скрипт) | запуск скрипта job'а «как агент» на этой машине (`CI_PROJECT_DIR`, `E2E_PYTHON`, `POSTGRES_PASSWORD`, 5434/6381) | **PASS**: 12/12 e2e за 55 с, репорт создан |
+| Docker job (PowerShell-скрипт) | `docker info`, `docker build` backend/frontend, `docker compose -f docker-compose.prod.yml config --quiet` | **PASS**: оба образа собраны, compose exit 0 |
 | Java 11 | `java -version` | Temurin 11.0.32.1+1 |
 | Fallback GitHub runner | `POST .../actions/runners/registration-token` | токен выдан (вариант A технически возможен) |
 
