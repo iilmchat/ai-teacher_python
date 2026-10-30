@@ -147,9 +147,10 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 - [x] **Зависит от:** — · **Оценка:** 3 ч
 
 ### S21-002: Пилот GitFlic — импорт и агент — [~] (подготовка выполнена, ждёт импорт/токены)
-- [x] Подготовить `gitflic-ci.yaml` и рунбук агентов (`docs/GITFLIC_RUNNER.md`);
-      локально проверить все Docker/PowerShell-команды job'ов (frontend, lint,
-      test, e2e, docker — PASS, см. `docs/CI.md` §8)
+- [x] Подготовить `gitflic-ci.yaml`, минимальный пилотный `ci/gitflic-pilot.yaml`
+      и рунбук агентов (`docs/GITFLIC_RUNNER.md`); локально проверить все
+      Docker/PowerShell-команды job'ов (frontend, lint, test, e2e, docker —
+      PASS, см. `docs/CI.md` §8)
 - [ ] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
       репозиторий из GitHub (PAT `repo`), сверить ветки/теги/коммиты, `main`
 - [ ] Установить PowerShell-агент на машину проекта (Java 11 + Git, тег

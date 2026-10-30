@@ -35,11 +35,13 @@ Docker-агент (PowerShell-агент `image` игнорирует и зап�
 зарегистрирован только один агент, job'ы второго типа будут висеть в
 «ожидании исполнителя», пока не истечёт Maximum job waiting time.
 
-Минимальный порядок пилота: сначала Docker-агент (`lint`/`test` — главное
-доказательство работоспособности `services`), затем PowerShell-агент
-(`e2e`/`docker`). Пока второго нет, можно временно отключить e2e/docker в
-`gitflic-ci.yaml` (перенести вручную в комментарий их `rules`) — но в commit
-это состояние не оставлять.
+Минимальный порядок пилота:
+1. Docker-агент + **`ci/gitflic-pilot.yaml`** (только `lint`/`test`) — главное
+   доказательство работоспособности `services`, без висящих e2e/docker.
+2. Затем PowerShell-агент и переключение пути конфига на полный
+   `gitflic-ci.yaml` (`e2e`/`docker`/`security`).
+Так первый живой прогон не «краснеет» из-за незарегистрированного второго
+агента, а полный пайплайн включается сразу после него.
 
 ---
 
@@ -345,7 +347,10 @@ at npipe:////./pipe/docker_engine» или `docker info` возвращает о
 
 1. **Импорт репозитория** (Lead): GitHub PAT → GitFlic «Импорт проекта»
    (подробно — [CI.md §6](CI.md), в т.ч. отзыв PAT после импорта).
-2. **CI/CD → Configuration File Path**: `gitflic-ci.yaml` (файл в корне).
+2. **CI/CD → Configuration File Path**:
+   - на время пилота (только Docker-агент) — `ci/gitflic-pilot.yaml`
+     (`lint` + `test`, без e2e/docker — см. §1);
+   - после регистрации обоих агентов — `gitflic-ci.yaml` (файл в корне).
 3. **CI/CD → Enable Merge Request Pipeline**: включить — это основной гейт для
    MR. Флажок **Merge Result Pipeline** — отдельный; по документации GitFlic
    это Enterprise-функция, на Free может быть недоступна (в `workflow:rules`
