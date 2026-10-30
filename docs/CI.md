@@ -439,6 +439,22 @@ gh run cancel <run_id>             # отменить (например, зал�
    (`docs/RULES.md` §11.19, `scripts/wheelhouse.py` в S22-005) и повторить;
 4. авторитетный «чистый» прогон — GitFlic/облачный агент, где PyPI доступен.
 
+### 12.6. Параметры этой машины (2026-10-30)
+
+| Что | Значение |
+|-----|----------|
+| Runner | `C:\actions-runner`, имя `ai-teacher-win`, labels `self-hosted, windows, ai-teacher` |
+| Регистрация | `gh api -X POST repos/iilmchat/ai-teacher_python/actions/runners/registration-token` → `config.cmd --unattended --replace` |
+| Запуск | `C:\actions-runner\run.cmd` **в сессии пользователя**; лог — `C:\actions-runner\_logs\runner.log`, диагностика — `_diag\` |
+| Локальный compose | Postgres `5436`, Redis `6383` (канон 5434/6381 занят чужими контейнерами, KI-001); `.env` — локальный, в git не попадает |
+| Repo secrets | `POSTGRES_PASSWORD`, `SECRET_KEY` — локальные значения, не production |
+| Repo variables | `E2E_PYTHON=K:\Projects\AI\ai-teacher_python\backend\venv\Scripts\python.exe`, `E2E_POSTGRES_PORT=5436`, `E2E_REDIS_PORT=6383` |
+| Кэши (volumes) | `ai-teacher-pip-cache`, `ai-teacher-pnpm-store`, `ai-teacher-wheelhouse` (69 МБ, 71 колесо) |
+| venv для e2e | `backend\venv` (Python 3.12, зависимости из wheelhouse; в git не попадает) |
+
+E2E-джоб поднимает `docker compose up -d postgres redis` сам и передаёт порты,
+пользователя и пароль через окружение — `.env` в clone'е runner'а не нужен.
+
 ---
 
 ## 13. Ссылки

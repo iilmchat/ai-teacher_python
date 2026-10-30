@@ -83,10 +83,16 @@
 | `pytest -q` (контейнер + pgvector/redis, как в CI) | **354 passed, 1 skipped** (97 с) |
 | Frontend: typecheck / lint / test / build | **80/80**, build **78.71 kB gzip** |
 | E2E Playwright | **12/12** |
-| CI `CI (self-hosted fallback)` | **6/6 success** (см. §4) |
+| CI `CI (self-hosted fallback)` | **6/6 success**, run
+[41122794849](https://github.com/iilmchat/ai-teacher_python/actions/runs/41122794849),
+11 мин 53 с |
 | `pip-audit` (wheelhouse/зеркало + OSV) | «No known vulnerabilities found, 16 ignored», exit 0 |
 | `pnpm audit --audit-level=high` | 0 |
 | `alembic upgrade head` + `alembic check` | OK, миграции до `010` |
+
+Тайминги job'ов (run 41122794849): Frontend 50 с, Security 1 мин 17 с, Lint 32 с,
+Test 1 мин 56 с, Docker build 5 мин 55 с (пип внутри Dockerfile — PyPI),
+E2E 1 мин 5 с (12/12).
 
 Build: 0 ошибок / 0 предупреждений (typecheck+build). Tests: 354/355
 (1 skip — Windows-only проверка).

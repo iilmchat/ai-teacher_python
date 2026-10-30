@@ -67,7 +67,8 @@
 | `check_version.py` | локально | OK: 0.2.0 во всех трёх файлах |
 | `release_notes.py --list` / `0.2.0` | локально | `0.2.0`, заметки из журнала |
 | `release_notes.py --version 9.9.9` | локально | exit 1 + список доступных релизов |
-| CI (self-hosted), 6 job'ов | run (см. SPRINT-21) | **6/6 success** |
+| CI (self-hosted), 6 job'ов | run 41122794849 (commit `d4b5d6e`) | **6/6 success**, 11 мин 53 с |
+| E2E (локально, как job) | `e2e.ps1` с `E2E_PYTHON`/`E2E_POSTGRES_PORT=5436` | **12/12** за 42.6 с |
 
 ---
 
