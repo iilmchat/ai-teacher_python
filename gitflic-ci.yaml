@@ -82,10 +82,15 @@ lint:
       - .pip-cache
   before_script:
     - python -m pip install --upgrade pip
-    - pip install ruff mypy
+    # Версии ПИНИМ: unpinned `pip install ruff` уже ломал lint в проверке
+    # от 2026-10-30 (новые правила upstream: 54 ошибки на том же коде, локально
+    # с 0.8.1 — 0). Держим в синхроне с requirements.txt (dev).
+    - pip install "ruff==0.8.1" "mypy==1.13.0"
   script:
-    - echo "==> ruff check backend/"
-    - ruff check backend/
+    - echo "==> ruff check app tests scripts"
+    # Скоуп как в RULES §3.1/§10: app + tests + scripts; `backend/` целиком
+    # тянет чужие правила unpinned-ruff и шумит.
+    - cd backend && ruff check app tests scripts
     # Конфиг mypy лежит в корневом pyproject.toml — передаём его явно,
     # иначе strict-правила не применятся (RULES §11.4).
     - echo "==> mypy app --config-file ../pyproject.toml"

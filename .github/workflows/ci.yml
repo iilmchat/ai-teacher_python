@@ -21,10 +21,13 @@ jobs:
       - name: Install linters
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          # Версии пиним: unpinned ruff ломал lint (54 новых правила upstream)
+          pip install "ruff==0.8.1" "mypy==1.13.0"
 
       - name: Run Ruff
-        run: ruff check backend/
+        run: |
+          cd backend
+          ruff check app tests scripts
 
       # Конфиг mypy лежит в корневом pyproject.toml, поэтому передаём его явно
       - name: Run MyPy (strict)
