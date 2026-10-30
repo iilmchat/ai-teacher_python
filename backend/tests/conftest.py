@@ -66,6 +66,25 @@ def disable_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "rate_limit_enabled", False)
 
 
+@pytest.fixture(autouse=True)
+def disable_cache(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """По умолчанию Redis-кэш выключен: тесты не ходят во внешний Redis.
+
+    Тесты кэша включают флаг сами и подставляют in-memory FakeRedis
+    (`set_redis_client`). Состояние метрик и «остывание» сбрасываются
+    между тестами, иначе счётчики протекают.
+    """
+    from app.db.redis import set_redis_client
+    from app.services.cache import reset_cache_state
+
+    monkeypatch.setattr(settings, "cache_enabled", False)
+    set_redis_client(None)
+    reset_cache_state()
+    yield
+    set_redis_client(None)
+    reset_cache_state()
+
+
 @pytest_asyncio.fixture
 async def test_engine():
     """Engine к тестовой БД; схема создаётся при необходимости"""

@@ -2,7 +2,7 @@
 Pydantic schemas for Chat model
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -103,4 +103,25 @@ class ChatTurnResponse(BaseModel):
 
     user_message: ChatMessageResponse
     assistant_message: ChatMessageResponse
+
+
+class ChatSearchItem(BaseModel):
+    """Найденное сообщение в истории чата (S19-005)"""
+
+    id: UUID
+    session_id: UUID
+    role: MessageRole
+    content: str
+    created_at: datetime
+    #: Косинусная близость для semantic-режима; ``None`` для ILIKE
+    score: float | None = None
+
+
+class ChatSearchResponse(BaseModel):
+    """Результат поиска по истории чата: режим и найденные сообщения"""
+
+    query: str
+    mode: Literal["semantic", "ilike"]
+    items: list[ChatSearchItem] = Field(default_factory=list)
+    total: int
 

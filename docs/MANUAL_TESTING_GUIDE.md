@@ -1,7 +1,8 @@
 # MANUAL_TESTING_GUIDE — ручные кейсы и чек-лист приёмки
 
 Проверки, которые нельзя (или пока невыгодно) автоматизировать. Автотесты —
-137 backend + 63 frontend; здесь — то, что смотрит человек.
+backend **341 passed + 1 skipped** + frontend 80 unit / 12 e2e; здесь — то,
+что смотрит человек.
 
 ---
 
@@ -74,6 +75,8 @@ cd frontend && pnpm dev        # http://127.0.0.1:3000
 | 4.9 | `x = [0] * 10**9` | `MemoryError`, API отвечает, контейнер/процесс жив |
 | 4.10 | `print("x" * 200000)` | вывод обрезан, есть пометка «вывод обрезан» |
 | 4.11 | 10 одновременных запусков при `EXECUTOR_MAX_CONCURRENCY=4` | часть ждёт, при перегрузке — 503 |
+| 4.12 | `"{x}".format(x=1)` | ошибка `RestrictedFeatureError` с подсказкой «используйте f-строки или %»; код не выполняется |
+| 4.13 | `x = 5; print(f"x={x}")` | `x=5` — f-строки работают; `print("%d" % x)` — `5` |
 
 ## 5. Задачи
 
@@ -149,15 +152,104 @@ cd frontend && pnpm dev        # http://127.0.0.1:3000
 | 8.4 | Перезапуск backend | данные в БД сохранились |
 | 8.5 | `alembic downgrade base && upgrade head` | схема пересоздаётся без ошибок |
 
+## 9. Кэш справочников и каталога (S19-003)
+
+Redis должен быть запущен (`docker compose up -d redis`); API — без
+`CACHE_ENABLED=false`.
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 9.1 | `GET /api/v1/chat/levels` дважды | второй ответ из кэша; в Redis `cache:chat:levels`, TTL ≤60 с |
+| 9.2 | `GET /api/v1/tasks/categories` | в Redis `cache:tasks:categories` |
+| 9.3 | Учитель создаёт задачу c новой категорией → `GET /tasks/categories` | новая категория видна; ключи `cache:tasks:*` пересозданы |
+| 9.4 | Подождать >60 с, повторить `GET /chat/levels` | запись пересоздана (`cache_miss`/`cache_set` в логе) |
+| 9.5 | Остановить Redis → `GET /chat/levels`, `GET /tasks` | 200 без кэша, в логе `cache_get_failed`; API не падает |
+| 9.6 | `GET /admin/analytics` (admin) | секция `cache {enabled, hits, misses, hit_rate, sets, invalidations, errors}` |
+| 9.7 | Два ученика с разным прогрессом открывают каталог | статусы не смешиваются (ключ включает `user_id`) |
+| 9.8 | После `submit` открыть каталог | статус может обновиться с задержкой ≤ TTL — это норма, не дефект |
+
+## 10. Поиск по истории чата (S19-005)
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 10.1 | `RAG_ENABLED=false`; `GET /api/v1/chat/search?q=цикл` | `mode="ilike"`, `score=null`, только свои сообщения |
+| 10.2 | Пользователь A ищет уникальное слово из сообщения B | `total=0` (изоляция) |
+| 10.3 | `RAG_ENABLED=true`, embedding-модель загружена в LM Studio; отправить сообщение, затем поиск | `mode="semantic"`, у элементов есть `score` |
+| 10.4 | RAG включён, но провайдер эмбеддингов недоступен | `mode="ilike"`, чат/поиск работают, в логе `embedding_failed` |
+| 10.5 | `q=""`, `q` длиной 201, `limit=0`/`limit=51` | 422 |
+| 10.6 | Без токена | 403 (нет заголовка `Authorization`); 401 — только невалидный токен |
+| 10.7 | `GET /tasks/{id}/hints/{index}` без токена | 403 (S20-003: раньше было анонимно; IDOR-находка F1, исправлена) |
+
+## 11. Пагинация (S19-004)
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 11.1 | `GET /tasks?limit=1&skip=1` | ровно 1 элемент, без дублей с первой страницей |
+| 11.2 | `GET /classrooms?limit=2` | ≤2 классов, `members_count` корректен |
+| 11.3 | `GET /me/notifications?limit=2&skip=2` | ≤2 элементов, `unread` — по всей выборке |
+| 11.4 | `GET /teacher/tasks?limit=2` | ≤2 элементов, `total` — по всей таблице, а не по странице |
+| 11.5 | Запросы без `skip`/`limit` | прежнее поведение (дефолты 0/100) |
+
+## 12. Заголовки безопасности и аудит (S20-002)
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 12.1 | `curl -I http://127.0.0.1:3000/` (prod-nginx) | `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, `Strict-Transport-Security` |
+| 12.2 | Проверить CSP в ответе | совпадает с `frontend/nginx.conf`, **без** `unsafe-eval` |
+| 12.3 | Открыть `/code`, выполнить код | Monaco грузится под CSP, в консоли 0 ошибок (worker'ы `blob:`) |
+| 12.4 | `curl -I http://.../index.html` | `Cache-Control: no-cache` |
+| 12.5 | `docker compose -f docker-compose.prod.yml up` без `POSTGRES_PASSWORD`/`SECRET_KEY` | compose падает (`:?`), дефолтных секретов нет |
+| 12.6 | `gitleaks git . --config .gitleaks.toml --redact` | 0 утечек; фейковый `sk-…` в temp-файле — ловится |
+| 12.7 | `pnpm audit`; `pip-audit -r requirements.txt` (Docker/CI) | frontend 0; backend 0 critical, остатки приняты (KI-015/016) |
+
+## 13. Бэкап и восстановление (S20-004)
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 13.1 | `bash scripts/backup.sh -o <tmp>/backups` | `*.dump.gz` + `.sha256`, `pg_restore -l` OK |
+| 13.2 | `bash scripts/restore.sh -f <dump> -t ai_teacher_restore_check --create -y --verify` | 14/14 таблиц, счётчики пользователей/задач/сообщений совпали |
+| 13.3 | `restore.sh -t ai_teacher` без `--force` | exit 2, отказ «рабочая БД» |
+| 13.4 | `backup.sh -r 14` при бэкапе старше 14 дней | старый удалён, свежие сохранены |
+| 13.5 | Удалить scratch-БД (`dropdb`) | 0 записей в `pg_database` |
+
+## 14. Нагрузочный smoke (S19-006)
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 14.1 | `backend/scripts/load_test.py` — health 50 RPS / каталог 20 RPS, `DEBUG=false` | p95 **6.3 / 25.4 мс**, 0 ошибок (PASS) |
+| 14.2 | `submit` 5 RPS | факт **2.5 RPS**, p95 **2219.7 мс** > бюджета 2000 мс — ожидаемое ограничение песочницы (knee ≈2 RPS), не дефект релиза: **KI-022**, рекомендации в `reports/sprint-19/LOAD_TEST.md` §5 |
+| 14.3 | Попытка поставить k6/locust | недоступно (PyPI с хоста заблокирован) — используется httpx-раннер |
+| 14.4 | После нагрузки | API отвечает на `/health`, БД доступна, очередь песочницы не забита |
+
+## 15. Сквозной сценарий приёмки v0.2.0
+
+| # | Шаг | Ожидаемо |
+|---|-----|----------|
+| 15.1 | Регистрация ученика → вход | роль `student`, редирект в систему |
+| 15.2 | Чат (базовый уровень), ответ стримится | ответ по уровню, история сохраняется |
+| 15.3 | Песочница: `print(sum(range(5)))` и `"{x}".format(x=1)` | `10` и понятная ошибка `RestrictedFeatureError` |
+| 15.4 | Учитель создаёт класс и назначает задачу с дедлайном | ученик видит задание на `/assignments` |
+| 15.5 | Ученик решает задачу | ✓ в матрице класса, уведомление/достижение на `/dashboard` |
+| 15.6 | Тёмная тема → F5; мобильная ширина 375 px | тема сохраняется, нет горизонтальной прокрутки |
+| 15.7 | `/admin` (admin): аналитика с секциями `llm` и `cache` | обе секции и реальные счётчики |
+| 15.8 | `curl -I /` | все security-заголовки (раздел 12) |
+| 15.9 | Бэкап + restore в scratch-БД | 14/14 таблиц (раздел 13) |
+| 15.10 | Полный прогон §1–§14 | новых дефектов нет; ограничения — KI-014…KI-018 |
+
 ---
 
 ## Чек-лист приёмки релиза
 
 - [ ] Все автотесты зелёные: backend `pytest -q`, frontend `pnpm test`
 - [ ] `ruff check`, `mypy app --config-file ../pyproject.toml` — 0 ошибок
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm build` — успешно
+- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test:offline` — успешно
 - [ ] `alembic upgrade head && alembic check` — без расхождений
-- [ ] Ручные разделы 1–8 пройдены
+- [ ] Ручные разделы 1–15 пройдены
+- [ ] Кэш: hit/инвалидация/TTL/fail-open (раздел 9)
+- [ ] `/chat/search`: RAG on/off + изоляция (раздел 10)
+- [ ] Пагинация и security-заголовки (разделы 11–12)
+- [ ] Backup/restore (раздел 13); нагрузочный smoke (раздел 14)
+- [ ] Матрица доступа S20-003: 35 тестов, IDOR не найден; hints без токена → 403
 - [ ] Новые дефекты заведены в `KNOWN_ISSUES.md`
 - [ ] `CHANGELOG.md` и `RELEASES.md` обновлены
 - [ ] Секретов в диффе нет
@@ -167,6 +259,7 @@ cd frontend && pnpm dev        # http://127.0.0.1:3000
 
 ## Известные ограничения (не дефекты приёмки)
 
-См. [KNOWN_ISSUES.md](KNOWN_ISSUES.md): KI-006 (WS-тест), KI-007 (rate limit),
-KI-008 (живая LLM), KI-009 (память песочницы), KI-010 (seed), KI-012 (e2e),
-KI-013 (Monaco CDN).
+Активные и принятые риски — [KNOWN_ISSUES.md](KNOWN_ISSUES.md): KI-014
+(CI-биллинг), KI-015 (starlette/fastapi — принятый риск), KI-016 (dev pytest),
+KI-017 (PyPI с хоста), KI-018 (`.format()` в песочнице). Закрытые в v0.2.0:
+KI-001…KI-013, KI-019…KI-021.

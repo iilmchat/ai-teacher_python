@@ -269,14 +269,20 @@ async def create_assignment_notifications(
 
 
 async def list_notifications(
-    db: AsyncSession, user_id: UUID, unread_only: bool = False
+    db: AsyncSession,
+    user_id: UUID,
+    unread_only: bool = False,
+    skip: int = 0,
+    limit: int = 100,
 ) -> tuple[list[Notification], int]:
-    """Уведомления и число непрочитанных"""
+    """Уведомления (с пагинацией S19-004) и число непрочитанных"""
     query = select(Notification).where(Notification.user_id == user_id)
     if unread_only:
         query = query.where(Notification.read_at.is_(None))
     result = await db.execute(
-        query.order_by(Notification.created_at.desc()).limit(100)
+        query.order_by(Notification.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
     notifications = list(result.scalars().all())
     unread = int(

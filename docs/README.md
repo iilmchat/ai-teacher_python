@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** v0.1.0 · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** v0.2.0 «Classroom» (2026-10-30) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -13,7 +13,7 @@
 | первый раз запускаете проект | [GETTING_STARTED.md](GETTING_STARTED.md) | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
-| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO.md](../TODO.md) |
+| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.2.md](../TODO_V0.2.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -34,7 +34,7 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md) — как система устроена сейчас: модули, потоки, контракты
 - [RULES.md](RULES.md) — правила кода, тестов, коммитов, окружения
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
-- [../TODO_V0.2.md](../TODO_V0.2.md) — **план этапа v0.2.0** (спринты 11–20; 11–18 закрыты, 19 — частично)
+- [../TODO_V0.2.md](../TODO_V0.2.md) — **этап v0.2.0** (спринты 11–20; завершён)
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
 ### Для QA и продукта
@@ -52,7 +52,8 @@
 - [RELEASES.md](RELEASES.md) — журнал спринтов и релизов
 - [CHANGELOG.md](CHANGELOG.md) — история изменений (Keep a Changelog)
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md) — реестр известных проблем (`KI-NNN`)
-- [reports/](reports/) — отчёты по спринтам
+- [reports/](reports/) — отчёты по спринтам: [sprint-19](reports/sprint-19/SPRINT-19.md),
+  [sprint-20](reports/sprint-20/SPRINT-20.md) (security-аудит — [SECURITY_AUDIT](reports/sprint-20/SECURITY_AUDIT.md))
 
 ---
 
@@ -60,13 +61,15 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Спринты | 1–18 завершены (19 — частично) |
-| Тесты backend | 271 (pytest, реальный PostgreSQL; +1 skip на Windows) |
-| Тесты frontend | 80 unit + 12 e2e (Playwright) |
-| Покрытие | backend 80%, frontend 73.6% строк |
+| Версия | **v0.2.0 «Classroom»** (2026-10-30); спринты 1–20 завершены |
+| Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
+| Тесты frontend | 80 unit + 12 e2e (Playwright; 12/12 green) |
+| Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
-| Размер фронтенда | entry 79 kB gzip, initial ~113 kB |
-| Открытые проблемы | 1 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
+| Миграции | head 010 (`alembic check` чист) |
+| Размер фронтенда | entry 78.71 kB gzip (лимит 80) |
+| Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
+| Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---
 
@@ -88,6 +91,11 @@ pnpm e2e            # Playwright: backend на 8001 + vite на 3100
 
 # Стек
 docker compose up -d postgres redis
+
+# Эксплуатация (S20)
+bash scripts/backup.sh                       # бэкап БД (docker exec pg_dump + gzip)
+bash scripts/restore.sh -f <dump> -t <db> --create -y --verify
+curl -I http://127.0.0.1:3000/               # security-заголовки nginx
 ```
 
 ---

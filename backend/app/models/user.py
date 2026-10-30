@@ -38,6 +38,8 @@ class User(Base):
         UniqueConstraint("username", name="users_username_key"),
         Index("idx_users_email", "email"),
         Index("idx_users_username", "username"),
+        # S19-004: список учеников в кабинете учителя (роль + last_active)
+        Index("idx_users_role_last_active", "role", "last_active"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

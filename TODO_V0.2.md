@@ -6,11 +6,11 @@
 > Статусы: `[ ]` — не начато, `[~]` — в работе, `[x]` — завершено,
 > `[!]` — блокер (см. [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md))
 
-**Целевая версия:** v0.2.0 «Classroom»  
+**Целевая версия:** v0.2.0 «Classroom» — выпущена 2026-10-30  
 **Создан:** 2026-10-29  
-**Текущий спринт:** 18 (UX, A11y & Design System) — завершён; следующий — 19 (Performance & Scale, S19-003…006)  
+**Текущий спринт:** спринт 20 — релиз v0.2.0; этап завершён (финальный тег и CI — S20-006, KI-014)  
 **Базис:** v0.1.0 (137 backend-тестов, 63 frontend, 13 KI: 9 открытых)  
-**Текущее состояние:** 271 backend-тест (+1 skip на Windows), 80 frontend-unit + 12 e2e, KI открыто — 1 (KI-014 CI)
+**Текущее состояние:** **341** backend-тест (+1 skip на Windows), 80 frontend-unit + 12 e2e, миграции до 010; активных KI — 6 (KI-014 CI, KI-015/016/018/022 принятые риски, KI-017 PyPI)
 
 ---
 
@@ -52,11 +52,19 @@ v0.1.0 — работающий продукт для одного ученик�
 | KI-009 | Med | Лимит памяти песочницы не enforced | 13 | ✅ Resolved |
 | KI-010 | Low | Задачи наполняются вручную | 14 | ✅ Resolved |
 | KI-012 | Low | Нет e2e-тестов | 11 | ✅ Resolved |
-| KI-013 | Low | Monaco грузится с CDN | 19 | ✅ Resolved |
-| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 12 | Open |
+| KI-013 | Low | Monaco грузится с CDN | 19 | ✅ Resolved (S19-001) |
+| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 12 | Open (обновлено в S20) |
+| KI-015 | High | starlette 0.41.3 (транзитивно от fastapi) — отложенный апгрейд | 20 | ⚠️ Accepted → v0.3.0 |
+| KI-016 | Low | dev-only pytest 8.3.3 advisory | 20 | ⚠️ Accepted |
+| KI-017 | Low | PyPI недоступен с хоста разработки | 20 | Open (workaround) |
+| KI-018 | Low | `.format()` запрещён в песочнице (RP 8.5) | 20 | ⚠️ Accepted |
+| KI-019 | Critical | python-jose/PyJWT/python-multipart уязвимости | 20 | ✅ Resolved (S20-001) |
+| KI-020 | Critical | vitest/tinypool criticals (frontend dev) | 20 | ✅ Resolved (S20-001) |
+| KI-021 | High | RestrictedPython 7.4 — 3 обхода песочницы | 20 | ✅ Resolved (S20-001b) |
+| KI-022 | Med | Предел throughput submit ≈2 RPS (песочница) | 19 | ⚠️ Accepted (v0.3.0) |
 
 Новые проблемы, ожидаемые на этапе, заводятся сразу с `KI-NNN` (следующий
-свободный номер — **KI-015**).
+свободный номер — **KI-023**).
 
 ---
 
@@ -583,12 +591,14 @@ event loop'ами (pytest создаёт новый loop на тест) — ис
 
 ---
 
-## Спринт 19: Performance & Scale — ⚠️ частично (S19-001/002)
+## Спринт 19: Performance & Scale — ✅ завершён (2026-10-30)
 
 **Цель:** быстрый интерфейс, кэш и поиск по истории. Закрывает KI-013.
 
 **Зависит от:** спринт 18  
-**Оценка:** 2.5 дня · **Факт (S19-001/002):** ~2 ч
+**Оценка:** 2.5 дня  
+**Отчёты:** [SPRINT-19](docs/reports/sprint-19/SPRINT-19.md) ·
+[LOAD_TEST](docs/reports/sprint-19/LOAD_TEST.md)
 
 ### S19-001: Локальный Monaco (KI-013) — ✅
 - [x] `monaco-editor` установлен; AMD-ассеты копируются в `public/monaco/vs`
@@ -602,105 +612,184 @@ event loop'ами (pytest создаёт новый loop на тест) — ис
 ### S19-002: Code splitting и lazy-маршруты — ✅
 - [x] `React.lazy` для всех страниц + `Suspense`
 - [~] Prefetch по hover — не делали (чанки малы, навигация быстрая)
-- [x] Бюджет: entry **76.3 kB gzip** (≤80), react 15.3 + i18n 18.4,
-      Monaco — отдельный чанк 1 kB + локальные ассеты
+- [x] Бюджет: entry **76.3 kB gzip** на S19-002 (≤80), react 15.3 + i18n 18.4,
+      Monaco — отдельный чанк + локальные ассеты; финальный замер после S20 —
+      **78.71 kB gzip**
 - [x] **Зависит от:** —
 - [x] **Оценка:** 4 ч
 
-### S19-003: Redis-кэш — ⏳ после 16
-- [ ] Кэш справочников: `/chat/levels`, `/tasks/categories`, `/tasks` (TTL 60 с)
-- [ ] Инвалидация при создании/правке задачи
-- [ ] Метрика попаданий в кэш (лог/админка)
-- [ ] **Зависит от:** S11-003 (Redis подключён)
-- [ ] **Оценка:** 5 ч
+### S19-003: Redis-кэш — ✅
+- [x] `app/services/cache.py`: `/chat/levels`, `/tasks/categories`, `/tasks`;
+      ключ списка включает `user_id` и все фильтры; TTL 60 с (`CACHE_TTL_SECONDS`)
+- [x] инвалидация namespace `cache:tasks:*` (SCAN+DEL) на create/update/delete/
+      деактивации, restore версии, импорте и seed
+- [x] fail-open + 10 с cooldown после сбоя Redis; флаг `CACHE_ENABLED`
+      (в тестах выключен autouse-фикстурой)
+- [x] метрики hits/misses/sets/invalidations/errors в памяти процесса →
+      секция `cache` в `GET /admin/analytics`; structlog-события
+- [x] тесты `test_cache.py` (9) на in-memory FakeRedis
+- [x] **Зависит от:** S11-003 (Redis подключён) — выполнено
+- [x] **Оценка:** 5 ч
 
-### S19-004: Оптимизация запросов — ⏳ после 16
-- [ ] Проверить N+1 в админке/классах (EXPLAIN на ключевых запросах)
-- [ ] Индексы под новые фильтры (tags, classrooms, assignments)
-- [ ] Пагинация там, где её не хватает
-- [ ] **Зависит от:** S16
-- [ ] **Оценка:** 4 ч
+### S19-004: Оптимизация запросов — ✅
+- [x] N+1 в `/classrooms`, `/classrooms/{id}/assignments`, `/classrooms/{id}`
+      устранены агрегирующими запросами (code review, EXPLAIN)
+- [x] пагинация `/classrooms`, `/me/notifications`, `/teacher/tasks`
+      (`total` — по всей таблице); `skip/limit` в `/tasks` — additive
+- [x] миграция `0009`: индексы каталога/учеников/уведомлений/дедлайнов/истории;
+      подтверждение планами, в т.ч. `SET LOCAL enable_seqscan=off`
+- [x] тесты `test_query_optimization.py` (7)
+- [x] **Зависит от:** S16 — выполнено
+- [x] **Оценка:** 4 ч
 
-### S19-005: Поиск по истории чата (pgvector, RAG-lite) — ⏳ после 16
-- [ ] Эмбеддинги сообщений через провайдера (опционально, флаг `RAG_ENABLED`)
-- [ ] `GET /chat/search?q=` — семантический поиск по своим сообщениям
-- [ ] Индекс `ivfflat`/`hnsw`, миграция
-- [ ] При выключенном флаге — поиск по подстроке (ILIKE)
-- [ ] **Зависит от:** S19-003
-- [ ] **Оценка:** 6 ч
+### S19-005: Поиск по истории чата (pgvector, RAG-lite) — ✅ (живая модель — нет)
+- [x] флаги `RAG_ENABLED=false` (default), `RAG_TOP_K`, `RAG_EMBEDDING_DIM/
+      MODEL/TIMEOUT`; миграция `0010` — HNSW + `vector_cosine_ops`
+- [x] `GET /chat/search?q=&limit=` — semantic при включённом RAG и доступном
+      провайдере, иначе/при сбое ILIKE; изоляция — только свои сессии
+- [x] best-effort эмбеддинги при сохранении (LM Studio `/embeddings`); сбой
+      провайдера не ломает отправку сообщения и поиск
+- [x] тесты `test_rag_search.py` (10): ILIKE, semantic, изоляция, 401/422, limit,
+      сбой эмбеддингов
+- [~] Живая embedding-модель не проверена (LM Studio с embedding-моделью не
+      поднят — та же причина, что KI-008); провайдер покрыт фейком
+- [~] Backfill эмбеддингов и порог релевантности (`RAG_MIN_SCORE`) — вне DoD
+- [x] **Зависит от:** S19-003
+- [x] **Оценка:** 6 ч
 
-### S19-006: Нагрузочное тестирование — ⏳ после 16
-- [ ] Сценарий k6/locust: 50 RPS health, 20 RPS каталог, 5 RPS submit
-- [ ] Зафиксировать p95 и точку деградации в отчёте
-- [ ] **Зависит от:** S19-002…S19-005
-- [ ] **Оценка:** 4 ч
+### S19-006: Нагрузочное тестирование — ✅ (цель 5 RPS submit не достигнута — KI-022)
+- [x] k6/locust не установить (PyPI с хоста заблокирован) → httpx-генератор
+      `backend/scripts/load_test.py` (asyncio)
+- [x] сценарии: health, каталог задач, submit; p50/p95/p99, error rate,
+      throughput; exit-код по бюджету p95/ошибок
+- [x] `health` 50 RPS — p95 **6.3 мс**, `tasks` 20 RPS — p95 **25.4 мс**,
+      0 ошибок (PASS)
+- [x] `submit` 5 RPS — факт **2.5 RPS**, p95 **2219.7 мс** > бюджета 2000 мс
+      (FAIL); knee ≈2 RPS, бутылочное горлышко — песочница (3 процесса на
+      submit × `EXECUTOR_MAX_CONCURRENCY=4` ≈2.3/s), БД/HTTP не лимитируют
+- [x] отчёт `docs/reports/sprint-19/LOAD_TEST.md` (окружение, деградация,
+      рекомендации); ограничение зарегистрировано как **KI-022** (Accepted,
+      v0.3.0) — 5 RPS submit не входит в DoD v0.2.0
+- [x] **Зависит от:** S19-002…S19-005 — выполнено
+- [x] **Оценка:** 4 ч
 
-### S19-007: Документация — ✅ (для S19-001/002)
-- [x] `ARCHITECTURE`: Monaco, code splitting, бюджет бандла
-- [x] README: размер бандла и метрики
-- [ ] `ARCHITECTURE`: кэш, RAG — после S19-003/005
-- [x] **Зависит от:** S19-001…S19-002
+### S19-007: Документация — ✅
+- [x] `ARCHITECTURE`: §6.2 кэш, §6.3 RAG, §6.4 оптимизация, §8 конфигурация
+- [x] `RULES` §11.18: ловушки кэша, эмбеддингов, pgvector, нагрузочного раннера
+- [x] `SPEC` §3.3/§3.11–3.12: контракты поиска, кэша, пагинации, флагов
+- [x] README/`docs/README`: метрики и фича-буллеты
+- [x] отчёты `SPRINT-19.md` и `LOAD_TEST.md`
+- [x] **Зависит от:** S19-001…S19-006
 - [x] **Оценка:** 2 ч
 
-**DoD:** ⚠️ частично — редактор работает офлайн, entry ≤ 80 kB; кэш, поиск
-и нагрузочный отчёт отложены до появления классов/нагрузки (после S16).
+**DoD:** ✅ Monaco работает офлайн, entry ≤80 kB (финал — 78.71 kB), кэш с
+инвалидацией и метриками, индексы 0009/0010 подтверждены, `/chat/search`
+работает в двух режимах и изолирован, нагрузочный профиль зафиксирован
+(health/tasks PASS; submit — knee ≈2 RPS, **KI-022**); KI-013 закрыт.
 
 ---
 
-## Спринт 20: Security Audit & Release v0.2.0
+## Спринт 20: Security Audit & Release v0.2.0 — ✅ завершён (2026-10-30)
 
 **Цель:** аудит безопасности, стабилизация и релиз.
 
 **Зависит от:** спринт 19  
-**Оценка:** 2 дня
+**Оценка:** 2 дня  
+**Отчёты:** [SECURITY_AUDIT](docs/reports/sprint-20/SECURITY_AUDIT.md) ·
+[SPRINT-20](docs/reports/sprint-20/SPRINT-20.md) ·
+[ACCESS_MATRIX](docs/reports/sprint-20/ACCESS_MATRIX.md)
 
-### S20-001: Аудит зависимостей
-- [ ] `pip-audit` (backend) и `pnpm audit` (frontend), устранить High/Critical
-- [ ] Dependabot/renovate для регулярных обновлений (конфиг)
-- [ ] Зафиксировать результат в отчёте
-- [ ] **Зависит от:** —
-- [ ] **Оценка:** 3 ч
+### S20-001: Аудит зависимостей — ✅
+- [x] `pip-audit` (backend, Docker/CI-путь) и `pnpm audit` (frontend) прогнаны
+- [x] High/Critical устранены: `python-jose` удалён → PyJWT 2.15.1,
+      `python-multipart` 0.0.31, `vitest`/`coverage` 4.1.12
+- [x] Локальный fallback `backend/scripts/audit_python_deps.py` (GitHub
+      Advisory API) — PyPI с хоста заблокирован (KI-017)
+- [x] `.github/dependabot.yml` (pip/npm/github-actions, weekly)
+- [x] Результат: 66 → **16 записей в 2 пакетах, 0 critical**; остатки
+      приняты и задокументированы (KI-015/KI-016)
+- [x] **Зависит от:** —
+- [x] **Оценка:** 3 ч
 
-### S20-002: Проверка секретов и конфигурации
-- [ ] `detect-secrets`/gitleaks в CI, `.env` вне git
-- [ ] Проверить отсутствие `DEBUG=true`/дефолтных секретов в prod-compose
-- [ ] CORS: список origin из ENV (не `*`), CSP-заголовки в nginx
-- [ ] **Зависит от:** —
-- [ ] **Оценка:** 3 ч
+### S20-001b: RestrictedPython 7.4 → 8.5 — ✅
+- [x] 3 high-обхода закрыты (GHSA-gmj9-h825-chq2, GHSA-ffg3-p8fm-mjx2,
+      GHSA-hp3v-5vw7-fx9w); wheel получен через Docker (PyPI недоступен)
+- [x] `executor.py`: `error_type=RestrictedFeatureError` + подсказка
+      f-строки/`%` из-за запрета `.format()` (KI-018)
+- [x] тесты executor/sandbox дополнены (f-string работает, format-векторы
+      блокируются); RP-записи убраны из `pip-audit --ignore-vuln`
+- [x] **Зависит от:** S20-001
+- [x] **Оценка:** 2 ч
 
-### S20-003: Аудит прав доступа
-- [ ] Таблица «эндпоинт × роль» → тест на каждый: 403 для чужих
-- [ ] Проверить IDOR во всех новых сущностях (классы, назначения, уведомления)
-- [ ] **Зависит от:** S16
-- [ ] **Оценка:** 4 ч
+### S20-002: Проверка секретов и конфигурации — ✅
+- [x] `.gitleaks.toml` + CI job `Security`; скан истории — **0 утечек / 42 коммита**
+- [x] `.env`/`.env.*.local`/`backups/` в `.gitignore`; prod-compose:
+      обязательные секреты (`:?`), `DEBUG=false`, БД/Redis не публикуются
+- [x] `ALLOWED_ORIGINS` из ENV (не `*`), CSP + security headers в nginx
+- [x] Проверки: `nginx -t`, живые заголовки curl, CSP+Monaco (Playwright,
+      `unsafe-eval` не потребовался)
+- [x] **Зависит от:** —
+- [x] **Оценка:** 3 ч
 
-### S20-004: Бэкапы и восстановление
-- [ ] `scripts/backup.sh` (pg_dump + gzip), `scripts/restore.sh`
-- [ ] Инструкция в GETTING_STARTED и DESIGN_ADMIN_AND_OPS
-- [ ] Проверка восстановления на тестовой БД (smoke)
-- [ ] **Зависит от:** —
-- [ ] **Оценка:** 3 ч
+### S20-003: Аудит прав доступа — ✅
+- [x] матрица «эндпоинт × роль», IDOR по всем сущностям (классы, назначения,
+      уведомления, чаты, история кода, версии задач, teacher/admin, `/chat/search`)
+- [x] `docs/reports/sprint-20/ACCESS_MATRIX.md` + `backend/tests/test_access_matrix.py`:
+      **35 тестов (17 функций), IDOR не найден**
+- [x] Исправлено: `GET /tasks/{id}/hints/{index}` больше не анонимный —
+      требует аутентификации (находка F1, LOW; найдено аудитом)
+- [x] **Зависит от:** S16, S19
+- [x] **Оценка:** 4 ч
 
-### S20-005: Финальная документация
-- [ ] Обновить все документы `docs/` под v0.2.0
-- [ ] `SPEC.md`: новые сущности, эндпоинты, критерии приёмки v0.2.0
-- [ ] `CHANGELOG.md` → `[0.2.0]`, `RELEASES.md` → спринты 11–20
-- [ ] `MANUAL_TESTING_GUIDE`: полный прогон
-- [ ] **Зависит от:** все
-- [ ] **Оценка:** 4 ч
+### S20-004: Бэкапы и восстановление — ✅
+- [x] `scripts/backup.sh` — `pg_dump` через `docker exec`, gzip, sha256,
+      retention N дней, проверка `pg_restore -l`
+- [x] `scripts/restore.sh` — scratch-БД по умолчанию, `--create`/`--clean`/
+      `--verify`, guard рабочей БД, коды 0/1/2
+- [x] Инструкции: GETTING_STARTED §8, DESIGN_ADMIN_AND_OPS §6/§7
+- [x] Smoke: восстановлено **14/14 таблиц**, счётчики совпали, scratch-БД удалена
+- [x] **Зависит от:** —
+- [x] **Оценка:** 3 ч
 
-### S20-006: Полная проверка и релиз
-- [ ] Backend: `ruff`, `mypy`, `pytest`, `alembic check`
-- [ ] Frontend: `typecheck`, `lint`, `test`, `build`, `e2e`
-- [ ] Docker: `docker compose -f docker-compose.prod.yml up -d --build` +
-      smoke (health, чат, задача, админка)
-- [ ] Версия `0.2.0` в `pyproject.toml` и `package.json`
-- [ ] Тег `v0.2.0`, push, GitHub Release
-- [ ] **Зависит от:** S20-001…S20-005
-- [ ] **Оценка:** 4 ч
+### S20-005: Финальная документация — ✅
+- [x] SPEC: кэш/RAG/пагинация/безопасность/бэкапы, критерии приёмки v0.2.0
+- [x] CHANGELOG `[0.2.0]`, RELEASES (спринты 19–20 + релиз), KNOWN_ISSUES
+      (KI-015…KI-022)
+- [x] RULES §11.18–11.19, ARCHITECTURE (безопасность/деплой),
+      MANUAL_TESTING_GUIDE (кэш, поиск, заголовки, бэкапы, нагрузка)
+- [x] README / docs/README / GETTING_STARTED / USER_GUIDE; отчёт `SPRINT-20.md`
+- [x] Финальные цифры внесены: backend **341 passed + 1 skipped**, нагрузка
+      (health/tasks PASS, submit knee ≈2 RPS), матрица 35 тестов
+- [x] **Зависит от:** S20-001…S20-004
+- [x] **Оценка:** 4 ч
 
-**DoD:** аудит чистый (нет High/Critical), бэкап/восстановление проверены,
-документация актуальна, все проверки зелёные, тег `v0.2.0` запушен.
+### S20-006: Полная проверка и релиз — ✅ тег `v0.2.0` и push на релизном коммите (CI — KI-014)
+- [x] Backend: `ruff`, `mypy`, `pytest` — **341 passed + 1 skip** (342 collected,
+      200–255 с в зависимости от загрузки), ruff/mypy 0;
+      `alembic upgrade head` → 010, `alembic check` — без расхождений
+- [x] Frontend: `typecheck`, `lint`, `test` (**80/80**), `build` (entry 78.71 kB),
+      `test:offline` — зелёные
+- [x] e2e — **12/12 passed** (Playwright chromium, ~1.2 мин, провайдер `echo`,
+      отдельная БД `ai_teacher_e2e`; Lead-run на финальном дереве)
+- [x] Docker prod: `docker compose -p ai_teacher_prod -f docker-compose.prod.yml
+      up -d --build` + smoke (health `version 0.2.0`, register/login/me, tasks,
+      security-заголовки, SPA-fallback, sandbox) — 4/4 сервиса healthy;
+      найдено и исправлено: prod-стек не применял миграции →
+      `backend/docker-entrypoint.sh` (`alembic upgrade head` до старта API,
+      `SKIP_MIGRATIONS=true` для отключения); добавлены `.dockerignore`
+- [x] Версия `0.2.0` в `pyproject.toml` / `frontend/package.json` /
+      `backend/app/config.py`
+- [x] Тег `v0.2.0`, push ветки/тега, GitHub Release — на этом релизном
+      коммите (CI не запускался, KI-014 — биллинг Actions)
+- [x] **Зависит от:** S20-001…S20-005
+- [x] **Оценка:** 4 ч
+
+**DoD:** ✅ 0 critical по зависимостям; high только в транзитивном starlette с
+неприменимыми векторами (принято, KI-015); бэкап/восстановление проверены;
+документация v0.2.0 актуальна; backend (341 passed + 1 skip) и frontend-гейты
+зелёные; e2e — 12/12; нагрузка: health/tasks PASS, submit — knee ≈2 RPS
+(**KI-022**); матрица доступа — 35 тестов, IDOR не найден; Docker prod smoke
+зелёный на чистой БД; тег `v0.2.0` и push выполнены (CI — KI-014).
 
 ---
 

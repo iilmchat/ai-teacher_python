@@ -84,6 +84,8 @@ class Assignment(Base):
     __table_args__ = (
         UniqueConstraint("classroom_id", "task_id", name="uq_assignment_task"),
         Index("idx_assignments_classroom", "classroom_id"),
+        # S19-004: фильтр/сортировка «моих заданий» по дедлайну
+        Index("idx_assignments_due_at", "due_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

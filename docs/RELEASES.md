@@ -2,8 +2,8 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.1.0 (выпущена)  
-**Текущий спринт:** спринт 18 завершён; 19 — частично (S19-001/002); следующий — 19 (S19-003…006)
+**Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
+**Текущий спринт:** спринты 19–20 завершены, этап v0.2.0 закрыт; следующий этап — v0.3.0
 
 ---
 
@@ -19,8 +19,19 @@
 - [Спринт 8: Frontend Base](#спринт-8-frontend-base)
 - [Спринт 9: Frontend Features](#спринт-9-frontend-features)
 - [Спринт 10: Admin & Polish — релиз v0.1.0](#спринт-10-admin--polish--релиз-v010)
+- [Спринт 10: Admin & Polish — релиз v0.1.0](#спринт-10-admin--polish--релиз-v010)
+- [Этап v0.2.0 «Classroom»](#этап-v020-classroom--релиз)
 - [Спринт 11: Quality Gates & E2E](#спринт-11-quality-gates--e2e)
-- [Следующий этап: v0.2.0](#следующий-этап-v020-classroom-планируется)
+- [Спринт 12: LLMOps](#спринт-12-llmops)
+- [Спринт 13: Sandbox Hardening](#спринт-13-sandbox-hardening)
+- [Спринт 14: Tasks v2](#спринт-14-tasks-v2)
+- [Спринт 15: Teacher Console](#спринт-15-teacher-console)
+- [Спринт 16: Classrooms & Assignments](#спринт-16-classrooms--assignments)
+- [Спринт 17: Engagement](#спринт-17-engagement)
+- [Спринт 18: UX, A11y & Design System](#спринт-18-ux-a11y--design-system)
+- [Спринт 19: Performance & Scale](#спринт-19-performance--scale)
+- [Спринт 20: Security Audit & Release](#спринт-20-security-audit--release)
+- [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
 ---
@@ -420,7 +431,7 @@
 
 ---
 
-## Следующий этап: v0.2.0 «Classroom» (планируется)
+## Этап v0.2.0 «Classroom» — релиз
 
 **План:** [../TODO_V0.2.md](../TODO_V0.2.md) — спринты 11–20, ~24 дня.
 
@@ -434,8 +445,8 @@
 | 16 | Classrooms & Assignments | — | ✅ |
 | 17 | Engagement | — | ✅ |
 | 18 | UX, A11y & Design System | — | ✅ |
-| 19 | Performance & Scale | KI-013 | ⚠️ S19-001/002, следующие 003…006 |
-| 20 | Security Audit & Release | — | — |
+| 19 | Performance & Scale | KI-013 | ✅ |
+| 20 | Security Audit & Release | KI-015…KI-018 (принято/закрыто) | ✅ |
 
 Порядок обязателен: спринты 11–13 закрывают технический долг, только затем
 добавляется функциональность (14–18) и оптимизации (19–20).
@@ -694,29 +705,6 @@
 
 ---
 
-## Спринт 19: Performance & Scale — ⚠️ частично (S19-001/002)
-
-**Период:** 2026-10-29  
-**Статус:** ⚠️ S19-001/002 выполнены; S19-003…006 отложены после S16
-
-### Что сделано
-- **Monaco локально (KI-013):** `monaco-editor` + AMD-ассеты в `public/monaco/vs`
-  (копируются prebuild), `MonacoEditor` — lazy-чанк, worker с своего origin;
-  `pnpm test:offline` проверяет отсутствие CDN в бандле
-- **Code splitting:** все страницы через `React.lazy`; entry **76.3 kB gzip**
-  (≤80), react 15.3 + i18n 18.4, Monaco отдельным чанком
-- Frontend: 71 unit, build 0, offline-check — passed
-
-### Отложено
-- S19-003 Redis-кэш, S19-004 оптимизация запросов, S19-005 pgvector-поиск,
-  S19-006 нагрузочный тест — после появления классов (S16), иначе нечего
-  кэшировать и оптимизировать
-
-### Закрыто KI
-- **KI-013**
-
----
-
 ## Спринт 16: Classrooms & Assignments
 
 **Период:** 2026-10-30  
@@ -838,7 +826,244 @@
 - CI не стартовал (KI-014, биллинг) — мерж по временному разрешению
 
 ### Следующие шаги
-- Спринт 19: S19-003…006 (Redis-кэш, запросы, pgvector, нагрузка)
+- Спринт 19: Performance & Scale (Redis-кэш, запросы, pgvector, нагрузка)
+
+---
+
+## Спринт 19: Performance & Scale
+
+**Период:** 2026-10-29 … 2026-10-30  
+**Статус:** ✅ Завершён (S19-006: профиль зафиксирован; целевые 5 RPS `submit`
+не достигнуты — knee ≈2 RPS, **KI-022**)
+
+### Задачи
+- [x] S19-001: Локальный Monaco без CDN (KI-013)
+- [x] S19-002: Code splitting и lazy-маршруты
+- [x] S19-003: Redis-кэш справочников и каталога задач
+- [x] S19-004: Оптимизация запросов, индексы 0009/0010, пагинация
+- [x] S19-005: Поиск по истории чата (pgvector, RAG-lite)
+- [x] S19-006: Нагрузочный тест (httpx-генератор вместо k6/locust)
+- [x] S19-007: Документация (ARCHITECTURE, README, RULES §11.18)
+
+### Что сделано
+- **Кэш (S19-003):** `app/services/cache.py` — `/chat/levels`,
+  `/tasks/categories`, `/tasks`; TTL 60 с, ключ списка включает `user_id` и
+  все фильтры; инвалидация namespace `cache:tasks:*` на CRUD/импорте/seed/
+  откате; fail-open + 10 с cooldown; метрики `cache` в `/admin/analytics`
+- **Оптимизация (S19-004):** N+1 в `/classrooms` и назначениях устранены
+  агрегатами; пагинация `/classrooms`, `/me/notifications`, `/teacher/tasks`;
+  индексы 0009 (каталог, ученики, уведомления, дедлайны, история сообщений),
+  HNSW 0010; EXPLAIN-подтверждение через `enable_seqscan=off`
+- **RAG-lite (S19-005):** `GET /chat/search` — семантический поиск по своим
+  сообщениям (pgvector HNSW, `vector_cosine_ops`) за флагом `RAG_ENABLED`,
+  ILIKE-fallback при выключенном/сбойном RAG; best-effort эмбеддинги через
+  LM Studio `/embeddings`; изоляция по `chat_sessions.user_id` в репозитории
+- **Нагрузка (S19-006):** `backend/scripts/load_test.py` (httpx, открытый
+  цикл, 1 worker, `DEBUG=false`, `LLM_PROVIDER=echo`); `health` 50 RPS —
+  p50 4.1 / p95 **6.3** мс, `tasks` 20 RPS — p50 12.9 / p95 **25.4** мс,
+  0 ошибок (PASS); `submit` — факт 2.5 RPS, p50 1964 / p95 **2219.7** мс при
+  бюджете 2000 мс (**FAIL по p95**), knee ≈2 RPS; бутылочное горлышко —
+  песочница (3 процесса на submit × `EXECUTOR_MAX_CONCURRENCY=4` ≈2.3/s).
+  Отчёт: `docs/reports/sprint-19/LOAD_TEST.md`; ограничение — **KI-022**
+- **Frontend (S19-001/002):** Monaco офлайн (KI-013 закрыт), route-level
+  code splitting, `pnpm test:offline`
+- **Тесты:** `test_cache.py` (9), `test_rag_search.py` (10),
+  `test_query_optimization.py` (7); autouse-фикстура `disable_cache`
+
+### Что не сделано
+- RAG с живой embedding-моделью не проверен: LM Studio с embedding-моделью не
+  поднят (причина KI-008); провайдер абстрагирован и покрыт фейком
+- Нет backfill эмбеддингов для сообщений до включения RAG; нет порога
+  релевантности (`RAG_MIN_SCORE`) — semantic всегда отдаёт top-k
+- Кэш каталога зависит от прогресса пользователя: после submit статус может
+  отставать до TTL (осознанно)
+- Метрики кэша — в памяти процесса (как `llm`): при нескольких воркерах
+  каждый показывает только свои счётчики
+- EXPLAIN снят на почти пустых таблицах; полноценный профиль — только
+  нагрузочный отчёт
+- Целевые 5 RPS `submit` не достигнуты (knee ≈2 RPS, p95 2219.7 мс > бюджета
+  2000 мс) — ограничение песочницы, зарегистрировано **KI-022**; рекомендации
+  (один процесс на все кейсы, пул интерпретаторов, поднять concurrency,
+  очередь с 429/503) — в LOAD_TEST §5, код не менялся в S19
+
+### Метрики
+- Backend: **341 passed** (+1 skip на Windows; 342 collected, 200.41 с —
+  финальный прогон v0.2.0), ruff 0, mypy strict 0 (76 модулей)
+- Frontend: **80 unit** + **12 e2e**; entry **78.71 kB gzip** (react 15.30,
+  i18n 18.40), `pnpm test:offline` — passed
+- Миграции: **003 → 010** (`upgrade head`), `alembic check` — «No new upgrade
+  operations detected», цикл downgrade→upgrade — 4 passed
+- Нагрузка: `health` p95 6.3 мс (50 RPS ✅), `tasks` p95 25.4 мс (20 RPS ✅),
+  `submit` p95 2219.7 мс при факте 2.5 RPS (5 RPS ❌, **KI-022**)
+- Покрытие: порог backend 70% (последний замер — 80%, S18)
+
+### Проблемы / уроки
+- Fail-open кэша без cooldown превращался бы в timeout на каждом запросе —
+  добавлены 10 с «остывания» и отдельные счётчики ошибок
+- Ключ списка задач обязан включать `user_id`: иначе кэш «протекает» между
+  учениками (статус прогресса в ответе)
+- Ivfflat на пустой таблице бесполезен (нужны обучающие данные) — выбран
+  HNSW, он строится сразу и поддерживает `vector_cosine_ops`
+- Локальный PyPI заблокирован → k6/locust не поставить, нагрузочный раннер
+  написан на httpx (см. RULES §11.18)
+
+### DoD
+- ✅ Кэш с инвалидацией и метриками, fail-open; пагинация без регрессий;
+  индексы подтверждены EXPLAIN; `/chat/search` работает в двух режимах и
+  изолирован; нагрузочный профиль зафиксирован (health/tasks PASS, submit —
+  knee ≈2 RPS, **KI-022**); KI-013 закрыт; документация обновлена
+
+### Закрыто KI
+- **KI-013** (Monaco с CDN)
+
+### Следующие шаги
+- Спринт 20: Security Audit & Release v0.2.0
+
+---
+
+## Спринт 20: Security Audit & Release
+
+**Период:** 2026-10-30  
+**Статус:** ✅ Завершён (S20-003 — 35 тестов, IDOR не найден; финальный тег
+`v0.2.0` — за релиз-инженером, CI — KI-014)
+
+### Задачи
+- [x] S20-001: Аудит зависимостей backend/frontend, устранение High/Critical
+- [x] S20-001b: RestrictedPython 7.4 → 8.5 (3 high обхода песочницы)
+- [x] S20-002: Секреты, gitleaks, CSP/security headers, prod-конфиг
+- [x] S20-003: Аудит прав доступа и IDOR (35 тестов; IDOR не найден; F1 исправлена)
+- [x] S20-004: Бэкапы и восстановление (`scripts/backup.sh`/`restore.sh`)
+- [x] S20-005: Финальная документация v0.2.0
+- [x] S20-006: Полная проверка и релиз (локальные гейты; тег — Lead)
+
+### Что сделано
+- **Зависимости (S20-001):** frontend `vitest`/`coverage` 3.2.7 → 4.1.12
+  (2 critical + 3 moderate закрыты, `pnpm audit` — 0); backend —
+  `python-jose` удалён → **PyJWT 2.15.1**, `python-multipart` **0.0.31**,
+  **RestrictedPython 8.5**; `pip-audit` (Docker/CI-путь): **66 записей в 7
+  пакетах → 16 записей в 2 пакетах, 0 critical** (остатки — starlette и
+  dev-only pytest, KI-015/KI-016); Dependabot; локальный
+  `audit_python_deps.py` для машины без PyPI
+- **Секреты/конфиг (S20-002):** `.gitleaks.toml` + CI job `Security`;
+  скан истории — **0 утечек на 42 коммитах**; `.env`/`backups/` в
+  `.gitignore`; prod-compose: обязательные секреты (`:?`), `DEBUG=false`,
+  БД/Redis без публикации портов, `ALLOWED_ORIGINS` из ENV
+- **CSP/заголовки:** CSP (без `unsafe-eval`), `nosniff`, `DENY`,
+  `strict-origin-when-cross-origin`, `Permissions-Policy`, HSTS,
+  `server_tokens off`; проверено `nginx -t` и Playwright (Monaco грузится,
+  worker'ы `blob:`); `index.html` — `no-cache`
+- **Доступ (S20-003):** матрица «эндпоинт × роль» + IDOR по всем сущностям —
+  **35 тестов, IDOR не найден**; автотест `test_access_matrix.py`; исправлена
+  находка F1 (LOW): анонимный `GET /tasks/{id}/hints/{index}` → теперь 403 без
+  заголовка `Authorization` (401 — невалидный токен)
+- **Бэкапы (S20-004):** `backup.sh`/`restore.sh` (docker exec pg_dump, gzip,
+  sha256, retention 14 дней, guard рабочей БД, `--create`/`--verify`);
+  smoke — **14/14 таблиц**, счётчики совпали; документация в
+  GETTING_STARTED §8 и DESIGN_ADMIN_AND_OPS §6/§7
+- **Документация (S20-005):** SPEC (кэш/RAG/пагинация/безопасность/бэкапы/
+  критерии v0.2.0), CHANGELOG `[0.2.0]`, RELEASES (19/20 + релиз),
+  KNOWN_ISSUES (KI-015…KI-022), RULES §11.18–11.19, MANUAL_TESTING_GUIDE,
+  README/GETTING_STARTED, USER_GUIDE; отчёт
+
+### Что не сделано
+- GitHub Actions job'ы (включая `Security` и `e2e`) не запускались —
+  KI-014 (биллинг Actions); локальные эквиваленты проверок выполнены
+- Координированный апгрейд `fastapi`/`starlette` отложен (KI-015, v0.3.0,
+  Dependabot PR); dev-апгрейд `pytest` 9.x — KI-016
+- Docker prod build+smoke и тег `v0.2.0` — финальный гейт Lead
+ 
+### Метрики
+- Frontend: **80/80** unit, typecheck/lint/build — 0, entry **78.71 kB gzip**,
+  `pnpm audit` — 0; **e2e 12/12** (Playwright, ~1.2 мин, провайдер `echo`,
+  отдельная БД `ai_teacher_e2e`)
+- Backend: **341 passed** (+1 skip; 342 collected, 200.41 с), ruff 0,
+  mypy strict 0
+- Аудит backend: `pip-audit` — 0 critical; 16 записей в 2 пакетах (принято,
+  KI-015/KI-016); CI-команда с 8 ignores — «No known vulnerabilities found,
+  16 ignored», exit 0
+- gitleaks: 0 утечек / 42 коммита; nginx: `nginx -t` OK, 6 заголовков;
+  backup/restore: 14/14 таблиц; Docker build: успешно (PyJWT 2.15.1,
+  multipart 0.0.31, python-jose отсутствует)
+
+### Проблемы
+- PyPI с хоста заблокирован → pip-audit только в Docker, локальный аудит
+  через GitHub Advisory API (лимит 60/час) — KI-017
+- RestrictedPython 8.5 запретил `.format()`/`format_map()`/`string.Formatter`
+  → user-visible ограничение, подсказка `RestrictedFeatureError` — KI-018
+- `starlette 0.41.3` тянется от `fastapi 0.115.5`: апгрейд требует мажорного
+  coordinated-апгрейда и полного прогона тестов — принят риск KI-015
+- CI-job `Security` использует временный `--ignore-vuln` (8 ID: 7 starlette +
+  1 pytest); после апгрейдов игноры убрать
+- Локальный venv (3.11) ставился без PyPI: `restrictedpython`/`starlette`/
+  `pytest` обновлялись вручную через Docker-wheelhouse — версии сверять с CI
+
+### DoD
+- ✅ 0 critical по зависимостям; high только в транзитивном starlette с
+  неприменимыми векторами (принято и отслеживается); бэкап/восстановление
+  проверены; security-заголовки живые; секретов в git нет; документация
+  v0.2.0 актуальна; backend **341 passed + 1 skip**, frontend 80/80 и e2e
+  **12/12** — зелёные; Docker prod smoke и тег `v0.2.0` — финальный шаг Lead
+  (CI — KI-014)
+
+### Закрыто KI
+- **KI-019** (python-jose/PyJWT/python-multipart), **KI-020** (vitest/tinypool),
+  **KI-021** (RestrictedPython 7.4 → 8.5); новые принятые риски — KI-015…KI-018
+
+### Следующие шаги
+- v0.3.0: coordinated fastapi/starlette upgrade (KI-015), dev pytest 9.x
+  (KI-016), backfill эмбеддингов/порог RAG, восстановление CI (KI-014)
+
+---
+
+## Релиз v0.2.0 «Classroom»
+
+**Дата:** 2026-10-30 · **Тег:** `v0.2.0` · **Предыдущий:** [v0.1.0](#спринт-10-admin--polish--релиз-v010)
+
+### Что вошло
+- **Для класса:** классы и вступление по коду, назначения с дедлайнами,
+  матрица прогресса класса, кабинет учителя (задачи/импорт/ученики)
+- **Вовлечение:** достижения, streak и `/me/stats`, дашборд, in-app уведомления
+- **UX:** тёмная тема, дизайн-система, WCAG AA (skip-link, aria, axe),
+  мобильный чат/drawer
+- **Производительность:** локальный Monaco без CDN, code splitting,
+  Redis-кэш, индексы и пагинация, поиск по истории чата (RAG-lite)
+- **Безопасность:** аудит зависимостей (0 critical), CSP/security headers,
+  gitleaks + CI job `Security`, Dependabot, backup/restore, `.format()`
+  заблокирован в песочнице как плата за закрытые обходы RP 8.5
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | **341 passed** (+1 skip; 342 collected) |
+| Frontend-тесты | 80 unit + 12 e2e (12/12 green) |
+| Миграции | 001 → 010, `alembic check` чист |
+| Entry-бандл | 78.71 kB gzip (≤ 80) |
+| Зависимости | frontend 0 vulns; backend 0 critical, 16 accepted-записей (KI-015/KI-016) |
+| Нагрузка (S19-006) | health 50 RPS p95 6.3 мс ✅ · tasks 20 RPS p95 25.4 мс ✅ · submit 2.5 RPS p95 2219.7 мс ❌ (knee ≈2 RPS, KI-022) |
+| Матрица доступа (S20-003) | 35 тестов, IDOR не найден |
+
+### Известные ограничения релиза
+- KI-014 — GitHub Actions не запускает job'ы (биллинг); локальные проверки
+  (backend 341/1, frontend 80/80, e2e 12/12, аудит, gitleaks, nginx, backup)
+  выполнены; Docker prod smoke и зелёный CI на GitHub — после восстановления
+  оплаты/финального гейта
+- KI-015/016 — принятые остаточные риски зависимостей (starlette/fastapi,
+  dev pytest); KI-017 — PyPI недоступен с хоста; KI-018 — `.format()` в
+  песочнице запрещён
+- RAG: нет backfill эмбеддингов и порога релевантности; живая embedding-модель
+  не проверялась (провайдер покрыт фейком)
+- Submit: целевые 5 RPS не достигнуты (knee ≈2 RPS, p95 2219.7 мс) —
+  ограничение песочницы, KI-022; health/каталог с запасом 47×/12×
+- Матрица доступа S20-003: 35 тестов, IDOR не найден, F1 (LOW) исправлена;
+  отсутствие заголовка `Authorization` → 403 (`HTTPBearer`), невалидный
+  токен → 401
+
+### Документация релиза
+[CHANGELOG.md](CHANGELOG.md#020---2026-10-30) ·
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) ·
+[reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) ·
+[reports/sprint-20/SPRINT-20.md](reports/sprint-20/SPRINT-20.md) ·
+[MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md)
 
 ---
 

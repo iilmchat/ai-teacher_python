@@ -1,7 +1,11 @@
 # Web Framework
 fastapi==0.115.5
 uvicorn[standard]==0.32.1
-python-multipart==0.0.17
+# S20-001: 0.0.17 → 0.0.31 (GHSA-wp53-j4wj-2cfg, GHSA-pp6c-gr5w-3c5g,
+# GHSA-5rvq-cxj2-64vf, GHSA-v9pg-7xvm-68hf — все закрыты в 0.0.31).
+# Версия проверяется CI (job Security → pip-audit); локально PyPI на хосте
+# заблокирован — см. docs/reports/sprint-20/SECURITY_AUDIT.md.
+python-multipart==0.0.31
 
 # Async
 asyncpg==0.30.0
@@ -25,11 +29,22 @@ email-validator==2.2.0
 # passlib не используется: несовместим с bcrypt 5.x (ValueError на 72+ байтах),
 # хэширование выполняется напрямую через bcrypt (см. app/core/security.py)
 bcrypt==5.0.0
-python-jose[cryptography]==3.3.0
-pyjwt==2.10.0
+# S20-001: python-jose удалён — GHSA-6c5p-j8vq-pqhj (critical),
+# GHSA-3qf3-8w2g-rqmx (critical), GHSA-cjwg-qfpm-7377; JWT-код переведён на
+# PyJWT (app/core/security.py). PyJWT 2.10.0 имеет advisory, поэтому пиним
+# 2.15.1: все известные GHSA PyJWT закрыты в 2.15.0/2.14.0 (2.15.1 — последняя
+# версия). Версия проверяется CI (job Security → pip-audit) и локально
+# (см. docs/reports/sprint-20/SECURITY_AUDIT.md).
+pyjwt==2.15.1
 
 # Code Execution
-restrictedpython==7.4
+# S20-001: RestrictedPython 7.4 → 8.5. В 7.4 три high-обхода песочницы:
+# GHSA-gmj9-h825-chq2 (try/except* type confusion, fix 8.0),
+# GHSA-ffg3-p8fm-mjx2 (guard hook shadowing, fix 8.3),
+# GHSA-hp3v-5vw7-fx9w (string.Formatter field resolution, fix 8.4).
+# Побочный эффект 8.x: str.format/format_map/string.Formatter запрещены
+# (см. app/core/executor.py — RestrictedFeatureError с подсказкой).
+restrictedpython==8.5
 
 # LLM
 openai==1.55.3

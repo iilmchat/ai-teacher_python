@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.1.0 · **© 2026 RuChating (iilmchat)**
+**Версия:** v0.2.0 «Classroom» · **© 2026 RuChating (iilmchat)**
 
 **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · DeepSeek / LM Studio · Docker Compose
 
@@ -20,12 +20,21 @@
   линтер с ошибками безопасности и подсказками по стилю.
 - **Задачи** — 6 готовых, проверка по тест-кейсам с `input()`, подсказки по одной,
   подробный отчёт; импорт/экспорт JSON/YAML, генерация через LLM, теги и версии.
-- **Прогресс** — статусы, попытки, процент решения, разбивка по сложности.
-- **Админка** — пользователи и роли, задачи, аналитика (DAU, попытки, сообщения, запуски).
+- **Прогресс** — статусы, попытки, процент решения, разбивка по сложности;
+  дашборд с серией дней, достижениями и уведомлениями.
+- **Классы** — создание класса, вступление по коду, назначения задач с
+  дедлайнами, матрица прогресса класса и «мои задания».
 - **Кабинет учителя** — CRUD задач с конструктором тест-кейсов, импорт файла,
   прогресс учеников.
+- **Админка** — пользователи и роли, задачи, аналитика (DAU, попытки, сообщения, запуски).
 - **Надёжность LLM** — healthcheck провайдера, fallback «облако → локально»,
   метрики латентности и токенов, детектор готовых решений на базовом уровне.
+- **Кэш и поиск** — справочники (`/chat/levels`, `/tasks/categories`, каталог)
+  кэшируются в Redis на 60 с с инвалидацией при правке задач; поиск по своей
+  истории чата — ILIKE всегда, семантический (pgvector) за флагом
+  `RAG_ENABLED`.
+- **Безопасность и эксплуатация** — CSP и security-заголовки nginx, gitleaks в
+  CI, Dependabot, аудит зависимостей, бэкап/восстановление БД скриптами.
 - **i18n** — русский и английский.
 
 ---
@@ -58,19 +67,27 @@ pnpm dev
 
 Подробно, с типичными ошибками — [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
+> **Эксплуатация v0.2.0.** Бэкап БД: `bash scripts/backup.sh` (pg_dump через
+> `docker exec`, gzip + sha256, retention 14 дней), восстановление —
+> `bash scripts/restore.sh ... --create --verify` (подробно — GETTING_STARTED
+> §8). Аудит зависимостей и security-заголовки — [SECURITY_AUDIT](docs/reports/sprint-20/SECURITY_AUDIT.md).
+
 ---
 
 ## Статус
 
 | Показатель | Значение |
 |------------|----------|
-| Спринты | 1–18 завершены (19 — частично; v0.2.0) |
-| Тесты backend | **271** (pytest, реальный PostgreSQL; +1 skip на Windows) |
-| Тесты frontend | **80** unit + **12** e2e (Playwright) |
-| Покрытие | backend **80%**, frontend **73.6%** строк |
+| Версия | **v0.2.0 «Classroom»** (2026-10-30) |
+| Спринты | 1–20 (этап v0.2.0 завершён) |
+| Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
+| Миграции | Alembic head **010** (10 миграций; `chat_messages` HNSW-индекс) |
+| Тесты frontend | **80** unit + **12** e2e (Playwright; 12/12 green) |
+| Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | TypeScript | strict, 0 ошибок |
-| Размер фронтенда | entry **79 kB** gzip, initial ~113 kB |
+| Размер фронтенда | entry **78.71 kB** gzip (react 15.30 + i18n 18.40; лимит 80) |
+| Зависимости | frontend 0 vulns; backend 0 critical (остатки приняты — KI-015/KI-016) |
 
 ---
 
@@ -90,7 +107,8 @@ pnpm dev
 - [docs/PROMPT_CURRENT.md](docs/PROMPT_CURRENT.md) — актуальные инструкции ассистента
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
-- [TODO.md](TODO.md) — план работ
+- [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
+- [TODO_V0.2.md](TODO_V0.2.md) — этап v0.2.0 (спринты 11–20); завершённый [TODO.md](TODO.md) — v0.1.0
 
 ---
 

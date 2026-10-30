@@ -1,0 +1,74 @@
+# Dependabot: автоматические PR с обновлениями зависимостей (S20-001)
+#
+# Почему так:
+#   - pip-зависимости фиксируются в backend/requirements.txt (RULES §11.3);
+#   - npm — pnpm-lock.yaml, обновляется через npm-ecosystem (Dependabot
+#     поддерживает pnpm-lock.yaml нативно);
+#   - GitHub Actions обновляются отдельно (безопасность supply chain CI);
+#   - еженедельно, чтобы не заваливать ревью, с группировкой patch/minor.
+#
+# Dependabot не может обновить python-jose: он удалён в S20-001 в пользу
+# уже установленного PyJWT (CVE-2024-33663/33664).
+version: 2
+
+updates:
+  # --- Backend: pip ---------------------------------------------------------
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      backend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # --- Frontend: npm (pnpm-lock.yaml) --------------------------------------
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Мажорные обновления vitest/vite/react требуют ручной проверки
+    # совместимости конфигов (RULES §11.10) — не группируем.
+
+  # --- GitHub Actions -------------------------------------------------------
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Moscow"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+    commit-message:
+      prefix: "ci(deps)"

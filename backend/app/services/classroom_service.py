@@ -73,6 +73,29 @@ class ClassroomService:
         )
         return list(result.scalars().all())
 
+    async def list_for_user_with_counts(
+        self, user: User, skip: int = 0, limit: int = 100
+    ) -> list[tuple[Classroom, int]]:
+        """Классы пользователя вместе с числом участников.
+
+        S19-004: вместо N+1 (`members_count` на каждый класс) — один запрос
+        с `GROUP BY`: число участников считается на стороне БД.
+        """
+        member_count = func.count(ClassroomMember.id)
+        user_classrooms = select(ClassroomMember.classroom_id).where(
+            ClassroomMember.user_id == user.id
+        )
+        result = await self.db.execute(
+            select(Classroom, member_count)
+            .join(ClassroomMember, ClassroomMember.classroom_id == Classroom.id)
+            .where(Classroom.id.in_(user_classrooms))
+            .group_by(Classroom.id)
+            .order_by(Classroom.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return [(row[0], int(row[1])) for row in result.all()]
+
     async def members_count(self, classroom_id: UUID) -> int:
         result = await self.db.execute(
             select(func.count())
@@ -216,7 +239,11 @@ class ClassroomService:
     async def list_assignments(
         self, classroom_id: UUID, user: User
     ) -> list[AssignmentItemData]:
-        """Назначения класса со счётчиками выполнения"""
+        """Назначения класса со счётчиками выполнения.
+
+        S19-004: счётчики «выполнили» считаются одним агрегирующим запросом
+        по всем назначениям, а не отдельным запросом на каждое.
+        """
         await self.get_for_user(classroom_id, user)
         members = await self.get_members(classroom_id)
         student_ids = [
@@ -232,29 +259,33 @@ class ClassroomService:
             .where(Assignment.classroom_id == classroom_id)
             .order_by(Assignment.created_at.desc())
         )
-        items: list[AssignmentItemData] = []
-        for assignment, task in result.all():
-            completed = 0
-            if student_ids:
-                completed_result = await self.db.execute(
-                    select(func.count())
-                    .select_from(UserTaskProgress)
-                    .where(
-                        UserTaskProgress.task_id == task.id,
-                        UserTaskProgress.user_id.in_(student_ids),
-                        UserTaskProgress.status == TaskStatus.COMPLETED,
-                    )
+        rows = result.all()
+        completed_by_task: dict[UUID, int] = {}
+        if student_ids and rows:
+            counts = await self.db.execute(
+                select(UserTaskProgress.task_id, func.count())
+                .where(
+                    UserTaskProgress.task_id.in_(
+                        [assignment.task_id for assignment, _ in rows]
+                    ),
+                    UserTaskProgress.user_id.in_(student_ids),
+                    UserTaskProgress.status == TaskStatus.COMPLETED,
                 )
-                completed = int(completed_result.scalar_one())
-            items.append(
-                AssignmentItemData(
-                    assignment=assignment,
-                    task=task,
-                    completed_count=completed,
-                    total_members=total_members,
-                )
+                .group_by(UserTaskProgress.task_id)
             )
-        return items
+            completed_by_task = {
+                task_id: int(count) for task_id, count in counts.all()
+            }
+
+        return [
+            AssignmentItemData(
+                assignment=assignment,
+                task=task,
+                completed_count=completed_by_task.get(task.id, 0),
+                total_members=total_members,
+            )
+            for assignment, task in rows
+        ]
 
     async def my_assignments(self, user: User) -> list[MyAssignmentData]:
         """Задания пользователя по всем его классам"""

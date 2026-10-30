@@ -24,7 +24,7 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "AI Teacher for Python"
-    version: str = "0.1.0"
+    version: str = "0.2.0"
     debug: bool = False
     # NoDecode: значение приходит строкой и режется нашим валидатором (CSV или JSON)
     allowed_origins: Annotated[list[str], NoDecode] = [
@@ -114,6 +114,24 @@ class Settings(BaseSettings):
     # Rate limiting (S11-003)
     #: В тестах отключается, чтобы лимиты не влияли на прогон
     rate_limit_enabled: bool = True
+
+    # Redis-кэш справочных данных (S19-003)
+    #: В тестах отключается, чтобы не ходить в реальный Redis
+    cache_enabled: bool = True
+    #: Время жизни записей кэша, секунд
+    cache_ttl_seconds: int = 60
+
+    # RAG-lite: семантический поиск по истории чата (S19-005)
+    #: Семантический поиск включается только явно: без эмбеддингов работает ILIKE
+    rag_enabled: bool = False
+    #: Сколько сообщений возвращать по умолчанию
+    rag_top_k: int = 5
+    #: Размерность эмбеддингов; должна совпадать с колонкой chat_messages.embedding
+    rag_embedding_dim: int = 1536
+    #: Модель эмбеддингов на OpenAI-совместимом endpoint (LM Studio)
+    rag_embedding_model: str = "local-embedding-model"
+    #: Таймаут запроса эмбеддинга, секунд
+    rag_embedding_timeout: float = 5.0
 
 
 # Глобальный экземпляр настроек

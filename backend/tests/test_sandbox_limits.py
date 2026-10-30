@@ -58,6 +58,12 @@ ATTACKS = [
     ("globals()", "SecurityError"),
     ("(1).__class__", "SecurityError"),
     ("[].__class__.__bases__", "SecurityError"),
+    # RP 8.x: обходы через format-механизм (GHSA-hp3v-5vw7-fx9w,
+    # GHSA-ffg3-p8fm-mjx2). str.format/format_map/string.Formatter
+    # блокируются целиком, f-строка с dunder — на статическом анализе.
+    ("x = 1\nprint(f'{x.__class__}')", "SecurityError"),
+    ("print('{0}'.format_map({'0': 1}))", "RestrictedFeatureError"),
+    ("import string\nprint(string.Formatter)", "RestrictedFeatureError"),
 ]
 
 

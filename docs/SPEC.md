@@ -4,7 +4,7 @@
 приёмки. Архитектурные обоснования — в [../Design.md](../Design.md) и
 [ARCHITECTURE.md](ARCHITECTURE.md); правила разработки — [RULES.md](RULES.md).
 
-**Версия:** v0.1.0 · **Обновлено:** 2026-10-29
+**Версия:** v0.2.0 «Classroom» · **Обновлено:** 2026-10-30
 
 ---
 
@@ -24,6 +24,13 @@
 Вне области v0.1.0: мобильное приложение, восстановление пароля, оплата,
 мультиарендность.
 
+**v0.2.0 «Classroom»** добавляет: классы и назначения (S16), достижения,
+дашборд и уведомления (S17), UX/тёмную тему/a11y (S18), Redis-кэш,
+оптимизацию запросов и поиск по истории чата (S19), аудит зависимостей,
+security-заголовки, бэкапы и релизную документацию (S20). Вне области
+v0.2.0: backfill эмбеддингов для «старых» сообщений и порог релевантности
+RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) §5.
+
 ---
 
 ## 2. Роли и права
@@ -38,6 +45,9 @@
 | Аналитика | ❌ | ❌ | ✅ |
 
 Регистрация всегда создаёт `student` (KI-011). Роль выдаёт только администратор.
+
+Матрица «эндпоинт × роль» и IDOR-проверки — §6.4 (S20-003). Правило
+неизменно: свои сущности — 200, чужие — 403, несуществующие — 404.
 
 ---
 
@@ -81,6 +91,10 @@
 | GET | `/chat/sessions/{id}` | — | `ChatSessionWithMessages` |
 | DELETE | `/chat/sessions/{id}` | — | 204 |
 | POST | `/chat/sessions/{id}/messages` | `{content}` | 201 `{user_message, assistant_message}` |
+| GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
+
+`GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
+меняется. Поиск по истории — только свои сообщения (см. ниже).
 
 WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
 
@@ -102,6 +116,32 @@ metadata, warnings}`.
 Права: своя сессия — 200; чужая — 403; несуществующая — 404.
 Недоступность LLM: 503 `{detail}` (S12-002).
 
+**Поиск по истории чата (S19-005).**
+
+```
+GET /api/v1/chat/search?q=<строка>&limit=<1..50>
+
+q      — обязательный, 1..200 символов (после trim пустой → 422)
+limit  — опциональный; по умолчанию RAG_TOP_K (5), максимум 50
+
+200 → {query, mode: "semantic" | "ilike",
+       items: [{id, session_id, role, content, created_at, score}],
+       total}
+```
+
+- Изоляция: в выдачу попадают **только сообщения из сессий текущего
+  пользователя** (фильтр `chat_sessions.user_id` в репозитории); чужие — не
+  попадают никогда.
+- `mode="semantic"` — если `RAG_ENABLED=true`, провайдер эмбеддингов доступен
+  и в БД есть векторы; `score = 1 − косинусное расстояние`.
+- `mode="ilike"` — всегда доступный fallback: подстрока без учёта регистра.
+  Используется при выключенном RAG, недоступном/упавшем провайдере,
+  несовпадении размерности эмбеддинга и при пустой семантической выдаче.
+- Ошибки: 403 — нет заголовка `Authorization` (так ведёт себя FastAPI
+  `HTTPBearer`); 401 — невалидный/просроченный токен; 422 — пустой/слишком
+  длинный `q`, `limit` вне диапазона; 500 не возникает при сбое эмбеддингов
+  (fail-open → ILIKE).
+
 ### 3.4 Код
 
 | Метод | Путь | Тело | Ответ |
@@ -119,6 +159,15 @@ violations, memory_limit_enforced, output_truncated}`.
 `memory_limit_enforced=false` — ОС не дала поставить лимит памяти (тогда
 действует таймаут); `output_truncated=true` — вывод обрезан по
 `EXECUTOR_MAX_OUTPUT`. Перегрузка песочницы → 503.
+
+`error_type` в `ExecutionResult`: `SecurityError` (AST/рантайм-политика),
+`SyntaxError`, `TimeoutError`, `SandboxError`, имя исключения Python или
+`RestrictedFeatureError` — новый тип для ограничений RestrictedPython 8.5
+(S20-001b). RP 8.x полностью блокирует `str.format`, `str.format_map` и
+`string.Formatter` (через них обходили песочницу); вместо сырого
+`NotImplementedError` возвращается подсказка: «используйте f-строки
+(`f"{x}"`) или оператор `%`». F-строки и `%` работают, dunder-доступ в них
+по-прежнему запрещён. Контракт выполнения остальных полей не изменился.
 
 ### 3.5 Задачи
 
@@ -145,6 +194,19 @@ violations, memory_limit_enforced, output_truncated}`.
 
 `SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message}`.
 
+Пагинация каталога (S19-004) — additive: `skip` (default `0`), `limit`
+(default `100`); клиенты без параметров получают прежний ответ. Кэш списка
+(S19-003): ключ включает пользователя (в ответе его прогресс) и все фильтры,
+TTL 60 с; инвалидация — при создании/правке/удалении/деактивации задачи,
+импорте, откате версии и seed. После `POST /tasks/{id}/submit` статус в
+каталоге может обновиться с задержкой ≤ TTL (инвалидация на submit не
+делается).
+
+`GET /tasks/{id}/hints/{index}` требует аутентификации (S20-003): раньше
+эндпоинт был анонимным, теперь без заголовка — 403 (HTTPBearer), с невалидным
+токеном — 401, как и остальные роуты `/tasks`; поведение для
+неактивной/несуществующей задачи не изменилось.
+
 ### 3.6 Админка
 
 | Метод | Путь | Параметры | Ответ |
@@ -153,12 +215,16 @@ violations, memory_limit_enforced, output_truncated}`.
 | PATCH | `/admin/users/{id}` | `{role?, level?}` | `AdminUserItem` |
 | DELETE | `/admin/users/{id}` | — | `{deleted: true}` |
 | GET | `/admin/tasks` | `skip`, `limit` | `{total, items[]}` |
-| GET | `/admin/analytics` | — | `{users, tasks, learning, activity, llm, generated_at}` |
+| GET | `/admin/analytics` | — | `{users, tasks, learning, activity, llm, cache, generated_at}` |
 
 `llm`: `{last_hour, last_24h, fallback_used, recorded_at}`; каждое окно —
 `{window_hours, requests, errors, avg_latency_ms, p95_latency_ms,
 avg_first_token_ms, prompt_tokens, completion_tokens, total_tokens,
 by_provider}` (S12-003, метрики в памяти процесса).
+
+`cache` (S19-003): `{enabled, hits, misses, hit_rate, sets, invalidations,
+errors}`. Метрики — в памяти процесса: при нескольких воркерах каждый
+показывает счётчики только своего процесса (как и `llm`).
 
 Ограничения: 400 — понижение/удаление себя; 403 — не админ; 404 — нет пользователя.
 
@@ -166,7 +232,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 
 | Метод | Путь | Параметры | Ответ |
 |-------|------|-----------|-------|
-| GET | `/teacher/tasks` | — | `{total, items[]}` (включая неактивные) |
+| GET | `/teacher/tasks` | `skip`, `limit` | `{total, items[]}` (включая неактивные; `total` — по всей таблице) |
 | GET | `/teacher/tasks/{id}` | — | `TaskAdminDetail` |
 | GET | `/teacher/students` | `search?`, `skip`, `limit` | `{total, items[]}` (агрегаты) |
 | GET | `/teacher/students/{id}/progress` | — | `{student, total_tasks, completed, in_progress, completion_rate, items[]}` |
@@ -179,7 +245,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 | Метод | Путь | Параметры | Ответ |
 |-------|------|-----------|-------|
 | POST | `/classrooms` | `{name}` | 201 `Classroom` (teacher/admin) |
-| GET | `/classrooms` | — | `{items[]}` — свои классы |
+| GET | `/classrooms` | `skip`, `limit` | `{items[]}` — свои классы (S19-004) |
 | GET | `/classrooms/{id}` | — | `ClassroomDetail` (с участниками) |
 | POST | `/classrooms/join` | `{join_code}` | `Classroom` |
 | POST | `/classrooms/{id}/join` | `{join_code}` | `Classroom` (проверяет id) |
@@ -197,7 +263,7 @@ by_provider}` (S12-003, метрики в памяти процесса).
 |-------|------|-----------|-------|
 | GET | `/me/achievements` | — | `{items[]}` — полученные достижения |
 | GET | `/me/stats` | — | `{solved, attempts, avg_attempts, streak_days, achievements_count, chat_sessions, chat_messages}` |
-| GET | `/me/notifications` | `unread_only?` | `{items[], unread}`; создаёт напоминания о дедлайнах |
+| GET | `/me/notifications` | `unread_only?`, `skip`, `limit` | `{items[], unread}`; создаёт напоминания о дедлайнах |
 | POST | `/me/notifications/{id}/read` | — | `NotificationItem`; чужое — 404 |
 
 Типы уведомлений: `assignment`, `deadline`, `achievement`.
@@ -210,9 +276,63 @@ by_provider}` (S12-003, метрики в памяти процесса).
 `status ∈ {ok, degraded, not_configured}` (S12-001). Проверка кэшируется на
 60 секунд, ключ не раскрывается.
 
+### 3.11. Кэш, поиск и пагинация (S19)
+
+**Redis-кэш справочников (S19-003),** слой `app/services/cache.py`:
+
+| Ключ | Что кэшируется | TTL |
+|------|----------------|-----|
+| `cache:chat:levels` | `GET /chat/levels` — статический справочник | 60 с |
+| `cache:tasks:categories` | `GET /tasks/categories` | 60 с |
+| `cache:tasks:list:<user>:<фильтры>` | `GET /tasks` — список с прогрессом пользователя; в ключе `user_id`, `difficulty`, `category`, `tag`, `q`, `skip`, `limit` | 60 с |
+
+- **Инвалидация:** любая мутация задач (создание, правка, удаление/деактивация,
+  импорт, откат версии, seed) удаляет namespace `cache:tasks:*` через SCAN+DEL.
+  `chat:levels` статический — не инвалидируется.
+- **Fail-open:** Redis недоступен → запрос обслуживается без кэша (200);
+  после сбоя кэш «остывает» 10 с (`CACHE_COOLDOWN_SECONDS`), чтобы не платить
+  таймаутом на каждом запросе. Ошибки логируются (`cache_get_failed` и т.п.),
+  наружу не пробрасываются.
+- **Метрики:** hits/misses/sets/invalidations/errors — в памяти процесса,
+  отдаются в секции `cache` (см. §3.6).
+- **Флаг:** `CACHE_ENABLED` (default `true`); в автотестах выключен autouse-
+  фикстурой, тесты кэша используют in-memory FakeRedis.
+
+**Пагинация (S19-004).** Новые параметры аддитивны; дефолты сохраняют прежнее
+поведение:
+
+| Эндпоинт | Параметры | Примечание |
+|----------|-----------|------------|
+| `GET /tasks` | `skip=0`, `limit=100` | кэшируется вместе с фильтрами |
+| `GET /classrooms` | `skip=0`, `limit=100` | `members_count` — одним агрегатом |
+| `GET /me/notifications` | `skip=0`, `limit=100` (1..200) | `unread` — по всей выборке |
+| `GET /teacher/tasks` | `skip=0`, `limit=100` | `total` — по всей таблице, а не по странице |
+| `GET /teacher/students` | `search?`, `skip=0`, `limit=100` | без изменений |
+| `GET /chat/search` | `limit` (1..50, default `RAG_TOP_K`) | см. §3.3 |
+
+**Ручные N+1-исправления (S19-004):** `GET /classrooms` (один
+`JOIN … GROUP BY` вместо count на класс), `GET /classrooms/{id}/assignments`
+(один `GROUP BY task_id`), `GET /classrooms/{id}` (без лишнего
+`selectinload`). Индексы — миграции 0009/0010 (§4).
+
+### 3.12. Флаги конфигурации, влияющие на контракты (S19–S20)
+
+| Переменная | Default | Влияние на API/поведение |
+|------------|---------|--------------------------|
+| `CACHE_ENABLED` | `true` | выключает Redis-кэш целиком (ответы те же, без кэша) |
+| `CACHE_TTL_SECONDS` | `60` | TTL записей кэша; задержка обновления каталога ≤ TTL |
+| `RAG_ENABLED` | `false` | `true` включает семантический режим `/chat/search`; иначе ILIKE |
+| `RAG_TOP_K` | `5` | `limit` по умолчанию у `/chat/search` |
+| `RAG_EMBEDDING_DIM` | `1536` | должна совпадать с `chat_messages.embedding`; иначе → ILIKE |
+| `RAG_EMBEDDING_MODEL` | `local-embedding-model` | модель на OpenAI-совместимом endpoint (LM Studio) |
+| `RAG_EMBEDDING_TIMEOUT` | `5.0` с | таймаут запроса эмбеддинга |
+| `LM_STUDIO_URL` | `http://127.0.0.1:8034/v1` | base URL провайдера эмбеддингов |
+| `ALLOWED_ORIGINS` | `localhost:3000`/`127.0.0.1:3000` | CORS; в prod-compose задаётся ENV, не `*` |
+| `EXECUTOR_*` | см. §5 | лимиты песочницы; `.format()` заблокирован независимо от настроек |
+
 ---
 
-## 4. Схема БД (миграции 001–008)
+## 4. Схема БД (миграции 001–010)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
@@ -224,6 +344,8 @@ chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
               metadata JSONB, embedding VECTOR(1536), created_at)
    role ∈ {user, assistant, system}
    metadata: {provider, model, prompt_version, warnings?}
+   embedding — nullable: заполняется best-effort при сохранении, только если
+   RAG_ENABLED=true и провайдер доступен; HNSW-индекс `vector_cosine_ops`
 
 code_executions(id, user_id→users, code, output, error, success, execution_time,
                 created_at)
@@ -263,6 +385,20 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 `classroom_members(user_id)`, `assignments(classroom_id)`,
 `user_achievements(user_id)`, `notifications(user_id, read_at)`.
 
+**Миграции 0009/0010 (S19-004/005), только аддитивные:**
+
+- `20261030_0009_query_indexes`: `tasks(is_active, created_at)`,
+  `users(role, last_active)`, `notifications(user_id, created_at)`,
+  `assignments(due_at)`, `chat_messages(session_id, created_at)`; дубли
+  существующих индексов не создаются.
+- `20261030_0010_chat_embedding_index`: HNSW-индекс
+  `idx_chat_messages_embedding_hnsw` (`vector_cosine_ops`) +
+  `ADD COLUMN IF NOT EXISTS embedding` (страховка; колонка есть с 001).
+  В `downgrade` индекс удаляется, колонка и расширение `vector` остаются.
+- Проверка: `alembic upgrade head`, `alembic check` (нет расхождений),
+  цикл `downgrade base → upgrade head`, одна голова — `20261030_0010`.
+- EXPLAIN-обоснование индексов — [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) §3.
+
 ---
 
 ## 5. Песочница: политика
@@ -279,10 +415,107 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 | Вывод | `EXECUTOR_MAX_OUTPUT` (100 000 символов), обрезка с пометкой |
 | Размер кода | ≤ 20 000 символов |
 | `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |
+| Форматирование строк | `str.format`/`format_map`, `string.Formatter` **запрещены** (RestrictedPython 8.5); f-строки и `%` работают → `error_type=RestrictedFeatureError` |
+
+Реализация — RestrictedPython **8.5** (S20-001b): закрыты 3 high-обхода
+песочницы (`try/except*`, shadowing guard-хуков, `string.Formatter`).
+Ограничение `.format()` — осознанная плата за безопасность, зафиксировано в
+KI-018; подсказка ученику возвращается в `error`.
 
 ---
 
-## 6. Статусы и переходы
+## 6. Безопасность, эксплуатация и бэкапы (S20)
+
+### 6.1. Заголовки безопасности nginx (S20-002)
+
+Задаются на уровне `server` в `frontend/nginx.conf` (наследуются во все
+`location`, где нет собственных `add_header`):
+
+| Заголовок | Значение |
+|-----------|----------|
+| `Content-Security-Policy` | `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; frame-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; child-src 'self' blob:; manifest-src 'self'` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), browsing-topics=()` |
+| `Strict-Transport-Security` | `max-age=31536000` (эффект только по HTTPS) |
+| `server_tokens` | `off` |
+
+- `script-src 'self'` — Vite собирает внешние хэшированные бандлы, inline-
+  скриптов в `dist/index.html` нет; `unsafe-eval` не требуется (проверено
+  Playwright с локальным Monaco).
+- `style-src 'unsafe-inline'` — React/Tailwind и Monaco используют
+  style-атрибуты; `worker-src blob:` — worker'ы Monaco; `connect-src 'self'` —
+  `/api` и WebSocket на том же origin.
+- `index.html` отдаётся с `Cache-Control: no-cache`, SPA-fallback — `try_files`.
+- Проверка: `curl -I http://<host>/` → все заголовки присутствуют.
+
+### 6.2. Секреты, CI и аудит зависимостей (S20-001/002)
+
+- **Секреты:** `.env`/`.env.local` и `backups/` в `.gitignore`; `.gitleaks.toml`
+  (встроенные правила + `deepseek-api-key`, `postgres-password-in-url`,
+  `jwt-secret-assignment`; allowlist — только плейсхолдеры/тестовые значения).
+  Проверка `gitleaks git . --config .gitleaks.toml --redact`: **0 утечек на 42
+  коммитах**; негативный контроль подтвердил, что правила ловят фейковые
+  секреты.
+- **Prod-compose:** `POSTGRES_PASSWORD`/`SECRET_KEY` обязательны (`:?` — без
+  них compose падает), `DEBUG=false`, порты БД/Redis наружу не публикуются,
+  `ALLOWED_ORIGINS` — из ENV (не `*`).
+- **CI job `Security`:** `pip-audit -r backend/requirements.txt --strict
+  --desc` (с временными `--ignore-vuln` для задокументированных остатков),
+  `gitleaks` по всей истории (fetch-depth 0), `pnpm audit --audit-level=high`.
+  Авторитетна проверка в CI/контейнере: на машине разработки PyPI с хоста
+  заблокирован (KI-017), локальный fallback — `backend/scripts/audit_python_deps.py`
+  по GitHub Advisory API (лимит 60 запросов/час, `--resume`/`--offline`).
+- **Dependabot:** `.github/dependabot.yml` — pip (`/backend`), npm (`/frontend`),
+  github-actions; weekly, группы minor/patch.
+- **Итог аудита:** frontend — `0` известных уязвимостей (`pnpm audit`);
+  backend — `0 critical`; остаточные записи (`pip-audit`): **16 записей в 2
+  пакетах** — `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`: 7 ID;
+  high — PYSEC-2026-161/248, остальные medium/low) и dev-only
+  `pytest 8.3.3` (PYSEC-2026-1845). Закрыты: `python-jose` (critical,
+  удалён → PyJWT 2.15.1), `ecdsa`, `python-multipart` 0.0.31,
+  `RestrictedPython` 8.5 (3 high обхода песочницы), frontend vitest 4.1.12.
+  Остатки — принятые риски KI-015/KI-016, неиспользуемые векторы starlette:
+  файлы отдаёт nginx, `StaticFiles`/`FileResponse` в API не используются,
+  тела — JSON, Host/urlencoded-векторы не задействованы. **Формулировка
+  «аудит полностью чистый» некорректна** — корректно: «0 critical, high только
+  в транзитивном starlette с неприменимыми векторами, риск принят и
+  отслеживается».
+
+### 6.3. Бэкап и восстановление (S20-004)
+
+Скрипты в `scripts/` (bash; Windows — Git Bash), работают через
+`docker exec <container> pg_dump` — локальный `pg_dump` не нужен.
+
+| Скрипт | Что делает |
+|--------|------------|
+| `backup.sh` | `pg_dump -Fc` → gzip → `<DB>_<UTC>.dump.gz` + `.sha256`; проверка `pg_restore -l`; retention (`-r`, default 14 дней); проверяет, что контейнер запущен (иначе дамп мог бы уйти в чужую БД — KI-001) |
+| `restore.sh` | восстановление в scratch-БД (по умолчанию), `--create`, `--clean`, `--verify` (счётчики таблиц/строк); guard: рабочую БД (`ai_teacher`) без `--force` не перезаписывает; запрещает `postgres`/`template0`/`template1`; требует подтверждения без `-y` |
+
+ENV: `POSTGRES_CONTAINER`, `POSTGRES_DB`, `POSTGRES_USER`, `BACKUP_DIR`,
+`BACKUP_RETENTION_DAYS`. Коды возврата: `0` — успех, `1` — ошибка, `2` —
+отказ/неверные аргументы. Smoke 2026-10-30: восстановлено **14/14 таблиц**,
+счётчики строк совпали, `alembic_version=010`. Подробно —
+[GETTING_STARTED.md](GETTING_STARTED.md) §8 и
+[DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) §6/§7.
+
+### 6.4. Матрица доступа и IDOR (S20-003)
+
+Проверка «эндпоинт × роль» и IDOR по всем сущностям: отчёт
+`docs/reports/sprint-20/ACCESS_MATRIX.md`, автотест
+`backend/tests/test_access_matrix.py`, исправление: `GET /tasks/{id}/hints/{index}`
+теперь требует аутентификации.
+
+**Результат S20-003:** 35 тестов (17 функций) — все проходят; **IDOR не
+найден**; одна находка F1 (LOW, hints был анонимным) исправлена. Нюанс
+конвенции: отсутствие заголовка `Authorization` → **403** (`HTTPBearer`),
+невалидный/просроченный токен → **401** (одинаково для всех защищённых
+маршрутов).
+
+---
+
+## 7. Статусы и переходы
 
 **Прогресс задачи:**
 
@@ -295,9 +528,13 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 
 **Сессия чата:** создаётся с уровнем (профиля или переданным), живёт до удаления.
 
+**Кэш (S19-003):** каталог задач и справочники живут в кэше до `TTL` (60 с);
+мутация задач инвалидирует namespace сразу, а `submit` — нет (статус в
+каталоге может отставать до TTL). Это осознанное поведение, а не дефект.
+
 ---
 
-## 7. Критерии приёмки v0.1.0
+## 8. Критерии приёмки v0.1.0
 
 - [x] Регистрация/вход/обновление токена; роль всегда `student`
 - [x] Все защищённые эндпоинты возвращают 401/403 без прав
@@ -313,8 +550,8 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 
 Не входит в приёмку (осознанно): e2e (KI-012), rate limiting в рантайме
 (KI-007), живые ответы LLM (KI-008), память песочницы (KI-009), офлайн-Monaco
-(KI-013). `KI-007` и `KI-012` закрыты в S11; `KI-008`, `KI-009`, `KI-013`
-остаются.
+(KI-013). `KI-007` и `KI-012` закрыты в S11; `KI-008`, `KI-009` — в S13,
+`KI-013` — в S19.
 
 ### Дополнение v0.2.0 (спринты 11–14)
 
@@ -333,14 +570,51 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 
 ---
 
-## 8. Совместимость и версии
+### Дополнение v0.2.0 (спринты 19–20)
+
+- [x] Redis-кэш справочников и каталога: hit/miss, инвалидация на CRUD/импорт/
+      seed, fail-open + 10 с cooldown, секция `cache` в `/admin/analytics`
+- [x] Пагинация списков (tasks/classrooms/notifications/teacher), N+1 в классах
+      устранены, `GET /teacher/tasks.total` — по всей таблице
+- [x] Индексы 0009/0010 (EXPLAIN-подтверждение), HNSW `vector_cosine_ops`,
+      `alembic check` чист, одна голова 0010
+- [x] `GET /chat/search`: только свои сообщения, `mode=semantic|ilike`,
+      ILIKE-fallback при выключенном/сбойном RAG
+- [x] Security-заголовки nginx (CSP без `unsafe-eval`), Monaco работает офлайн
+- [x] `python-jose` удалён → PyJWT 2.15.1; `python-multipart` 0.0.31;
+      frontend vitest 4.1.12 (`pnpm audit` — 0)
+- [x] RestrictedPython 8.5 (3 high обхода закрыты); `.format()` заблокирован
+      с понятной подсказкой (`RestrictedFeatureError`)
+- [x] `gitleaks` — 0 утечек на 42 коммитах; CI job `Security`; Dependabot
+- [x] `scripts/backup.sh`/`restore.sh`; smoke — 14/14 таблиц, retention/guard
+- [x] `GET /tasks/{id}/hints/{index}` требует аутентификации (S20-003)
+- [x] Остаточные риски задокументированы: KI-015 (starlette/fastapi),
+      KI-016 (dev pytest), KI-017 (PyPI с хоста), KI-018 (`.format()`)
+- [x] Автотесты: backend — **341 passed, 1 skipped** (342 collected); frontend
+      80 unit + 12 e2e (**12/12 green**); ruff/mypy/typecheck/lint — 0
+- [x] Документация v0.2.0: SPEC, CHANGELOG, RELEASES, KNOWN_ISSUES, RULES,
+      MANUAL_TESTING_GUIDE, README; отчёты sprint-19/sprint-20
+- [x] Нагрузочный профиль S19-006 зафиксирован: `health` 50 RPS p95 6.3 мс,
+      каталог 20 RPS p95 25.4 мс; 5 RPS `submit` **не достигнуты** (факт
+      2.5 RPS, p95 2219.7 мс при бюджете 2000 мс, knee ≈2 RPS) — ограничение
+      песочницы, **KI-022**, рекомендации в `reports/sprint-19/LOAD_TEST.md` §5
+- [x] Матрица доступа S20-003: **35 тестов**, IDOR не найден; находка F1
+      (LOW, hints без auth) исправлена; отчёт `reports/sprint-20/ACCESS_MATRIX.md`
+- [ ] Финальные проверки и тег `v0.2.0` (S20-006, за релиз-инженером)
+
+---
+
+## 9. Совместимость и версии
 
 | Компонент | Версия |
 |-----------|--------|
 | Python | 3.12 (проверено также на 3.11) |
 | FastAPI / Pydantic | 0.115 / 2.10 |
-| PostgreSQL + pgvector | 17 / образ `pgvector/pgvector:pg17` |
+| Аутентификация | PyJWT 2.15.1, python-multipart 0.0.31 (python-jose удалён) |
+| Песочница | RestrictedPython 8.5 |
+| PostgreSQL + pgvector | 17 / образ `pgvector/pgvector:pg17` (pgvector 0.8.7) |
 | Redis | 7 |
 | Node.js / pnpm | 22 / 12 |
 | React / Vite / TypeScript | 19 / 6 / 5.8 |
+| Vitest / coverage | 4.1.12 |
 | API | v1 (`/api/v1`), обратная совместимость внутри major |

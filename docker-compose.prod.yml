@@ -49,6 +49,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      # CORS из ENV, не '*': в prod frontend и API на одном origin (nginx
+      # проксирует /api), поэтому CORS нужен только для внешних клиентов.
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}

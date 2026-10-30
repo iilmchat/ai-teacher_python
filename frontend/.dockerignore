@@ -1,0 +1,9 @@
+# Контекст сборки frontend-образа (S20-006): node_modules/dist/локальные
+# ассеты Monaco генерируются внутри образа, в контексте они не нужны.
+node_modules/
+dist/
+public/monaco/
+playwright-report/
+test-results/
+coverage/
+*.log

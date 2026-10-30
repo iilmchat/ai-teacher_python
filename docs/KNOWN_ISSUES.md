@@ -3,8 +3,8 @@
 > Этот документ содержит список всех известных проблем, ограничений и блокеров.
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
-**Последнее обновление:** 2026-10-29 (спринт 15 / 19)  
-**Всего проблем:** 14 (активных: 1, закрытых: 13)
+**Последнее обновление:** 2026-10-30 (спринт 20 / релиз v0.2.0)  
+**Всего проблем:** 22 (активных: 6, закрытых: 16)
 
 ---
 
@@ -21,7 +21,9 @@ Workaround: временное решение (если есть)
 Обновлено: дата
 ```
 
-**Статусы:** `Open`, `In Progress`, `Blocked`, `Resolved`, `Closed`
+**Статусы:** `Open`, `In Progress`, `Blocked`, `Resolved`, `Closed`  
+**Accepted** — риск/ограничение принято осознанно и отслеживается: не блокирует
+релиз, план — в рамках планового апгрейда или пересмотра решения.
 
 **Severity:** `Critical`, `High`, `Med`, `Low`
 
@@ -44,11 +46,179 @@ spending limit needs to be increased». Код, workflow и локальные �
 **План закрытия:** проверить GitHub → Settings → Billing & plans, пополнить
 или поднять лимит Actions, затем перезапустить CI (`gh run rerun <id>`).
 
-**Создано:** 2026-10-29 · **Обновлено:** 2026-10-29 (спринт 12)
+**Обновлено 2026-10-30 (спринт 20):** добавлен job `Security` (pip-audit,
+gitleaks, pnpm audit), но на GitHub он не запускался — причина прежняя
+(биллинг Actions). Гейты v0.2.0 выполняются локально (ruff, mypy, pytest,
+pnpm, Docker); непройденным остаётся именно CI на GitHub — в отчёте это
+фиксируется как «CI не стартовал», а не «CI зелёный».
+
+**Создано:** 2026-10-29 · **Обновлено:** 2026-10-30 (спринт 20)
+
+---
+
+### KI-015 · Accepted · High · deps: fastapi/starlette · отложенный апгрейд starlette 0.41.3
+
+**Описание:** `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) содержит
+7 ID: high — PYSEC-2026-161, PYSEC-2026-248; medium/low — PYSEC-2026-1941,
+1942, 2280, 2281, 249. Апгрейд до исправленной версии требует мажорного
+`starlette` (≥1.3.1) и координированного апгрейда `fastapi` с полным
+прогоном тестов — в спринте 20 это за рамками бюджета и рискованно перед
+релизом.
+
+**Почему риск принят (векторы не применимы):** файлы статики отдаёт nginx
+(`StaticFiles`/`FileResponse` в API не используются), тела запросов — JSON
+(не urlencoded-формы), `HTTPEndpoint` не используется, решения аутентификации
+не зависят от `request.url`/Host (валидация — за nginx). `pip-audit` в CI
+игнорирует эти 7 ID до апгрейда, чтобы job ловил новые уязвимости.
+
+**Workaround:** Dependabot откроет PR на starlette; мажор проверять вручную —
+в рамках v0.3.0 (координированный апгрейд fastapi+starlette, полный прогон
+`test_access_matrix`, API, WS и e2e).
+
+**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
+
+---
+
+### KI-016 · Accepted · Low · dev-deps · pytest 8.3.3 (dev-only advisory)
+
+**Описание:** `pytest 8.3.3` — PYSEC-2026-1845 (moderate, UNIX tmpdir).
+Зависимость только для разработки/CI, в runtime-образ не попадает; на
+Windows-машине разработки вектор не воспроизводится. Фикс — мажорный
+`pytest 9.x` вместе с dev-апгрейдом.
+
+**Workaround:** CI `pip-audit` игнорирует 1 ID (PYSEC-2026-1845); апгрейд —
+в плановом dev-обновлении.
+
+**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
+
+---
+
+### KI-017 · Open · Low · окружение/инструменты · PyPI недоступен с хоста
+
+**Описание:** на машине разработки `pypi.org`/`files.pythonhosted.org`
+заблокированы (connection reset/timeout): `pip install`/`pip-audit` с хоста
+не работают, часть апгрейдов пришлось ставить вручную через Docker-wheelhouse.
+Docker-контейнеры PyPI видят, npm registry и `api.github.com` доступны.
+
+**Workaround:** аудит backend выполняется в контейнере (`python:3.12-slim`) —
+это же путь CI; для локальной разработки — `backend/scripts/audit_python_deps.py`
+по GitHub Advisory API (лимит 60 запросов/час, кэш, `--resume`, `--offline`,
+exit 2 при неполном прогоне). Закрепление версий — `requirements.txt` +
+Dependabot; авторитетный результат — CI `Security`.
+
+**План закрытия:** восстановление доступа к PyPI на рабочей машине
+(прокси/сеть) либо переход на локальное зеркало; до этого — процесс выше.
+
+**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
+
+---
+
+### KI-018 · Accepted · Low · core/executor · `.format()` запрещён после RestrictedPython 8.5
+
+**Описание:** RestrictedPython 8.5 закрывает обходы песочницы
+(GHSA-hp3v-5vw7-fx9w и GHSA-ffg3-p8fm-mjx2) ценой полного запрета
+`str.format`, `str.format_map` и `string.Formatter` — иначе field-resolution
+снова даёт доступ к атрибутам. Для ученика это user-visible ограничение:
+`"{x}".format(x=1)` теперь возвращает ошибку.
+
+**Решение/политика:** f-строки (`f"{x}"`) и оператор `%` работают и
+рекомендованы в подсказке; dunder-доступ внутри f-строк по-прежнему
+заблокирован (`SecurityError`). Вместо сырого `NotImplementedError`
+возвращается `error_type=RestrictedFeatureError` с русской подсказкой.
+Задокументировано в USER_GUIDE, SPEC §5, RULES §11.8/§11.19; покрыто
+тестами (`test_executor.py`, `test_sandbox_limits.py`).
+
+**План пересмотра:** если RestrictedPython добавит безопасный форматтер —
+пересмотреть; до этого ограничение принято (безопасность важнее удобства).
+
+**Создано:** 2026-10-30 (S20-001b) · **Обновлено:** 2026-10-30
+
+---
+
+### KI-022 · Accepted · Med · performance/песочница · предел throughput submit (~2 RPS)
+
+**Описание:** нагрузочный тест S19-006 (S19-006,
+[LOAD_TEST.md](reports/sprint-19/LOAD_TEST.md)): `health` держит 50 RPS
+(p95 6.3 мс), каталог — 20 RPS (p95 25.4 мс), а `submit` целевые 5 RPS не
+достигает: факт 2.5 RPS, p50 1964 мс / p95 2219.7 мс при бюджете 2000 мс;
+деградация на 3 RPS (p95 2387 мс). Точка насыщения ≈2 RPS, максимум
+≈2.2–2.5 submit/s.
+
+**Причина:** песочница, а не БД/HTTP. Один `submit` — 3 тест-кейса, каждый в
+отдельном дочернем интерпретаторе Python (~0.5–0.6 с на кейс); при
+`EXECUTOR_MAX_CONCURRENCY=4` это ≈7 exec/s ≈ 2.3 submit/s (сходится с
+измерением). При `DEBUG=true` SQLAlchemy `echo` пишет каждый запрос и цифры
+хуже — артефакт логирования, нагрузку запускать только с `DEBUG=false`.
+
+**Почему принято в v0.2.0:** профиль зафиксирован и воспроизводим; 5 RPS
+submit не входит в DoD релиза; деградация ограничена сценарием `submit`,
+health/каталог имеют запас 47×/12×. Рекомендации — в отчёте LOAD_TEST §5.
+
+**План:** v0.3.0 — прогонять все кейсы в одном дочернем процессе или пул
+«тёплых» интерпретаторов; поднять `EXECUTOR_MAX_CONCURRENCY` (процессы
+CPU-bound — рост до загрузки ядер); если 5 RPS submit — продуктовое
+требование, защищать latency очередью с явным 429/503 и SLO, а не накоплением
+очереди. Для CI — smoke ниже knee (submit 1–2 RPS, health 50, tasks 20).
+
+**Создано:** 2026-10-30 (S19-006) · **Обновлено:** 2026-10-30
 
 ---
 
 ## Закрытые проблемы
+
+### KI-019 · Resolved · Critical · deps/security · python-jose и PyJWT 2.10.0
+
+**Описание:** аудит backend (`pip-audit`, Docker/CI-путь) показал 66 записей
+уязвимостей в 7 пакетах, в т.ч. critical в `python-jose 3.3.0`
+(GHSA-6c5p-j8vq-pqhj, GHSA-3qf3-8w2g-rqmx — algorithm confusion) и 24 записи
+в `PyJWT 2.10.0`; `python-multipart 0.0.17` — 14 записей.
+
+**Решение (S20-001):** `python-jose` удалён вместе с транзитивными `ecdsa`/
+`rsa`; JWT-код (`app/core/security.py`) переведён на **PyJWT 2.15.1**
+(все известные GHSA закрыты в 2.14.0/2.15.0), `python-multipart` →
+**0.0.31**. Проверки: `pip-audit` — 0 находок по этим пакетам; функциональный
+smoke JWT (access/refresh round-trip, expired/forged → None), Form-разбор,
+`docker build` — успешно. В отчёте аудита остались 16 записей в 2 пакетах
+(starlette, dev pytest) — см. KI-015/KI-016.
+
+**Создано:** 2026-10-30 · **Закрыто:** 2026-10-30 (спринт 20, S20-001)
+
+---
+
+### KI-020 · Resolved · Critical · frontend dev-deps · vitest/tinypool
+
+**Описание:** `pnpm audit` — 5 уязвимостей в dev-зависимостях тестового
+toolchain: 2 critical (`tinypool` GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr)
+и 3 moderate (`vitest`/`@vitest/mocker`); в production-бандл не попадают.
+
+**Решение (S20-001):** `vitest` и `@vitest/coverage-v8` 3.2.7 → **4.1.12**
+(`tinypool` ≥2.1.2); конфиги менять не потребовалось; `vitest-axe`
+совместим. Проверки: typecheck/lint/test **80/80**/build — зелёные,
+`pnpm audit` — **No known vulnerabilities found**.
+
+**Создано:** 2026-10-30 · **Закрыто:** 2026-10-30 (спринт 20, S20-001)
+
+---
+
+### KI-021 · Resolved · High · песочница · RestrictedPython 7.4 (3 обхода)
+
+**Описание:** `restrictedpython 7.4` — 3 high-обхода песочницы:
+GHSA-gmj9-h825-chq2 (`try/except*` type confusion, fix 8.0),
+GHSA-ffg3-p8fm-mjx2 (shadowing guard-хуков, fix 8.3),
+GHSA-hp3v-5vw7-fx9w (`string.Formatter` field resolution, fix 8.4).
+
+**Решение (S20-001b):** апгрейд **7.4 → 8.5** (wheel получен через Docker,
+т.к. PyPI с хоста заблокирован — KI-017). В `executor.py` добавлена
+friendly-обработка новых запретов (`RestrictedFeatureError` + подсказка
+f-строки/`%`); тесты: `test_executor.py` +2, `test_sandbox_limits.py` +3
+(атаки `format`/`format_map`/`string.Formatter`, dunder в f-строке);
+focused-прогон executor/sandbox — 39 passed, sandbox/executor/runner/
+code-api/concurrency — 55 passed. Из CI `pip-audit --ignore-vuln` убраны
+PYSEC-2026-1874/3917/4161. Побочный эффект — KI-018.
+
+**Создано:** 2026-10-30 · **Закрыто:** 2026-10-30 (спринт 20, S20-001b)
+
+---
 
 ### KI-008 · Resolved · Med · services/llm, QA · нет проверки реальных ответов LLM
 
@@ -114,7 +284,7 @@ AMD-ассеты `min/vs` копируются в `public/monaco/vs` перед 
 с локального origin. `pnpm test:offline` проверяет, что в бандле и `index.html`
 нет CDN-ссылок. Спринт 19, S19-001.
 
-**Создано:** 2026-10-29 · **Закрыто:** 2026-10-29 (спринт 19, частично)
+**Создано:** 2026-10-29 · **Закрыто:** 2026-10-29 (спринт 19, S19-001)
 
 ---
 

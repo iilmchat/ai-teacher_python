@@ -77,6 +77,37 @@ async def test_forbidden_dunder_access(executor: SandboxedExecutor) -> None:
     assert result.error_type == "SecurityError"
 
 
+async def test_fstring_formatting_works(executor: SandboxedExecutor) -> None:
+    """f-строки — безопасная замена .format() в RP 8.x"""
+    result = await executor.execute("x = 5\nprint(f'x = {x:>3}')")
+
+    assert result.success is True
+    assert result.output.strip() == "x =   5"
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        "print('{0.__class__}'.format(1))",
+        "print('{0}'.format(1))",
+        "print('{0}'.format_map({'0': 1}))",
+        "import string\nprint(string.Formatter)",
+    ],
+)
+async def test_str_format_is_blocked_with_hint(
+    executor: SandboxedExecutor, code: str
+) -> None:
+    """RP 8.x блокирует format-методы строки (GHSA-hp3v-5vw7-fx9w)
+
+    Ученику возвращается понятная подсказка вместо `NotImplementedError`.
+    """
+    result = await executor.execute(code)
+
+    assert result.success is False
+    assert result.error_type == "RestrictedFeatureError"
+    assert "f-строки" in (result.error or "")
+
+
 async def test_runtime_error_reported(executor: SandboxedExecutor) -> None:
     """Ошибка времени выполнения возвращается с типом"""
     result = await executor.execute("print(1 / 0)")

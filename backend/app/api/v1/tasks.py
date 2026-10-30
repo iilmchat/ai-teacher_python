@@ -39,6 +39,12 @@ from app.schemas.task import (
     TaskVersionList,
     TestCase,
 )
+from app.services.cache import (
+    cache_get_json,
+    cache_set_json,
+    categories_cache_key,
+    tasks_list_cache_key,
+)
 from app.services.llm import LLMProvider, create_llm_provider
 from app.services.task_generation import generate_tasks
 from app.services.task_import import (
@@ -86,8 +92,21 @@ async def list_tasks(
     skip: int = 0,
     limit: int = 100,
 ) -> list[TaskListItem]:
-    """Каталог задач с фильтрами и статусом прохождения"""
-    return await service.list_tasks(
+    """Каталог задач с фильтрами и статусом прохождения (кэш S19-003)"""
+    cache_key = tasks_list_cache_key(
+        current_user.id,
+        difficulty=difficulty.value if difficulty is not None else None,
+        category=category,
+        tag=tag,
+        search=q,
+        skip=skip,
+        limit=limit,
+    )
+    cached = await cache_get_json(cache_key)
+    if isinstance(cached, list):
+        return [TaskListItem.model_validate(item) for item in cached]
+
+    items = await service.list_tasks(
         current_user,
         difficulty=difficulty,
         category=category,
@@ -96,6 +115,8 @@ async def list_tasks(
         skip=skip,
         limit=limit,
     )
+    await cache_set_json(cache_key, [item.model_dump(mode="json") for item in items])
+    return items
 
 
 @router.get("/progress", response_model=ProgressSummary)
@@ -110,8 +131,15 @@ async def get_progress(
 async def list_categories(
     _: CurrentUser, service: TaskServiceDep
 ) -> CategoriesResponse:
-    """Категории активных задач (S14-004)"""
-    return CategoriesResponse(categories=await service.list_categories())
+    """Категории активных задач (S14-004, кэш S19-003)"""
+    key = categories_cache_key()
+    cached = await cache_get_json(key)
+    if isinstance(cached, dict):
+        return CategoriesResponse.model_validate(cached)
+
+    response = CategoriesResponse(categories=await service.list_categories())
+    await cache_set_json(key, response.model_dump(mode="json"))
+    return response
 
 
 @router.get("/export")
@@ -220,9 +248,13 @@ async def get_task(
 
 @router.get("/{task_id}/hints/{index}", response_model=HintResponse)
 async def get_hint(
-    task_id: UUID, index: int, service: TaskServiceDep
+    task_id: UUID, index: int, _: CurrentUser, service: TaskServiceDep
 ) -> HintResponse:
-    """Подсказка по номеру (с нуля)"""
+    """Подсказка по номеру (с нуля).
+
+    S20-003: подсказки доступны только аутентифицированным пользователям —
+    как и остальные роуты `/tasks` (раньше эндпоинт был анонимным).
+    """
     hint, total = await service.get_hint(task_id, index)
     return HintResponse(index=index, hint=hint, total=total)
 

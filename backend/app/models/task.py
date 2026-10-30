@@ -53,6 +53,8 @@ class Task(Base):
         Index("idx_tasks_difficulty", "difficulty"),
         Index("idx_tasks_category", "category"),
         Index("idx_tasks_tags", "tags", postgresql_using="gin"),
+        # S19-004: каталог фильтрует по is_active и сортирует по created_at
+        Index("idx_tasks_active_created", "is_active", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
