@@ -145,9 +145,16 @@ async def student_progress(
 
 
 @router.get("/tasks", response_model=TeacherTaskList)
-async def list_all_tasks(_: TeacherUser, db: DbSession) -> TeacherTaskList:
-    """Все задачи, включая деактивированные"""
-    tasks = await TaskRepository(db).list_tasks(only_active=False, limit=1000)
+async def list_all_tasks(
+    _: TeacherUser,
+    db: DbSession,
+    skip: int = 0,
+    limit: int = 100,
+) -> TeacherTaskList:
+    """Все задачи, включая деактивированные (пагинация — S19-004)"""
+    repo = TaskRepository(db)
+    tasks = await repo.list_tasks(only_active=False, skip=skip, limit=limit)
+    total = await repo.count_tasks(only_active=False)
     items = [
         TeacherTaskItem(
             id=task.id,
@@ -162,7 +169,7 @@ async def list_all_tasks(_: TeacherUser, db: DbSession) -> TeacherTaskList:
         )
         for task in tasks
     ]
-    return TeacherTaskList(total=len(items), items=items)
+    return TeacherTaskList(total=total, items=items)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskAdminDetail)

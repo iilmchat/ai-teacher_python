@@ -23,6 +23,7 @@ from app.schemas.task import (
     TaskImportPreview,
     TaskImportResponse,
 )
+from app.services.cache import invalidate_tasks_cache
 
 
 class TaskImportFormatError(ValueError):
@@ -141,6 +142,8 @@ async def import_tasks(
         created += 1
 
     await session.commit()
+    if created:
+        await invalidate_tasks_cache()
     return TaskImportResponse(created=created, skipped=skipped, errors=errors)
 
 

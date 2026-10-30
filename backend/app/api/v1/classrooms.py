@@ -71,13 +71,19 @@ async def create_classroom(
 
 @router.get("/classrooms", response_model=ClassroomList)
 async def list_classrooms(
-    current_user: CurrentUser, db: DbSession
+    current_user: CurrentUser,
+    db: DbSession,
+    skip: int = 0,
+    limit: int = 100,
 ) -> ClassroomList:
-    """Классы текущего пользователя"""
+    """Классы текущего пользователя (S19-004: один запрос + пагинация)"""
     service = ClassroomService(db)
+    rows = await service.list_for_user_with_counts(
+        current_user, skip=skip, limit=limit
+    )
     items = [
-        _classroom_response(classroom, await service.members_count(classroom.id))
-        for classroom in await service.list_for_user(current_user)
+        _classroom_response(classroom, members_count)
+        for classroom, members_count in rows
     ]
     return ClassroomList(items=items)
 
@@ -98,9 +104,8 @@ async def get_classroom(
 ) -> ClassroomDetail:
     """Класс с участниками"""
     service = ClassroomService(db)
-    classroom = await service.get_for_user(
-        classroom_id, current_user, with_members=True
-    )
+    # Участники читаются отдельным запросом ниже: selectinload здесь не нужен
+    classroom = await service.get_for_user(classroom_id, current_user)
     member_rows = await service.get_members(classroom_id)
     users = {
         user.id: user

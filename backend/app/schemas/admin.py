@@ -113,6 +113,18 @@ class AnalyticsLLM(BaseModel):
     recorded_at: str
 
 
+class AnalyticsCache(BaseModel):
+    """Метрики Redis-кэша справочников (S19-003)"""
+
+    enabled: bool
+    hits: int
+    misses: int
+    hit_rate: float
+    sets: int
+    invalidations: int
+    errors: int
+
+
 class AnalyticsResponse(BaseModel):
     """Сводка для дашборда"""
 
@@ -121,6 +133,7 @@ class AnalyticsResponse(BaseModel):
     learning: AnalyticsLearning
     activity: AnalyticsActivity
     llm: AnalyticsLLM
+    cache: AnalyticsCache
     generated_at: str
 
 

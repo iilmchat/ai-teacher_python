@@ -52,6 +52,8 @@ class Notification(Base):
     __table_args__ = (
         Index("idx_notifications_user", "user_id"),
         Index("idx_notifications_unread", "user_id", "read_at"),
+        # S19-004: постраничная выдача уведомлений (сортировка по created_at)
+        Index("idx_notifications_user_created", "user_id", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)

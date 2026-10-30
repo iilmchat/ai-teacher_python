@@ -60,6 +60,14 @@ class TaskRepository(BaseRepository[Task]):
         )
         return [str(row[0]) for row in result.all()]
 
+    async def count_tasks(self, *, only_active: bool = True) -> int:
+        """Общее число задач (для пагинации, S19-004)"""
+        query = select(func.count()).select_from(Task)
+        if only_active:
+            query = query.where(Task.is_active.is_(True))
+        result = await self.session.execute(query)
+        return int(result.scalar_one())
+
     async def count_by_difficulty(self) -> dict[str, int]:
         """Количество задач по сложностям"""
         result = await self.session.execute(

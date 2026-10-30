@@ -5,7 +5,7 @@ API вовлечения: достижения, статистика, уведо
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import get_current_active_user
@@ -58,11 +58,20 @@ async def notifications(
     current_user: CurrentUser,
     db: DbSession,
     unread_only: bool = False,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
 ) -> NotificationsResponse:
-    """Уведомления; перед выдачей добавляет напоминания о дедлайнах"""
+    """Уведомления; перед выдачей добавляет напоминания о дедлайнах
+
+    Пагинация — additive (S19-004): дефолты сохраняют прежнее поведение.
+    """
     await engagement_service.sync_deadline_notifications(db, current_user.id)
     items, unread = await engagement_service.list_notifications(
-        db, current_user.id, unread_only=unread_only
+        db,
+        current_user.id,
+        unread_only=unread_only,
+        skip=skip,
+        limit=limit,
     )
     return NotificationsResponse(
         items=[NotificationItem.model_validate(item) for item in items],

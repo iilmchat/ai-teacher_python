@@ -35,6 +35,7 @@ from app.schemas.task import (
     TaskVersionItem,
     TestCaseResult,
 )
+from app.services.cache import invalidate_tasks_cache
 
 
 class TaskService:
@@ -311,8 +312,14 @@ class TaskService:
             )
         )
 
-    async def create_task(self, payload: TaskCreate, author: User) -> Task:
-        """Создать задачу"""
+    async def create_task(
+        self,
+        payload: TaskCreate,
+        author: User,
+        *,
+        invalidate_cache: bool = True,
+    ) -> Task:
+        """Создать задачу (S19-003: сбрасывает кэш каталога и категорий)"""
         task = Task(
             title=payload.title,
             description=payload.description,
@@ -324,7 +331,10 @@ class TaskService:
             solution_template=payload.solution_template,
             created_by=author.id,
         )
-        return await self.tasks.create(task)
+        created = await self.tasks.create(task)
+        if invalidate_cache:
+            await invalidate_tasks_cache()
+        return created
 
     async def create_many(
         self, payloads: list[TaskCreate], author: User
@@ -332,7 +342,11 @@ class TaskService:
         """Создать несколько задач (генерация/массовый импорт)"""
         created: list[Task] = []
         for payload in payloads:
-            created.append(await self.create_task(payload, author))
+            created.append(
+                await self.create_task(payload, author, invalidate_cache=False)
+            )
+        if created:
+            await invalidate_tasks_cache()
         return created
 
     async def export_active(self) -> list[Task]:
@@ -363,6 +377,7 @@ class TaskService:
 
         await self.db.commit()
         await self.db.refresh(task)
+        await invalidate_tasks_cache()
         return task
 
     async def list_versions(self, task_id: UUID) -> list[TaskVersionItem]:
@@ -414,6 +429,7 @@ class TaskService:
 
         await self.db.commit()
         await self.db.refresh(task)
+        await invalidate_tasks_cache()
         return task
 
     async def delete_task(self, task_id: UUID) -> None:
@@ -425,5 +441,7 @@ class TaskService:
             task = await self._get_task_or_404(task_id)
             task.is_active = False
             await self.db.commit()
+            await invalidate_tasks_cache()
             return
         await self.tasks.delete(task_id)
+        await invalidate_tasks_cache()

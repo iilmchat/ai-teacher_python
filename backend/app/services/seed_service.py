@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.data.seed_tasks import TASKS
 from app.models.task import Task
+from app.services.cache import invalidate_tasks_cache
 
 logger = structlog.get_logger(__name__)
 
@@ -38,5 +39,7 @@ async def seed_tasks(session: AsyncSession) -> int:
         existing.add(title)
         created += 1
     await session.commit()
+    if created:
+        await invalidate_tasks_cache()
     logger.info("seed_tasks", created=created, total=len(TASKS))
     return created

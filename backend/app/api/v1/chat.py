@@ -8,23 +8,31 @@ Chat API endpoints (S4-005).
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.security import get_current_active_user
 from app.db.database import get_db
 from app.models.user import User
 from app.schemas.chat import (
     ChatMessageRequest,
     ChatMessageResponse,
+    ChatSearchItem,
+    ChatSearchResponse,
     ChatSessionCreate,
     ChatSessionResponse,
     ChatSessionWithMessages,
     ChatTurnResponse,
 )
+from app.services.cache import cache_get_json, cache_set_json, levels_cache_key
 from app.services.chat_service import ChatService
 from app.services.levels import list_levels
 from app.services.llm import LLMProvider, create_llm_provider
+from app.services.llm.embeddings import (
+    EmbeddingProvider,
+    create_embedding_provider,
+)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -37,12 +45,24 @@ def get_llm_provider() -> LLMProvider:
     return create_llm_provider()
 
 
+def get_embedding_provider() -> EmbeddingProvider | None:
+    """Провайдер эмбеддингов для RAG-lite (S19-005); переопределяется в тестах"""
+    return create_embedding_provider()
+
+
 LLMProviderDep = Annotated[LLMProvider, Depends(get_llm_provider)]
+EmbeddingProviderDep = Annotated[
+    EmbeddingProvider | None, Depends(get_embedding_provider)
+]
 
 
-def get_chat_service(db: DbSession, provider: LLMProviderDep) -> ChatService:
-    """Сервис чата с провайдером LLM"""
-    return ChatService(db, provider)
+def get_chat_service(
+    db: DbSession,
+    provider: LLMProviderDep,
+    embedding_provider: EmbeddingProviderDep,
+) -> ChatService:
+    """Сервис чата с провайдерами LLM и эмбеддингов"""
+    return ChatService(db, provider, embedding_provider)
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
@@ -50,8 +70,13 @@ ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
 
 @router.get("/levels")
 async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
-    """Информация об уровнях ассистента (S5-004)"""
-    return {
+    """Информация об уровнях ассистента (S5-004, кэш S19-003)"""
+    key = levels_cache_key()
+    cached = await cache_get_json(key)
+    if isinstance(cached, dict):
+        return cached
+
+    payload = {
         "levels": [
             {
                 "level": info.level.value,
@@ -63,6 +88,39 @@ async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
             for info in list_levels()
         ]
     }
+    await cache_set_json(key, payload)
+    return payload
+
+
+@router.get("/search", response_model=ChatSearchResponse)
+async def search_chat_history(
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+    q: str = Query(..., min_length=1, max_length=200, description="Поисковый запрос"),
+    limit: int | None = Query(default=None, ge=1, le=50),
+) -> ChatSearchResponse:
+    """Поиск по истории чата текущего пользователя (S19-005).
+
+    С `RAG_ENABLED=true` и настроенным провайдером — семантический поиск
+    (pgvector), иначе ILIKE по подстроке. Чужие сессии не попадают в выдачу
+    никогда: фильтр по `chat_sessions.user_id` зашит в репозиторий.
+    """
+    effective_limit = limit or settings.rag_top_k
+    mode, hits = await service.search(current_user, q, effective_limit)
+    items = [
+        ChatSearchItem(
+            id=hit.message.id,
+            session_id=hit.message.session_id,
+            role=hit.message.role,
+            content=hit.message.content,
+            created_at=hit.message.created_at,
+            score=hit.score,
+        )
+        for hit in hits
+    ]
+    return ChatSearchResponse(
+        query=q, mode=mode, items=items, total=len(items)
+    )
 
 
 @router.post(

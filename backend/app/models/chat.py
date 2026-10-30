@@ -13,6 +13,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 
+#: Размерность эмбеддингов сообщений (S19-005); совпадает с колонкой в БД
+EMBEDDING_DIM = 1536
+
 
 class MessageRole(str, enum.Enum):
     """Роль в чате"""
@@ -58,8 +61,19 @@ class ChatMessage(Base):
     """Модель сообщения чата"""
 
     __tablename__ = "chat_messages"
-    # Индексы совпадают с миграцией 001 (иначе `alembic check` падает)
-    __table_args__ = (Index("idx_chat_messages_session", "session_id"),)
+    # Индексы совпадают с миграциями 001 и 0010 (иначе `alembic check` падает)
+    __table_args__ = (
+        Index("idx_chat_messages_session", "session_id"),
+        # S19-004: история сессии читается с сортировкой по created_at
+        Index("idx_chat_messages_session_created", "session_id", "created_at"),
+        # S19-005: HNSW-индекс для семантического поиска (косинусное расстояние)
+        Index(
+            "idx_chat_messages_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     session_id: Mapped[UUID] = mapped_column(
@@ -79,7 +93,9 @@ class ChatMessage(Base):
         "metadata", JSONB, default=dict, server_default=text("'{}'::jsonb")
     )
     # 1536 — размерность эмбеддингов, используемая в проекте
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(EMBEDDING_DIM), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

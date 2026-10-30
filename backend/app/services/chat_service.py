@@ -19,11 +19,18 @@ from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.user import User, UserLevel
 from app.services.levels import resolve_level
 from app.services.llm.base import LLMMessage, LLMProvider
+from app.services.llm.embeddings import EmbeddingProvider
 from app.services.llm.policy import (
     detect_level_policy_violations,
     extract_code_blocks,
 )
 from app.services.llm.prompt_builder import build_messages, prompt_version
+from app.services.rag import (
+    SearchHit,
+    SearchMode,
+    search_chat_messages,
+    try_embed,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -44,9 +51,16 @@ def parse_level(value: str | UserLevel) -> UserLevel:
 class ChatService:
     """Бизнес-логика чата"""
 
-    def __init__(self, db: AsyncSession, provider: LLMProvider) -> None:
+    def __init__(
+        self,
+        db: AsyncSession,
+        provider: LLMProvider,
+        embedding_provider: EmbeddingProvider | None = None,
+    ) -> None:
         self.db = db
         self.provider = provider
+        #: Провайдер эмбеддингов для RAG-lite (S19-005); ``None`` — RAG выключен
+        self.embedding_provider = embedding_provider
         self.sessions = ChatSessionRepository(db)
         self.messages = ChatMessageRepository(db)
         #: Предупреждения политики уровня для последнего ответа (S12-005)
@@ -99,6 +113,14 @@ class ChatService:
         """Сообщения сессии в хронологическом порядке"""
         return await self.messages.get_session_messages(session_id)
 
+    async def search(
+        self, user: User, query: str, limit: int
+    ) -> tuple[SearchMode, list[SearchHit]]:
+        """Поиск по своим сообщениям: semantic при RAG, иначе ILIKE (S19-005)"""
+        return await search_chat_messages(
+            self.db, user.id, query, limit, self.embedding_provider
+        )
+
     # --- Сообщения ------------------------------------------------------
 
     def _history_for_llm(self, history: list[ChatMessage]) -> list[LLMMessage]:
@@ -140,8 +162,13 @@ class ChatService:
         if not text:
             raise ValidationError("Сообщение не может быть пустым")
 
+        # RAG-lite: вектор считается best-effort, ошибка не ломает отправку
+        user_embedding = await try_embed(self.embedding_provider, text)
         user_message = await self.messages.create_message(
-            session_id=session.id, role=MessageRole.USER, content=text
+            session_id=session.id,
+            role=MessageRole.USER,
+            content=text,
+            embedding=user_embedding,
         )
         # Последнее сообщение истории — только что сохранённый вопрос,
         # его передаём в build_messages отдельно, чтобы не дублировать
@@ -154,12 +181,14 @@ class ChatService:
         )
 
         answer = await self.provider.generate(llm_messages)
+        answer_embedding = await try_embed(self.embedding_provider, answer)
         assistant_message = await self.messages.create_message(
             session_id=session.id,
             role=MessageRole.ASSISTANT,
             content=answer,
             code_blocks=extract_code_blocks(answer),
             metadata=self._assistant_metadata(level, answer),
+            embedding=answer_embedding,
         )
         return user_message, assistant_message
 
@@ -173,8 +202,12 @@ class ChatService:
             raise ValidationError("Сообщение не может быть пустым")
 
         self.last_warnings = []
+        user_embedding = await try_embed(self.embedding_provider, text)
         await self.messages.create_message(
-            session_id=session.id, role=MessageRole.USER, content=text
+            session_id=session.id,
+            role=MessageRole.USER,
+            content=text,
+            embedding=user_embedding,
         )
         history = await self.get_history(session.id)
         level = resolve_level(parse_level(session.level))
@@ -191,10 +224,12 @@ class ChatService:
 
         answer = "".join(chunks).strip()
         if answer:
+            answer_embedding = await try_embed(self.embedding_provider, answer)
             await self.messages.create_message(
                 session_id=session.id,
                 role=MessageRole.ASSISTANT,
                 content=answer,
                 code_blocks=extract_code_blocks(answer),
                 metadata=self._assistant_metadata(level, answer),
+                embedding=answer_embedding,
             )

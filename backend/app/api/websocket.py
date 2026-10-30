@@ -29,7 +29,7 @@ import structlog
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.chat import get_llm_provider
+from app.api.v1.chat import get_embedding_provider, get_llm_provider
 from app.core.security import decode_token
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
@@ -38,6 +38,7 @@ from app.models.chat import ChatSession
 from app.models.user import User
 from app.services.chat_service import ChatService
 from app.services.llm import LLMProvider, LLMUnavailableError
+from app.services.llm.embeddings import EmbeddingProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -131,6 +132,7 @@ async def chat_websocket(
     token: str = "",
     db: AsyncSession = Depends(get_db),
     provider: LLMProvider = Depends(get_llm_provider),
+    embedding_provider: EmbeddingProvider | None = Depends(get_embedding_provider),
 ) -> None:
     """Стриминг ответов ассистента в реальном времени"""
     await websocket.accept()
@@ -147,7 +149,7 @@ async def chat_websocket(
         await websocket.close(code=4401)
         return
 
-    service = ChatService(db, provider)
+    service = ChatService(db, provider, embedding_provider)
     try:
         session = await service.get_session(session_id, user)
     except (NotFoundError, AccessDeniedError) as exc:

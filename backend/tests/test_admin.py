@@ -241,6 +241,7 @@ async def test_analytics_structure(
         "learning",
         "activity",
         "llm",
+        "cache",
         "generated_at",
     }
     assert data["users"]["total"] >= 1
@@ -251,3 +252,14 @@ async def test_analytics_structure(
     assert set(data["llm"]) == {"last_hour", "last_24h", "fallback_used", "recorded_at"}
     assert data["llm"]["last_24h"]["window_hours"] == 24
     assert data["llm"]["last_hour"]["requests"] >= 0
+    assert set(data["cache"]) == {
+        "enabled",
+        "hits",
+        "misses",
+        "hit_rate",
+        "sets",
+        "invalidations",
+        "errors",
+    }
+    assert data["cache"]["hits"] >= 0
+    assert 0.0 <= data["cache"]["hit_rate"] <= 1.0

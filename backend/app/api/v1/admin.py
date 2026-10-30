@@ -23,6 +23,7 @@ from app.schemas.admin import (
     AdminUserListResponse,
     AdminUserUpdate,
     AnalyticsActivity,
+    AnalyticsCache,
     AnalyticsLearning,
     AnalyticsLLM,
     AnalyticsResponse,
@@ -31,6 +32,7 @@ from app.schemas.admin import (
     DeleteResponse,
 )
 from app.services.analytics_service import AnalyticsService
+from app.services.cache import cache_metrics
 from app.services.llm.metrics import llm_metrics
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -151,7 +153,7 @@ async def list_tasks(
 
 @router.get("/analytics", response_model=AnalyticsResponse)
 async def get_analytics(_: AdminUser, db: DbSession) -> AnalyticsResponse:
-    """Сводная аналитика для дашборда (БД + метрики LLM из памяти процесса)"""
+    """Сводная аналитика для дашборда (БД + метрики LLM и кэша из памяти)"""
     raw = await AnalyticsService(db).summary()
     return AnalyticsResponse(
         users=AnalyticsUsers(**raw["users"]),  # type: ignore[arg-type]
@@ -159,5 +161,6 @@ async def get_analytics(_: AdminUser, db: DbSession) -> AnalyticsResponse:
         learning=AnalyticsLearning(**raw["learning"]),  # type: ignore[arg-type]
         activity=AnalyticsActivity(**raw["activity"]),  # type: ignore[arg-type]
         llm=AnalyticsLLM.model_validate(llm_metrics.snapshot()),
+        cache=AnalyticsCache(**cache_metrics.snapshot()),
         generated_at=str(raw["generated_at"]),
     )
