@@ -178,7 +178,43 @@ build 78.71 kB gzip, `test:offline`; e2e 12/12; docker prod smoke 4/4 healthy.
 
 ---
 
-## 8. Ссылки
+## 8. Локальная проверка job'ов до живого GitFlic (2026-10-30)
+
+Облачных агентов у GitFlic по умолчанию нет, а первый прогон на платформе —
+дорогая проверка. Поэтому команды job'ов прогнаны локально в тех же образах
+Docker (репозиторий копируется в контейнер через `tar`, `venv`/`node_modules`
+исключены; сервисы — отдельные контейнеры в сети с `alias postgres`/`redis`).
+
+| Job | Как проверяли | Результат |
+|-----|---------------|-----------|
+| `frontend` | `node:22-alpine`: corepack pnpm@12, `pnpm install --frozen-lockfile`, typecheck/lint/test/build | **PASS**: 80/80 тестов, build 78.71 kB gzip (~3.5 мин) |
+| `lint` | `python:3.12-slim`, `ruff==0.8.1` + `mypy==1.13.0`, `cd backend && ruff check app tests scripts`, `mypy app --config-file ../pyproject.toml` | **PASS** (0/0) |
+| `test` | `python:3.12-slim` + `services` `pgvector/pgvector:pg17` (alias `postgres`) и `redis:7-alpine` (alias `redis`), wait-loops, `alembic upgrade head && alembic check`, `pytest -q` | **PASS**: **341 passed + 1 skipped** (106 с), миграции до `010` |
+
+**Найденный и исправленный дефект.** В старом CI (`ci.yml` и первичном порте)
+линтеры ставились без версий (`pip install ruff mypy`), а ruff запускался как
+`ruff check backend/`. На 2026-10-30 unpinned ruff даёт **54 ошибки** на том же
+коде (новые правила upstream, напр. `UP042`/`C420`), тогда как закреплённый
+`ruff==0.8.1` со скоупом `app tests scripts` — **0 ошибок**. GitHub Actions этот
+дефект не показывал, потому что job'ы вообще не запускались из-за биллинга.
+Версии закреплены в обоих конфигах: `gitflic-ci.yaml` и
+`.github/workflows/ci.yml`.
+
+**Что остаётся непроверяемым локально** (проверяется только живым пилотом):
+проброс переменных окружения в `services` на стороне GitFlic, глубина
+checkout'а для gitleaks, поведение MR-пайплайна и блокировка merge, теги
+агентов/выбор исполнителя, межзапусковый кэш и артефакты.
+
+**Fallback GitHub (вариант A) — статус.** Регистрация self-hosted runner'а
+технически доступна: `POST /repos/iilmchat/ai-teacher_python/actions/runners/registration-token`
+возвращает токен (проверено, repo-скоупа хватает). Но на **Windows** self-hosted
+runner не поддерживает GitHub service containers, поэтому job'у `test` нужен
+docker-compose-подход, а `e2e` — нативный прогон; это не «один час», а отдельная
+задача. Поэтому fallback остаётся резервом, а не первым шагом.
+
+---
+
+## 9. Ссылки
 
 - Тарифы GitFlic: <https://gitflic.ru/price>
 - Справочник `gitflic-ci.yaml`: <https://docs.gitflic.ru/latest/en/cicd/gitflic-ci-yaml/>
