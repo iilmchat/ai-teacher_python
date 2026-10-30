@@ -220,12 +220,30 @@ Docker (репозиторий копируется в контейнер чер
 checkout'а для gitleaks, поведение MR-пайплайна и блокировка merge, теги
 агентов/выбор исполнителя, межзапусковый кэш и артефакты.
 
-**Fallback GitHub (вариант A) — статус.** Регистрация self-hosted runner'а
-технически доступна: `POST /repos/iilmchat/ai-teacher_python/actions/runners/registration-token`
-возвращает токен (проверено, repo-скоупа хватает). Но на **Windows** self-hosted
-runner не поддерживает GitHub service containers, поэтому job'у `test` нужен
-docker-compose-подход, а `e2e` — нативный прогон; это не «один час», а отдельная
-задача. Поэтому fallback остаётся резервом, а не первым шагом.
+**Fallback GitHub (вариант A) — реализован и проверен (2026-10-30).**
+Workflow `.github/workflows/ci-selfhosted.yml` (self-hosted runner `ai-teacher-win`,
+labels `self-hosted, windows, ai-teacher`) прогнан на этой машине: **все 6 job'ов
+зелёные** — Lint 2.4 мин, Frontend 1.0, Security 1.5, Test 3.8, E2E 2.2,
+Docker 1.0 (run
+[41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162)).
+Job'ы используют те же команды, что и GitFlic-конфиг (`scripts/ci/*`), поэтому
+это ещё и проверка общего набора скриптов.
+
+Найдены и исправлены по ходу: mypy в lint-job'е требует установленных
+runtime-зависимостей (295 `import-not-found`), поэтому lint ставит
+`backend/requirements.txt`; bash-скрипты закреплены `.gitattributes` (LF).
+
+**Ограничение варианта A:** на GitHub **free для приватного репозитория
+недоступна защита ветвей/required checks** — API отвечает
+`403 «Upgrade to GitHub Pro or make this repository public»`. То есть fallback
+даёт зелёный CI, но не может *заблокировать* мерж красного PR без платного
+плана (или публикации репозитория).
+
+**GitFlic закрывает этот пробел на бесплатном тарифе:** в настройках проекта есть
+защита веток (правила PUSH/MERGE, force-push, codeowners) и опция
+«Проверять статус последнего конвейера при слиянии запроса» — мерж возможен
+только при успешном последнем конвейере (MR-пайплайне). Это ровно тот гейт,
+который нужен в S21-004; проверка на живом проекте — после токена/агента.
 
 ---
 

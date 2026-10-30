@@ -164,8 +164,9 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 - [ ] **Зависит от:** S21-001 · **Оценка:** 6 ч
 
 ### S21-003: Портирование CI на выбранную платформу — [~]
-- [ ] GitHub-путь: self-hosted runner, существующие job'ы, кэш `pip`/`pnpm`/
-      Playwright, таймауты
+- [x] GitHub-путь (fallback): self-hosted runner + `ci-selfhosted.yml`, 6/6 job'ов
+      зелёные (run 41070317162); кэш pip/pnpm/Playwright — TODO; required checks
+      на GitHub Free/private недоступны (403, нужен Pro) — см. `docs/CI.md` §8
 - [x] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
       `security`) в `gitflic-ci.yaml`; `docker build` — на PowerShell-агенте;
       кэш и артефакты (live-проверка — в S21-002)
