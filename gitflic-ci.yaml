@@ -234,10 +234,10 @@ test:
 # =============================================================================
 frontend:
   stage: test
-  # needs: [] — не ждать lint: как независимый job `Frontend` в GitHub
-  # (документированный приём «пустой needs»). На одном Docker-агенте задачи
-  # всё равно пойдут последовательно, но статус lint не блокирует frontend.
-  needs: []
+  # Без `needs`: пустой массив в GitFlic не документирован — надёжнее
+  # использовать порядок стадий (lint → test). На одном Docker-агенте задачи
+  # всё равно выполняются последовательно; на нескольких — параллельно внутри
+  # стадии.
   image: node:22-alpine
   tags:
     - docker
@@ -271,9 +271,8 @@ frontend:
 # =============================================================================
 security-backend:
   stage: security
-  # Независимая проверка (в GitHub job `Security` без needs): не ждём test,
-  # стартуем сразу; пустой needs — документированный приём.
-  needs: []
+  # Независимая проверка в своей стадии; пустой `needs` в GitFlic не
+  # документирован, поэтому порядок задаёт `stages`.
   image: python:3.12-slim
   tags:
     - docker
@@ -304,7 +303,6 @@ security-backend:
 
 security-frontend:
   stage: security
-  needs: []
   image: node:22-alpine
   tags:
     - docker
@@ -318,7 +316,6 @@ security-frontend:
 
 gitleaks:
   stage: security
-  needs: []
   # entrypoint переопределяем пустым: у образа gitleaks своя entrypoint,
   # а нам нужен shell, чтобы выполнить команду job'а.
   image:
