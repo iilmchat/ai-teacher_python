@@ -108,7 +108,8 @@ pnpm dev
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [TODO_V0.2.md](TODO_V0.2.md) — этап v0.2.0 (спринты 11–20); завершённый [TODO.md](TODO.md) — v0.1.0
+- [TODO_V0.3.md](TODO_V0.3.md) — **текущий этап v0.3.0** (спринты 21–30);
+  завершённые [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0 и [TODO.md](TODO.md) — v0.1.0
 
 ---
 
