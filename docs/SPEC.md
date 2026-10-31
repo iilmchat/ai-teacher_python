@@ -415,6 +415,7 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 | Пул тёплых процессов (S23) | `EXECUTOR_POOL_SIZE` (2; 0 — выключен), перезапуск после `EXECUTOR_POOL_MAX_TASKS` (50) задач и после сбоя |
 | Батч тест-кейсов (S23) | все кейсы задачи — один процесс, результат по кейсам; зависший кейс → `TimeoutError`, остальные → `SandboxError` |
 | Throughput submit | 5 RPS, p95 ≤ 2000 мс (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`) |
+| Режим исполнения (S24) | `EXECUTOR_MODE=native` (по умолчанию) или `container`; образ `EXECUTOR_IMAGE`. Контейнер: `--network none`, `--read-only`, `--cap-drop ALL`, `no-new-privileges`, non-root `65534`, tmpfs `/tmp`, `--memory`; при недоступном Docker — fallback на native + warning |
 | Вывод | `EXECUTOR_MAX_OUTPUT` (100 000 символов), обрезка с пометкой |
 | Размер кода | ≤ 20 000 символов |
 | `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |

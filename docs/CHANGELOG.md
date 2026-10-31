@@ -14,6 +14,20 @@
 
 ### Добавлено
 
+**Изоляция песочницы (S24)**
+
+- Контейнер-раннер `ai-teacher-sandbox-runner` (`backend/sandbox_runner`):
+  python:3.12-slim + RestrictedPython + чистое ядро песочницы, non-root;
+  запуск `--network none --read-only --cap-drop ALL --security-opt
+  no-new-privileges --user 65534:65534 --tmpfs /tmp --memory`
+- `EXECUTOR_MODE=native|container` (по умолчанию `native`), `EXECUTOR_IMAGE`;
+  при недоступном Docker/образе — fallback на native + warning и метрика
+  `fallbacks`
+- `--self-check` изоляции (uid, read-only rootfs, tmpfs, сеть, `CapEff=0`);
+  проверяется в CI (`Docker build`) и `scripts/ci/docker.ps1`
+- Метрики контейнерного режима (`runs`, `errors`, `timeouts`, `fallbacks`,
+  среднее время старта) — основа для `/metrics` в S25
+
 **Производительность песочницы (S23, KI-022)**
 
 - Батч тест-кейсов: все кейсы задачи выполняет **один** дочерний

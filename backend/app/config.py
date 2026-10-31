@@ -100,6 +100,13 @@ class Settings(BaseSettings):
 
     # Code Execution (S13)
     executor_timeout: int = 5  # секунд
+    #: Режим исполнения (S24): `native` — дочерний интерпретатор + Job Object/
+    #: RLIMIT_AS; `container` — одноразовый контейнер с жёсткой изоляцией
+    #: (сеть выключена, read-only rootfs, --cap-drop ALL). По умолчанию native;
+    #: при недоступном Docker контейнерный режим откатывается на native с warning.
+    executor_mode: str = "native"
+    #: Образ контейнера-раннера (собирается из backend/sandbox_runner)
+    executor_image: str = "ai-teacher-sandbox-runner:latest"
     executor_memory_limit: int = 128  # MB
     #: Максимум символов stdout в ответе (S13-005)
     executor_max_output: int = 100_000
