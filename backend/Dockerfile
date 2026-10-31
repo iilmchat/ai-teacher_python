@@ -8,9 +8,13 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
+# Индекс PyPI параметризован (S25): на машине проекта pypi.org недоступен —
+# CI передаёт зеркало через --build-arg PIP_INDEX_URL.
+ARG PIP_INDEX_URL=https://pypi.org/simple/
+
 # Copy requirements first for better caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --index-url $PIP_INDEX_URL -r requirements.txt
 
 # Copy application code
 COPY . .

@@ -247,3 +247,9 @@ docker exec ai_teacher_postgres dropdb -U ai_teacher ai_teacher_restore_check
 - [../docs/RULES.md](RULES.md) — правила разработки
 - [../TODO_V0.2.md](../TODO_V0.2.md) — этап v0.2.0 (спринты 11–20, завершён)
 - [../docs/KNOWN_ISSUES.md](KNOWN_ISSUES.md) — известные проблемы и принятые риски
+
+> **Сборка образов без PyPI (S25).** `backend/Dockerfile` и
+> `backend/sandbox_runner/Dockerfile` принимают `--build-arg PIP_INDEX_URL`;
+> `scripts/ci/docker.ps1` передаёт зеркало (`CI_PYPI_MIRROR`, по умолчанию
+> `mirrors.aliyun.com`), иначе сборка висит на pypi.org. GitHub-hosted runner
+> может использовать индекс по умолчанию.

@@ -18,8 +18,13 @@ Write-Host '==> Проверка Docker daemon'
 docker info --format '{{.ServerVersion}}' | Out-Null
 Assert-Step 'docker info (Docker Desktop запущен?)'
 
+# S25: PyPI с машины проекта недоступен — образы собираются с зеркалом
+# (переопределяется через CI_PYPI_MIRROR; на GitHub-hosted доступен pypi.org).
+$pypiIndex = if ($env:CI_PYPI_MIRROR) { $env:CI_PYPI_MIRROR } else { 'https://mirrors.aliyun.com/pypi/simple/' }
+Write-Host "==> индекс PyPI для сборки: $pypiIndex"
+
 Write-Host '==> Сборка backend-образа'
-docker build -t ai-teacher-backend ./backend
+docker build --build-arg "PIP_INDEX_URL=$pypiIndex" -t ai-teacher-backend ./backend
 Assert-Step 'docker build ./backend'
 
 Write-Host '==> Сборка frontend-образа'
@@ -35,7 +40,7 @@ if (-not $env:SECRET_KEY) { $env:SECRET_KEY = 'ci_secret_key_do_not_use_in_produ
 # S24-001: образ контейнера-раннера песочницы собирается отдельно и проходит
 # self-check изоляции (read-only rootfs, нет сети, нет capabilities, non-root).
 Write-Host '==> Сборка образа контейнера-раннера (sandbox_runner)'
-docker build -f ./backend/sandbox_runner/Dockerfile -t ai-teacher-sandbox-runner:latest ./backend
+docker build --build-arg "PIP_INDEX_URL=$pypiIndex" -f ./backend/sandbox_runner/Dockerfile -t ai-teacher-sandbox-runner:latest ./backend
 Assert-Step 'docker build sandbox_runner'
 
 Write-Host '==> Self-check изоляции контейнера-раннера'
