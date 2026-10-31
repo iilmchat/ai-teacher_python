@@ -1,0 +1,386 @@
+{
+  "GET /admin/analytics": {
+    "activity": {
+      "executions": "number",
+      "failed_executions": "number",
+      "messages": "number",
+      "sessions": "number"
+    },
+    "cache": {
+      "enabled": "bool",
+      "errors": "number",
+      "hit_rate": "number",
+      "hits": "number",
+      "invalidations": "number",
+      "misses": "number",
+      "sets": "number"
+    },
+    "generated_at": "str",
+    "learning": {
+      "attempts": "number",
+      "average_attempts": "number",
+      "completed": "number",
+      "started": "number"
+    },
+    "llm": {
+      "fallback_used": "number",
+      "last_24h": {
+        "avg_first_token_ms": "number",
+        "avg_latency_ms": "number",
+        "by_provider": {},
+        "completion_tokens": "number",
+        "errors": "number",
+        "p95_latency_ms": "number",
+        "prompt_tokens": "number",
+        "requests": "number",
+        "total_tokens": "number",
+        "window_hours": "number"
+      },
+      "last_hour": {
+        "avg_first_token_ms": "number",
+        "avg_latency_ms": "number",
+        "by_provider": {},
+        "completion_tokens": "number",
+        "errors": "number",
+        "p95_latency_ms": "number",
+        "prompt_tokens": "number",
+        "requests": "number",
+        "total_tokens": "number",
+        "window_hours": "number"
+      },
+      "recorded_at": "str"
+    },
+    "tasks": {
+      "active": "number",
+      "easy": "number",
+      "hard": "number",
+      "medium": "number",
+      "total": "number"
+    },
+    "users": {
+      "active_24h": "number",
+      "active_7d": "number",
+      "by_role": {
+        "admin": "number",
+        "student": "number",
+        "teacher": "number"
+      },
+      "total": "number"
+    }
+  },
+  "GET /auth/me": {
+    "created_at": "str",
+    "email": "str",
+    "id": "str",
+    "last_active": "str",
+    "level": "str",
+    "role": "str",
+    "settings": {},
+    "username": "str"
+  },
+  "GET /chat/search": {
+    "items": [
+      {
+        "content": "str",
+        "created_at": "str",
+        "id": "str",
+        "role": "str",
+        "score": null,
+        "session_id": "str"
+      }
+    ],
+    "mode": "str",
+    "query": "str",
+    "total": "number"
+  },
+  "GET /chat/sessions": [
+    {
+      "created_at": "str",
+      "id": "str",
+      "level": "str",
+      "updated_at": "str",
+      "user_id": "str"
+    }
+  ],
+  "GET /chat/sessions/{id}": {
+    "created_at": "str",
+    "id": "str",
+    "level": "str",
+    "messages": [
+      {
+        "code_blocks": [],
+        "content": "str",
+        "created_at": "str",
+        "id": "str",
+        "metadata": {},
+        "role": "str",
+        "session_id": "str",
+        "warnings": []
+      },
+      {
+        "code_blocks": [
+          "str"
+        ],
+        "content": "str",
+        "created_at": "str",
+        "id": "str",
+        "metadata": {
+          "model": "str",
+          "prompt_version": "number",
+          "provider": "str"
+        },
+        "role": "str",
+        "session_id": "str",
+        "warnings": []
+      }
+    ],
+    "updated_at": "str",
+    "user_id": "str"
+  },
+  "GET /classrooms/{id}": {
+    "created_at": "str",
+    "id": "str",
+    "join_code": "str",
+    "members": [
+      {
+        "joined_at": "str",
+        "role": "str",
+        "user_id": "str",
+        "username": "str"
+      }
+    ],
+    "members_count": "number",
+    "name": "str",
+    "owner_id": "str"
+  },
+  "GET /classrooms/{id}/progress": {
+    "cells": [
+      {
+        "attempts": "number",
+        "status": "str",
+        "student_id": "str",
+        "task_id": "str"
+      }
+    ],
+    "completion_rate": "number",
+    "problem_tasks": [],
+    "students": [
+      {
+        "id": "str",
+        "username": "str"
+      }
+    ],
+    "tasks": [
+      {
+        "id": "str",
+        "title": "str"
+      }
+    ]
+  },
+  "GET /me/assignments": {
+    "items": [
+      {
+        "classroom_id": "str",
+        "classroom_name": "str",
+        "difficulty": "str",
+        "due_at": null,
+        "id": "str",
+        "overdue": "bool",
+        "status": "str",
+        "task_id": "str",
+        "title": "str"
+      }
+    ]
+  },
+  "GET /tasks": [
+    {
+      "category": "str",
+      "difficulty": "str",
+      "hints_count": "number",
+      "id": "str",
+      "status": "str",
+      "tags": [
+        "str"
+      ],
+      "title": "str"
+    }
+  ],
+  "GET /tasks/progress": {
+    "by_difficulty": {
+      "easy": {
+        "completed": "number",
+        "total": "number"
+      },
+      "hard": {
+        "completed": "number",
+        "total": "number"
+      },
+      "medium": {
+        "completed": "number",
+        "total": "number"
+      }
+    },
+    "completed": "number",
+    "completion_rate": "number",
+    "in_progress": "number",
+    "items": [
+      {
+        "attempts": "number",
+        "completed_at": "str",
+        "difficulty": "str",
+        "status": "str",
+        "task_id": "str",
+        "title": "str"
+      }
+    ],
+    "not_started": "number",
+    "total_tasks": "number"
+  },
+  "GET /tasks/{id}": {
+    "attempts": "number",
+    "category": "str",
+    "description": "str",
+    "difficulty": "str",
+    "hints": [
+      "str"
+    ],
+    "id": "str",
+    "solution_template": "str",
+    "status": "str",
+    "tags": [
+      "str"
+    ],
+    "test_cases_count": "number",
+    "title": "str"
+  },
+  "GET /tasks/{id} 404": {
+    "detail": "str"
+  },
+  "POST /auth/login": {
+    "access_token": "str",
+    "refresh_token": "str",
+    "token_type": "str",
+    "user": {
+      "email": "str",
+      "id": "str",
+      "level": "str",
+      "role": "str",
+      "username": "str"
+    }
+  },
+  "POST /auth/register": {
+    "created_at": "str",
+    "email": "str",
+    "id": "str",
+    "last_active": "str",
+    "level": "str",
+    "role": "str",
+    "settings": {},
+    "username": "str"
+  },
+  "POST /chat/sessions": {
+    "created_at": "str",
+    "id": "str",
+    "level": "str",
+    "updated_at": "str",
+    "user_id": "str"
+  },
+  "POST /chat/sessions/{id}/messages": {
+    "assistant_message": {
+      "code_blocks": [
+        "str"
+      ],
+      "content": "str",
+      "created_at": "str",
+      "id": "str",
+      "metadata": {
+        "model": "str",
+        "prompt_version": "number",
+        "provider": "str"
+      },
+      "role": "str",
+      "session_id": "str",
+      "warnings": []
+    },
+    "user_message": {
+      "code_blocks": [],
+      "content": "str",
+      "created_at": "str",
+      "id": "str",
+      "metadata": {},
+      "role": "str",
+      "session_id": "str",
+      "warnings": []
+    }
+  },
+  "POST /classrooms": {
+    "created_at": "str",
+    "id": "str",
+    "join_code": "str",
+    "members_count": "number",
+    "name": "str",
+    "owner_id": "str"
+  },
+  "POST /classrooms/join": {
+    "created_at": "str",
+    "id": "str",
+    "join_code": "str",
+    "members_count": "number",
+    "name": "str",
+    "owner_id": "str"
+  },
+  "POST /classrooms/{id}/assignments": {
+    "completed_count": "number",
+    "created_at": "str",
+    "difficulty": "str",
+    "due_at": null,
+    "id": "str",
+    "task_id": "str",
+    "title": "str",
+    "total_members": "number"
+  },
+  "POST /tasks": {
+    "attempts": "number",
+    "category": "str",
+    "description": "str",
+    "difficulty": "str",
+    "hints": [
+      "str"
+    ],
+    "id": "str",
+    "is_active": "bool",
+    "solution_template": "str",
+    "status": "str",
+    "tags": [
+      "str"
+    ],
+    "test_cases": [
+      {
+        "description": "str",
+        "expected_output": "str",
+        "input": "str"
+      }
+    ],
+    "test_cases_count": "number",
+    "title": "str"
+  },
+  "POST /tasks/{id}/submit": {
+    "attempts": "number",
+    "message": "str",
+    "passed": "bool",
+    "passed_count": "number",
+    "results": [
+      {
+        "actual_output": "str",
+        "description": "str",
+        "error": null,
+        "expected_output": "str",
+        "index": "number",
+        "input": "str",
+        "passed": "bool"
+      }
+    ],
+    "status": "str",
+    "total_count": "number"
+  }
+}

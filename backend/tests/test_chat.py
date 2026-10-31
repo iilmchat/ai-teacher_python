@@ -4,63 +4,26 @@
 LLM подменяется фейковым провайдером: тесты не ходят в сеть (RULES §4.4).
 """
 
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 
-from app.main import app
-from app.services.llm.base import LLMMessage, LLMProvider
 from app.services.llm.prompt_builder import load_system_prompt
+from tests.fake_llm import FakeProvider, install_fake_provider, uninstall_fake_provider
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
-
-
-class FakeProvider(LLMProvider):
-    """Фейковый провайдер, запоминающий переданные сообщения"""
-
-    name = "fake"
-
-    def __init__(
-        self,
-        reply: str = "Попробуй проверить условие.\n\n```python\nprint(1)\n```",
-    ) -> None:
-        self.reply = reply
-        self.calls: list[list[LLMMessage]] = []
-
-    async def generate(
-        self,
-        messages: list[LLMMessage],
-        *,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-    ) -> str:
-        self.calls.append(messages)
-        return self.reply
-
-    async def stream(
-        self,
-        messages: list[LLMMessage],
-        *,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-    ) -> AsyncIterator[str]:
-        self.calls.append(messages)
-        for part in ("Привет", ", ", "ученик!"):
-            yield part
 
 
 @pytest.fixture
 def fake_provider() -> Iterator[FakeProvider]:
     """Фейковый LLM-провайдер и его установка в приложение"""
     provider = FakeProvider()
-    from app.api.v1.chat import get_llm_provider
-
-    app.dependency_overrides[get_llm_provider] = lambda: provider
+    install_fake_provider(provider)
     yield provider
-    app.dependency_overrides.pop(get_llm_provider, None)
+    uninstall_fake_provider()
 
 
 async def _register_and_login(
