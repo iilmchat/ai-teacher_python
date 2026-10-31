@@ -642,3 +642,17 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 IP, время. Записываются: `user.updated`, `user.deleted`, `task.created`,
 `task.updated`, `task.deleted`, `classroom.created`, `assignment.created`.
 Запись best-effort: ошибка аудита не ломает действие (warning в лог).
+
+---
+
+## 16. Экспорт, retention и удаление аккаунта (S26)
+
+| Что | Контракт |
+|-----|----------|
+| `GET /api/v1/admin/analytics/export` | admin; параметры `dataset` (`users`/`tasks`/`attempts`/`activity`), `format` (`csv`/`json`); потоковый ответ, `Content-Disposition: attachment`, `X-Export-Limit`; лимит `EXPORT_MAX_ROWS` (100 000, 0 — без лимита); каждое скачивание — `analytics.exported` в аудите |
+| `GET /api/v1/classrooms/{id}/report` | владелец класса/админ; CSV (UTF-8 BOM), колонки `student_id, username, task_id, task_title, status, attempts, completed_at, due_at, overdue`; последняя строка — «ИТОГО»; ученик получает 403; пишется `classroom.report_exported` |
+| Retention | `RETENTION_CHAT_MESSAGES_DAYS` (90), `RETENTION_CODE_EXECUTIONS_DAYS` (90), `RETENTION_NOTIFICATIONS_DAYS` (180), `RETENTION_AUDIT_LOG_DAYS` (365); `0` — отключено; применяется `backend/scripts/apply_retention.py` (`--dry-run`, `--only`, `--batch-size`) |
+| `DELETE /api/v1/auth/me` | тело `{"password": "..."}`; 204 при успехе, 400 при неверном пароле; анонимизация username/email, сброс пароля, `is_active=false`; событие `user.self_deleted`; необратимо |
+
+Неактивный (`is_active=false`) аккаунт получает **401** на защищённых
+маршрутах и не может войти (пароль сброшен).

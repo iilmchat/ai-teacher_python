@@ -14,6 +14,18 @@
 
 ### Добавлено
 
+**Данные и приватность (S26)**
+
+- `GET /api/v1/admin/analytics/export` — CSV/JSON, потоково, лимит
+  `EXPORT_MAX_ROWS`, аудит каждого экспорта
+- `GET /api/v1/classrooms/{id}/report` — CSV-матрица класса (overdue, итоги),
+  только владельцу/админу
+- Retention: `RETENTION_*_DAYS` + `backend/scripts/apply_retention.py`
+  (`--dry-run`, батчи, `--only`)
+- `DELETE /api/v1/auth/me` — удаление аккаунта с подтверждением паролем:
+  анонимизация, блокировка входа (`users.is_active`, миграция 012)
+- `docs/PRIVACY.md` — политика ПДн: состав, сроки, экспорт, удаление
+
 **Наблюдаемость и аудит (S25)**
 
 - `X-Request-ID` (входящий или `uuid4`) в ответе, в structlog-контексте и во

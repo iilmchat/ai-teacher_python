@@ -6,6 +6,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -297,4 +298,36 @@ async def class_progress(
             )
             for task in data.problem_tasks
         ],
+    )
+
+
+@router.get("/classrooms/{classroom_id}/report")
+async def classroom_report(
+    classroom_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> Response:
+    """CSV-отчёт класса (S26-002): матрица «ученик × задача», overdue, итоги.
+
+    Доступ — только владелец класса (или админ); участник-ученик получает 403.
+    """
+    from app.services.class_report import build_class_report
+
+    text, rows = await build_class_report(db, classroom_id, current_user)
+    await record_audit(
+        db,
+        actor=current_user,
+        action="classroom.report_exported",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={"rows": rows},
+        request=request,
+    )
+    filename = f"classroom-{classroom_id}-report.csv"
+    # utf-8-sig: Excel корректно открывает кириллицу в CSV
+    return Response(
+        content=text.encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

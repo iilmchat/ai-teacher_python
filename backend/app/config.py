@@ -132,6 +132,15 @@ class Settings(BaseSettings):
     #: Наполнять задачи при старте приложения (S14-002, KI-010)
     seed_on_start: bool = False
 
+    # Retention (S26-003): сколько дней хранить; 0 — не удалять (по умолчанию
+    # значения консервативные, применение — scripts/apply_retention.py)
+    retention_chat_messages_days: int = 90
+    retention_code_executions_days: int = 90
+    retention_notifications_days: int = 180
+    retention_audit_log_days: int = 365
+    #: Максимум строк в одном экспорте (S26-001); 0 — без лимита (не рекомендуется)
+    export_max_rows: int = 100_000
+
     # Rate limiting (S11-003)
     #: В тестах отключается, чтобы лимиты не влияли на прогон
     rate_limit_enabled: bool = True

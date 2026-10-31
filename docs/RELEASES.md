@@ -3,9 +3,9 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** 25 завершён (этап v0.3.0 «Ops & Scale»,
-[TODO_V0.3.md](../TODO_V0.3.md)) — Observability & Audit Log: request-id,
-`/metrics`, liveness/readiness, аудит; следующий — спринт 26 (Export, Retention & Privacy)
+**Текущий спринт:** 26 завершён (этап v0.3.0 «Ops & Scale»,
+[TODO_V0.3.md](../TODO_V0.3.md)) — Export, Retention & Privacy: экспорт,
+отчёт класса, retention, удаление аккаунта; следующий — спринт 27 (RAG v2 & Search UX)
 
 ---
 
@@ -38,6 +38,7 @@
 - [Спринт 23: Sandbox Throughput](#спринт-23-sandbox-throughput)
 - [Спринт 24: Sandbox Runner Isolation](#спринт-24-sandbox-runner-isolation)
 - [Спринт 25: Observability & Audit Log](#спринт-25-observability--audit-log)
+- [Спринт 26: Export, Retention & Privacy](#спринт-26-export-retention--privacy)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1418,6 +1419,60 @@ S21-002/S21-004 закрыты частично
 - ✅ `/metrics` отдаёт метрики; request_id в логах и ответе.
 - ✅ Readiness корректно отражает зависимости; liveness не зависит от них.
 - ✅ Audit log пишется и читается админом (фильтры/пагинация, 403 для ученика).
+
+---
+
+## Спринт 26: Export, Retention & Privacy
+
+**Период:** 2026-11-01  
+**Статус:** ✅ завершён: экспорт аналитики CSV/JSON, отчёт класса, retention-скрипт,
+удаление аккаунта с анонимизацией и политика ПДн
+
+### Задачи
+- [x] S26-001: Экспорт аналитики CSV/JSON
+- [x] S26-002: Отчёт класса CSV (API; UI-кнопка — отдельным шагом)
+- [x] S26-003: Retention-политика и скрипт
+- [x] S26-004: Удаление аккаунта и `docs/PRIVACY.md`
+- [x] S26-005: Документация
+
+### Что сделано
+- **S26-001.** `GET /api/v1/admin/analytics/export?dataset=…&format=csv|json`
+  (`app/services/export_service.py`): серверный курсор, CSV/JSON-поток,
+  лимит `EXPORT_MAX_ROWS` (100 000), заголовки `Content-Disposition` и
+  `X-Export-Limit`, аудит `analytics.exported`. Наборы: users, tasks, attempts,
+  activity (чат + запуски кода).
+- **S26-002.** `GET /api/v1/classrooms/{id}/report` — CSV (UTF-8 BOM) с
+  матрицей «ученик × задача», статусом, попытками, `overdue` и строкой «ИТОГО»;
+  доступ только владельцу/админу, аудит `classroom.report_exported`.
+- **S26-003.** `RETENTION_*_DAYS` (chat 90, code 90, notifications 180,
+  audit 365; `0` — выключено) + `backend/scripts/apply_retention.py`
+  (`--dry-run`, `--only`, `--batch-size`); логи `retention_applied` как метрика
+  удалённых строк.
+- **S26-004.** `DELETE /api/v1/auth/me` (пароль обязателен): анонимизация
+  username/email, сброс пароля, `is_active=false` (миграция 012), аудит
+  `user.self_deleted`. `docs/PRIVACY.md` — состав данных, сроки, экспорт,
+  удаление, права пользователя.
+- **S26-005.** SPEC §16, DESIGN_ADMIN_AND_OPS §11 (retention/cron, экспорт,
+  удаление), RULES §11.23, CHANGELOG, PRIVACY.
+
+### Метрики
+- Backend: **+12 тестов** (экспорт, отчёт, retention, удаление); полный прогон —
+  см. отчёт.
+- Миграция `012` (`users.is_active`), `alembic check` — без расхождений.
+
+### Проблемы
+- **UI-кнопка «Скачать отчёт»** не вошла в этот заход: API готов, кнопка —
+  отдельным небольшим коммитом (S26-002 остаётся `[~]`).
+- **Retention не автоматизирован в compose** (cron-пример в документации):
+  запуск — ручной/по cron, чтобы не удалять данные неожиданно.
+- **Self-service экспорт для ученика** не сделан: по запросу к администратору
+  (в PRIVACY.md зафиксировано).
+
+### DoD
+- ✅ Экспорт аналитики и отчёт класса работают (CSV/JSON, аудит, лимиты).
+- ✅ Retention `--dry-run` и применение; настройки задокументированы.
+- ✅ Удаление аккаунта анонимизирует данные и блокирует вход.
+- ✅ Политика ПДн описана (`docs/PRIVACY.md`), ссылки в USER_GUIDE.
 
 ---
 
