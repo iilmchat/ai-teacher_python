@@ -22,7 +22,8 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app
 
 # Только RestrictedPython: раннер не должен уметь ничего из стека приложения
-RUN pip install --no-cache-dir "restrictedpython==8.5"
+ARG PIP_INDEX_URL=https://pypi.org/simple/
+RUN pip install --no-cache-dir --index-url $PIP_INDEX_URL "restrictedpython==8.5"
 
 WORKDIR /app
 

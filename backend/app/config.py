@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     app_name: str = "AI Teacher for Python"
     version: str = "0.2.0"
     debug: bool = False
+    #: Формат логов: `json` (production/CI) или `console` (dev) — S25-001
+    log_level: str = "INFO"
+    log_format: str = "json"
+    #: Prometheus-метрики (S25-002): эндпоинт без авторизации для внутренней
+    #: сети; в nginx наружу не публикуется
+    metrics_enabled: bool = True
+    metrics_path: str = "/metrics"
     # NoDecode: значение приходит строкой и режется нашим валидатором (CSV или JSON)
     allowed_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:3000",

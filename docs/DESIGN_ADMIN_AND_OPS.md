@@ -251,3 +251,38 @@ code_executions=2), retention удалил тестовый бэкап стар�
 6. ~~Скрипты бэкапа/восстановления (S20-004)~~ — сделано в S20-004.
 7. Автоматические бэкапы по расписанию + off-site копия — после v0.2.0.
 8. Экспорт метрик в Prometheus/OTel и алерты — после v0.2.0.
+
+---
+
+## 10. Мониторинг и аудит (S25)
+
+**Метрики.** `GET /metrics` (Prometheus text format) на том же процессе, без
+авторизации — предназначен для внутренней сети: nginx отдаёт 404 на `/metrics`
+и `/health/*`, поэтому наружу они не попадают. Собираются:
+
+| Группа | Метрики |
+|--------|---------|
+| HTTP | `http_requests_total{method,path,status}`, `http_request_duration_seconds` (гистограмма) |
+| Песочница | `sandbox_runs_total{mode,result}`, `sandbox_duration_seconds`, `sandbox_timeouts_total` |
+| LLM | `llm_requests`, `llm_failures`, `llm_latency_ms`, `llm_tokens{kind}`, `llm_fallbacks` |
+| Кэш | `cache_hits`, `cache_misses`, `cache_errors` |
+| БД | `db_pool_connections{state}`, `db_pool_size` |
+
+LLM/кэш/БД отдаются как gauge из in-memory счётчиков процесса (на нескольких
+воркерах значения не суммируются — до перехода на общий экспортер в v0.3.x).
+
+**Алерты (рекомендуемые):** 5xx rate > 1% за 5 мин; p95 `http_request_duration`
+> 2 с; `sandbox_timeouts_total` растёт; `sandbox_runs_total{result="error"}`
+растёт; `llm_failures` растёт; `db_pool_connections{state="checked_out"}` близко
+к `db_pool_size`.
+
+**Логи.** JSON (`LOG_FORMAT=json`), каждая запись содержит `request_id`
+(из `X-Request-ID`), `http_request` пишется на каждый запрос с длительностью.
+`LOG_FORMAT=console` — для локальной разработки.
+
+**Health.** Docker healthcheck и compose используют `/health/ready`
+(БД + Redis), liveness — `/health/live`. `/api/v1/health` остаётся для
+совместимости и показывает состояние LLM.
+
+**Аудит.** `audit_log` (кто/что/над чем/IP/время) + `GET /api/v1/admin/audit`
+с фильтрами. Retention — в спринте 26 (`RETENTION_AUDIT_DAYS`).

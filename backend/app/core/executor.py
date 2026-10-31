@@ -38,6 +38,7 @@ from typing import Any
 
 from app.config import settings
 from app.core.container_sandbox import ContainerSandbox
+from app.core.metrics import sandbox_observed
 from app.core.runner_pool import PooledWorker, get_pool
 from app.core.sandbox_runtime import (
     ALLOWED_MODULES,
@@ -558,12 +559,14 @@ class SandboxedExecutor:
                 "Песочница перегружена: слишком много одновременных запусков. "
                 "Попробуйте через несколько секунд."
             )
+        started_at = time.perf_counter()
         try:
             # S24: контейнерный режим — до пула/батча; при недоступном Docker
             # `run_batch` вернёт None, и мы продолжим нативным путём.
             if self.mode == "container":
                 container_results = await self._execute_in_container(code, stdins)
                 if container_results is not None:
+                    self._observe_sandbox(started_at, "container", container_results)
                     return container_results
 
             if self.pool_size > 0:
@@ -578,16 +581,33 @@ class SandboxedExecutor:
                         results, reusable = await self._execute_batch_on_worker(
                             worker, code, stdins
                         )
+                        self._observe_sandbox(started_at, "native", results)
                         return results
                     finally:
                         await pool.release(worker, reusable=reusable)
 
             batched = await self._execute_batch_process(code, stdins)
-            if batched is None:
-                return [self._execute_in_process(code, stdin) for stdin in stdins]
-            return batched
+            results = (
+                batched
+                if batched is not None
+                else [self._execute_in_process(code, stdin) for stdin in stdins]
+            )
+            self._observe_sandbox(started_at, "native", results)
+            return results
         finally:
             slots.release()
+
+    @staticmethod
+    def _observe_sandbox(
+        started_at: float, mode: str, results: list[ExecutionResult]
+    ) -> None:
+        """Метрики песочницы (S25-002): длительность, результат, таймауты"""
+        sandbox_observed(
+            mode=mode,
+            duration_s=time.perf_counter() - started_at,
+            timed_out=any(result.error_type == "TimeoutError" for result in results),
+            failed=any(not result.success for result in results),
+        )
 
     async def execute(self, code: str, stdin_text: str = "") -> ExecutionResult:
         """Выполнить код в песочнице (блокирующая работа — в отдельном потоке).

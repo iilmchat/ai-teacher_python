@@ -9,8 +9,8 @@
 
 **Целевая версия:** v0.3.0 «Ops & Scale»  
 **Создан:** 2026-10-30  
-**Текущий спринт:** 24 завершён — Sandbox Runner Isolation (контейнер-раннер,
-self-check изоляции, `EXECUTOR_MODE`); следующий — 25 (Observability & Audit Log)  
+**Текущий спринт:** 25 завершён — Observability & Audit Log (request-id,
+`/metrics`, health, аудит); следующий — 26 (Export, Retention & Privacy)  
 **Базис:** v0.2.0 (2026-10-30)  
 **Текущее состояние:** **460** backend-тестов (+1 skip на Windows), 80 frontend-unit
 + 12 e2e, миграции до `010`; CI — 7 job'ов (вкл. perf-smoke) на self-hosted
@@ -400,40 +400,34 @@ fallback документирован; влияние на p95 submit зафик
 **Зависит от:** спринт 21  
 **Оценка:** 2 дня
 
-### S25-001: Request-ID и корреляция логов — [ ]
-- [ ] Middleware: `X-Request-ID` (входящий или uuid4), `request_id` в structlog
-      context, в ответе — заголовок; прокидывание в LLM/песочницу
-- [ ] **Зависит от:** — · **Оценка:** 3 ч
+### S25-001: Request-ID и корреляция логов — [x]
+- [x] Middleware: `X-Request-ID` (входящий или uuid4), `request_id` в structlog
+      context, заголовок в ответе; `current_request_id()` для сервисов
+- [x] **Зависит от:** — · **Оценка:** 3 ч
 
-### S25-002: Prometheus `/metrics` — [ ]
-- [ ] `prometheus_client`: HTTP (route/method/status/latency), LLM (requests,
-      errors, latency, tokens), cache (hits/misses), sandbox (runs, timeouts,
-      concurrency), DB pool
-- [ ] Отдельный порт/эндпоинт без авторизации для внутренней сети; в nginx не
-      публиковать наружу
-- [ ] **Зависит от:** S25-001 · **Оценка:** 5 ч
+### S25-002: Prometheus `/metrics` — [x]
+- [x] `prometheus_client`: HTTP (route/method/status/latency), LLM (gauge из
+      счётчиков), cache, sandbox (runs/timeouts/длительность), DB pool
+- [x] Отдельный эндпоинт без авторизации для внутренней сети; nginx → 404
+- [x] **Зависит от:** S25-001 · **Оценка:** 5 ч
 
-### S25-003: Liveness/Readiness — [ ]
-- [ ] `/health/live` (процесс жив) и `/health/ready` (БД/Redis/LLM-конфиг);
-      `/api/v1/health` сохранить обратно совместимым
-- [ ] Docker healthcheck и compose переключить на readiness
-- [ ] **Зависит от:** — · **Оценка:** 2 ч
+### S25-003: Liveness/Readiness — [x]
+- [x] `/health/live` и `/health/ready` (БД/Redis/LLM-конфиг); `/api/v1/health`
+      сохранён; compose healthcheck → readiness
+- [x] **Зависит от:** — · **Оценка:** 2 ч
 
-### S25-004: Audit log действий teacher/admin — [ ]
-- [ ] Таблица `audit_log` (актор, действие, сущность, payload-сводка, IP, время),
-      миграция; запись: роли, задачи, классы, назначения, удаление
-- [ ] `GET /api/v1/admin/audit` (admin, пагинация/фильтры)
-- [ ] **Зависит от:** S25-001 · **Оценка:** 5 ч
+### S25-004: Audit log действий teacher/admin — [x]
+- [x] Таблица `audit_log` (актор, действие, сущность, payload-сводка, IP, время),
+      миграция 011; записи: роли, задачи, классы, назначения, удаление
+- [x] `GET /api/v1/admin/audit` (admin, пагинация/фильтры)
+- [x] **Зависит от:** S25-001 · **Оценка:** 5 ч
 
-### S25-005: Документация и дашборд-гайд — [ ]
-- [ ] `DESIGN_ADMIN_AND_OPS` §monitoring: метрики, алерты (ошибки 5xx, latency
-      p95, очередь песочницы), валюация; `MANUAL_TESTING_GUIDE`
-- [ ] **Зависит от:** S25-001…S25-004 · **Оценка:** 3 ч
+### S25-005: Документация и дашборд-гайд — [x]
+- [x] `DESIGN_ADMIN_AND_OPS` §10: метрики, алерты, логи, аудит; `MANUAL_TESTING_GUIDE`
+- [x] **Зависит от:** S25-001…S25-004 · **Оценка:** 3 ч
 
 **DoD:** `/metrics` отдаёт метрики; request_id в логах и ответе; readiness
 корректно отражает зависимости; audit log пишется и читается админом.
-
----
 
 ## Спринт 26: Export, Retention & Privacy
 

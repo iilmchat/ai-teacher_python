@@ -3,9 +3,9 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** 24 завершён (этап v0.3.0 «Ops & Scale»,
-[TODO_V0.3.md](../TODO_V0.3.md)) — Sandbox Runner Isolation: контейнер-раннер,
-self-check изоляции, EXECUTOR_MODE; следующий — спринт 25 (Observability & Audit Log)
+**Текущий спринт:** 25 завершён (этап v0.3.0 «Ops & Scale»,
+[TODO_V0.3.md](../TODO_V0.3.md)) — Observability & Audit Log: request-id,
+`/metrics`, liveness/readiness, аудит; следующий — спринт 26 (Export, Retention & Privacy)
 
 ---
 
@@ -37,6 +37,7 @@ self-check изоляции, EXECUTOR_MODE; следующий — спринт 
 - [Спринт 22: Dependency Modernization](#спринт-22-dependency-modernization)
 - [Спринт 23: Sandbox Throughput](#спринт-23-sandbox-throughput)
 - [Спринт 24: Sandbox Runner Isolation](#спринт-24-sandbox-runner-isolation)
+- [Спринт 25: Observability & Audit Log](#спринт-25-observability--audit-log)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1366,6 +1367,60 @@ S21-002/S21-004 закрыты частично
 - ✅ Выбор режима — флаг `EXECUTOR_MODE`, по умолчанию `native`.
 
 ---
+## Спринт 25: Observability & Audit Log
+
+**Период:** 2026-10-31  
+**Статус:** ✅ завершён: request-id, `/metrics`, liveness/readiness, аудит
+действий teacher/admin (миграция 011) и админ-эндпоинт журнала
+
+### Задачи
+- [x] S25-001: Request-ID и корреляция логов
+- [x] S25-002: Prometheus `/metrics`
+- [x] S25-003: Liveness/Readiness
+- [x] S25-004: Audit log + `GET /admin/audit`
+- [x] S25-005: Документация и гайд по мониторингу
+
+### Что сделано
+- **S25-001.** `RequestContextMiddleware`: `X-Request-ID` из запроса или `uuid4`,
+  ответ с тем же заголовком, `structlog.contextvars` (функция
+  `current_request_id()`), запись `http_request` с длительностью. Добавлена
+  конфигурация structlog (`app/core/logging.py`, JSON/console).
+- **S25-002.** `app/core/metrics.py` на `prometheus_client` с отдельным реестром:
+  HTTP (`http_requests_total`, гистограмма длительности по шаблону маршрута),
+  песочница (`sandbox_runs_total`, `sandbox_duration_seconds`,
+  `sandbox_timeouts_total`), LLM/кэш (gauge из in-memory счётчиков при scrape),
+  пул БД. `GET /metrics` без авторизации; `METRICS_ENABLED` отключает; nginx
+  отдаёт 404 на `/metrics` и `/health/*`.
+- **S25-003.** `/health/live` (без зависимостей) и `/health/ready` (БД, Redis,
+  конфиг LLM; 503 + `checks`); `/api/v1/health` не изменён; healthcheck в
+  `docker-compose.prod.yml` переведён на readiness.
+- **S25-004.** Таблица `audit_log` (миграция `011`, индексы по времени/действию/
+  актору), `record_audit` (best-effort, отдельный коммит), `list_audit`;
+  `GET /api/v1/admin/audit` с фильтрами и пагинацией. Пишутся: `user.updated`,
+  `user.deleted`, `task.created/updated/deleted`, `classroom.created`,
+  `assignment.created`.
+- **S25-005.** SPEC §15, DESIGN_ADMIN_AND_OPS §10 (метрики, алерты, логи,
+  аудит), RULES §11.22, CHANGELOG, отчёт SPRINT-25.
+
+### Метрики
+- Backend: **+13 тестов** наблюдаемости/аудита; полный прогон — см. отчёт.
+- Миграции: `011` (audit_log), `alembic check` — без расхождений.
+
+### Проблемы
+- Метрики LLM/кэша/пула — **gauge из счётчиков процесса**: на нескольких
+  воркерах не суммируются (осознанно до общего экспортёра).
+- `audit_log` растёт без ограничения — retention появится в спринте 26
+  (`RETENTION_AUDIT_DAYS`).
+- Запись аудита — отдельный коммит после действия: при падении процесса между
+  действием и аудитом запись может потеряться (best-effort, задокументировано).
+
+### DoD
+- ✅ `/metrics` отдаёт метрики; request_id в логах и ответе.
+- ✅ Readiness корректно отражает зависимости; liveness не зависит от них.
+- ✅ Audit log пишется и читается админом (фильтры/пагинация, 403 для ученика).
+
+---
+
 ## Шаблон отчёта по спринту
 
 ```
