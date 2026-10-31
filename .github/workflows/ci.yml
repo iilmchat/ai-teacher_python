@@ -274,26 +274,13 @@ jobs:
       # pip-audit требует PyPI. Локальный fallback для разработки —
       # backend/scripts/audit_python_deps.py (GitHub Advisory API).
       #
-      # --ignore-vuln: известные residual-риски, которые нельзя закрыть без
-      # координированного апгрейда (локальный PyPI заблокирован, апгрейд
-      # ломает совместимость и требует полного прогона тестов). Каждый ID и
-      # обоснование — docs/reports/sprint-20/SECURITY_AUDIT.md §8.
-      # RestrictedPython обновлён до 8.5 (S20-001b) — его PYSEC-2026-1874/
-      # 3917/4161 из игнора убраны. Остались starlette (транзитивно от
-      # fastapi 0.115.5) и dev-only pytest.
+      # S22-002/003: starlette 1.10 и pytest 9 закрыли прежние advisory,
+      # поэтому --ignore-vuln больше нет — job ловит любые новые находки.
       - name: Audit backend dependencies (pip-audit)
         run: |
           python -m pip install --upgrade pip
           pip install pip-audit
-          pip-audit -r backend/requirements.txt --strict --desc \
-            --ignore-vuln PYSEC-2026-161 \
-            --ignore-vuln PYSEC-2026-1941 \
-            --ignore-vuln PYSEC-2026-1942 \
-            --ignore-vuln PYSEC-2026-2280 \
-            --ignore-vuln PYSEC-2026-2281 \
-            --ignore-vuln PYSEC-2026-248 \
-            --ignore-vuln PYSEC-2026-249 \
-            --ignore-vuln PYSEC-2026-1845
+          pip-audit -r backend/requirements.txt --strict --desc
 
       - name: Install gitleaks
         env:

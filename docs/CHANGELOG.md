@@ -9,9 +9,24 @@
 
 ## [Unreleased]
 
-Этап v0.3.0 «Ops & Scale» (спринты 21–30). Спринт 21 — CI & Quality Gates.
+Этап v0.3.0 «Ops & Scale» (спринты 21–30). Спринт 21 — CI & Quality Gates,
+спринт 22 — Dependency Modernization.
 
 ### Добавлено
+
+**Контрактные тесты и зависимости (S22)**
+
+- Снапшот OpenAPI (`backend/tests/contracts/openapi.json`, 68 операций,
+  92 схемы) и тест совместимости: разрешены только аддитивные изменения
+  (`backend/tests/contract_utils.py`); перегенерация —
+  `python scripts/snapshot_openapi.py`
+- Фикстуры форм ответов 21 ключевого эндпоинта (auth, tasks, chat, classrooms,
+  admin analytics) — `backend/tests/test_api_contract_shapes.py` +
+  `contracts/endpoints.json`
+- `fastapi 0.162.0` + `starlette 1.10.0` (KI-015): 7 advisory starlette
+  закрыты, `pip-audit` в CI — без `--ignore-vuln`
+- `pytest 9.2.0`, `pytest-asyncio 1.4.1`, `pytest-cov 7.1.0`,
+  `pytest-env 1.8.3` (KI-016): dev-only advisory PYSEC-2026-1845 закрыт
 
 **CI (S21)**
 
@@ -39,6 +54,9 @@
 
 ### Изменено
 
+- **401 вместо 403 без заголовка `Authorization`** (S22-002, Starlette 1.x):
+  поведение выровнено по RFC 7235 (`401` + `WWW-Authenticate`); клиентский код
+  уже обрабатывал 401 (refresh/логин). Переводы ошибок и SPEC §7 обновлены.
 - `pytest`/`ruff`/`mypy` в CI ставятся из `backend/requirements.txt`
   (закреплённые версии): unpinned ruff давал 54 ложных ошибки на неизменённом
   коде, а mypy без runtime-зависимостей — 295 `import-not-found`

@@ -90,9 +90,31 @@ pip install -r requirements.txt
 .\venv\Scripts\pytest.exe -q
 ```
 
-> **PyPI с хоста может быть заблокирован** (KI-017). Тогда `pip install`/
-> `pip-audit` локально не работают: аудит backend — в контейнере
-> `python:3.12-slim`, локальный fallback — `backend/scripts/audit_python_deps.py`
+### Если PyPI недоступен: wheelhouse (S22-005)
+
+PyPI с рабочей машины может быть заблокирован (KI-017). Тогда зависимости
+ставятся из локального «склада» колёс:
+
+```powershell
+# 1) скачать все пины (Docker, Linux-колёса — как в CI):
+python scripts/wheelhouse.py build --out .wheelhouse --docker `
+    --index-url https://mirrors.aliyun.com/pypi/simple/
+
+# 2) поставить в venv без сети:
+python scripts/wheelhouse.py install --from .wheelhouse `
+    --python backend\venv\Scripts\python.exe
+
+# 3) посмотреть, что лежит:
+python scripts/wheelhouse.py list --from .wheelhouse
+```
+
+`.wheelhouse/` — в `.gitignore`; колёса, собранные pip'ом Windows-хоста, в
+Linux-контейнер не ставятся, поэтому в CI используется тот же скрипт, но с
+именованным томом (`scripts/ci/build-wheelhouse.ps1`). Порядок безопасного
+апгрейда зависимостей — [RULES.md](RULES.md) §11.21.
+
+> Аудит backend — в контейнере `python:3.12-slim` (`pip-audit`), локальный
+> fallback — `backend/scripts/audit_python_deps.py`
 > (см. [reports/sprint-20/SECURITY_AUDIT.md](reports/sprint-20/SECURITY_AUDIT.md)).
 
 ---

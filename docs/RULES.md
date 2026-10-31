@@ -818,6 +818,37 @@ tests/
     <name>`, `C:\actions-runner\_diag\Runner_*.log`; отмена — `gh run cancel`,
     перезапуск — `gh run rerun <id> --failed`.
 
+### 11.21. Обновление зависимостей (S22)
+
+1. **Апгрейд — только с контрактными тестами.** `pytest -q tests/test_contract_openapi.py`
+   (снапшот OpenAPI, 68 операций) и `tests/test_api_contract_shapes.py`
+   (21 форма ответов) запускаются **до** и **после** апгрейда. Breaking-изменение
+   без осознанного обновления снапшота — блокер мержа.
+2. **Порядок апгрейда:** контрактные тесты → `pip install` новых пинов в venv
+   (или wheelhouse) → `pytest -q` → e2e → обновление `requirements.txt` →
+   `pip-audit` без игноров → CHANGELOG/SPEC/KNOWN_ISSUES. Один апгрейд — один PR.
+3. **Снапшот обновляется осознанно, отдельным коммитом.** `python
+   scripts/snapshot_openapi.py`; в коммите — почему изменение аддитивное
+   (пример S22-002: `format: password`, `contentMediaType`,
+   `ValidationError.ctx/input` — косметика OpenAPI, без удаления полей).
+4. **Поведенческие изменения — в SPEC и тесты.** Апгрейд `starlette 1.x` дал
+   **401 вместо 403** без заголовка `Authorization` (RFC 7235). Такое
+   фиксируется в SPEC §7, тесте `test_access_matrix` и CHANGELOG, а не
+   «замалчивается» зелёным pytest.
+5. **`--ignore-vuln` — только с KI и датой.** С S22-002/003 в CI игноров нет;
+   если появится новый advisory без исправления — завести KI, обосновать
+   неприменимость вектора и указать, когда игнор снимается.
+6. **Wheelhouse для офлайн-установки.** `python scripts/wheelhouse.py build
+   --out .wheelhouse --docker` (Linux-колёса) + `install --no-index`;
+   для CI — named volume `ai-teacher-wheelhouse` (`scripts/ci/build-wheelhouse.ps1`).
+   Колёса, собранные pip'ом Windows-хоста, в Linux-контейнер не ставятся.
+7. **Dependabot:** minor/patch — группой, мерж после зелёного CI; major —
+   отдельным PR и ручной проверкой конфигов; авто-мерж на GitHub Free/private
+   недоступен (KI-023), поэтому «зелёный + review» остаётся ручным правилом.
+8. **`filterwarnings = error` пока не включаем.** В коде ~1 400 предупреждений
+   `datetime.utcnow()`; сначала чистка, потом строгий режим — иначе шум
+   предупреждений превратится в красный CI.
+
 ---
 
 ## 12. Отчёты по шагам спринта

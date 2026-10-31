@@ -107,3 +107,6 @@ frontend/.pnp.js
 *.swp
 
 .release/
+
+# Wheelhouse для офлайн-установки (S22-005)
+.wheelhouse/

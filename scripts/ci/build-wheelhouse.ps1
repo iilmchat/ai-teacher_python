@@ -1,18 +1,19 @@
 # =============================================================================
 # wheelhouse для офлайн-установки backend-зависимостей в CI (KI-017, S22-005).
 #
-# PyPI с машины проекта нестабилен, поэтому job'ы `lint`/`test` сначала берут
-# колёса из named volume `ai-teacher-wheelhouse` (смонтирован в /wheelhouse),
-# и только при его отсутствии идут в PyPI.
+# PyPI с машины проекта нестабилен, поэтому job'ы `lint`/`test`/`security`
+# сначала берут колёса из named volume `ai-teacher-wheelhouse` (смонтирован в
+# /wheelhouse), и только при его отсутствии идут в PyPI/зеркало.
 #
-# ВАЖНО: колёса качает Linux-контейнер (python:3.12-slim) — та же платформа,
-# что у job'ов. Windows-wheelhouse (собранный pip'ом хоста) для контейнеров
-# непригоден: pip скажет «not a supported wheel».
+# Обёртка над `scripts/wheelhouse.py`: скачивание выполняет Linux-контейнер
+# (python:3.12-slim) — та же платформа, что у job'ов. Windows-wheelhouse,
+# собранный pip'ом хоста, для контейнеров непригоден («not a supported wheel»).
 #
 # Примеры:
 #   pwsh scripts/ci/build-wheelhouse.ps1                 # обновить volume
 #   pwsh scripts/ci/build-wheelhouse.ps1 -Recreate       # с нуля
 #   pwsh scripts/ci/build-wheelhouse.ps1 -ListOnly       # что лежит внутри
+#   pwsh scripts/ci/build-wheelhouse.ps1 -IndexUrl https://pypi.org/simple/
 # =============================================================================
 param(
     [string]$Volume = 'ai-teacher-wheelhouse',
@@ -34,28 +35,32 @@ if ($Recreate) {
 }
 
 if ($ListOnly) {
-    docker run --rm -v "${Volume}:/wheelhouse:ro" python:3.12-slim `
-        sh -c 'ls /wheelhouse/*.whl 2>/dev/null | wc -l; du -sh /wheelhouse 2>/dev/null'
+    docker run --rm `
+        -v "${Volume}:/wheelhouse:ro" `
+        -v "${RepoRoot}:/src:ro" `
+        python:3.12-slim `
+        python /src/scripts/wheelhouse.py list --from /wheelhouse
     exit $LASTEXITCODE
 }
 
-$requirements = Join-Path $RepoRoot 'backend\requirements.txt'
-if (-not (Test-Path -LiteralPath $requirements)) {
-    throw "requirements не найден: $requirements"
+if (-not (Test-Path -LiteralPath (Join-Path $RepoRoot 'backend\requirements.txt'))) {
+    throw "requirements не найден: $RepoRoot\backend\requirements.txt"
 }
 
-Write-Host "==> скачивание колёс в volume $Volume (Linux/wheel платформа контейнера)"
+Write-Host "==> скачивание колёс в volume $Volume (Linux-платформа контейнера)"
 Write-Host "    индекс: $IndexUrl"
-$mirrorHost = ([uri]$IndexUrl).Host
 docker run --rm `
     -v "${Volume}:/wheelhouse" `
-    -v "${requirements}:/tmp/requirements.txt:ro" `
+    -v "${RepoRoot}:/src:ro" `
     python:3.12-slim `
-    sh -c "pip download -q --timeout 30 --retries 3 --index-url '$IndexUrl' --trusted-host '$mirrorHost' -r /tmp/requirements.txt -d /wheelhouse && ls /wheelhouse/*.whl | wc -l"
+    python /src/scripts/wheelhouse.py build `
+        --requirements /src/backend/requirements.txt `
+        --out /wheelhouse `
+        --index-url $IndexUrl
 
 if ($LASTEXITCODE -ne 0) {
-    throw "pip download не удался (индекс $IndexUrl, KI-017). Повторите позже, задайте -IndexUrl или соберите wheelhouse там, где PyPI доступен."
+    throw "wheelhouse build не удался (индекс $IndexUrl, KI-017). Повторите позже, задайте -IndexUrl или соберите wheelhouse там, где PyPI доступен."
 }
 
 Write-Host '==> готово. Проверка:'
-& $PSScriptRoot\build-wheelhouse.ps1 -Volume $Volume -ListOnly
+& $PSScriptRoot\build-wheelhouse.ps1 -Volume $Volume -RepoRoot $RepoRoot -ListOnly

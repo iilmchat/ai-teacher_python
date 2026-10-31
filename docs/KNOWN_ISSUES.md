@@ -3,8 +3,8 @@
 > Этот документ содержит список всех известных проблем, ограничений и блокеров.
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
-**Последнее обновление:** 2026-10-30 (спринт 21 / v0.3.0 — CI & Quality Gates)  
-**Всего проблем:** 23 (активных: 6, закрытых: 17)
+**Последнее обновление:** 2026-10-31 (спринт 22 / v0.3.0 — Dependency Modernization)  
+**Всего проблем:** 23 (активных: 3, закрытых: 20)
 
 ---
 
@@ -48,77 +48,15 @@ ADR и инструкции — `docs/CI.md` §10; проверка того, ч
 
 **Workaround:** RULES §10 — мерж только при зелёном `CI (self-hosted fallback)`
 (проверка глазами), зелёный прогон 6/6 известен (run 41070317162).
+С S22-004 это же ограничение закрывает авто-мерж Dependabot minor/patch: на
+Free/private нет ни branch protection, ни auto-merge — группа обновлений
+мержится вручную после зелёного CI.
 
 **План закрытия:** (1) владелец выдаёт GitFlic-токен/регистрирует агент →
 прогнать пилот → включить гейт и проверить красным MR; либо (2) GitHub Pro /
 публичный репозиторий → `pwsh scripts/ci/protect-branch.ps1`.
 
 **Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-10-30
-
----
-
-### KI-015 · Accepted · High · deps: fastapi/starlette · отложенный апгрейд starlette 0.41.3
-
-**Описание:** `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) содержит
-7 ID: high — PYSEC-2026-161, PYSEC-2026-248; medium/low — PYSEC-2026-1941,
-1942, 2280, 2281, 249. Апгрейд до исправленной версии требует мажорного
-`starlette` (≥1.3.1) и координированного апгрейда `fastapi` с полным
-прогоном тестов — в спринте 20 это за рамками бюджета и рискованно перед
-релизом.
-
-**Почему риск принят (векторы не применимы):** файлы статики отдаёт nginx
-(`StaticFiles`/`FileResponse` в API не используются), тела запросов — JSON
-(не urlencoded-формы), `HTTPEndpoint` не используется, решения аутентификации
-не зависят от `request.url`/Host (валидация — за nginx). `pip-audit` в CI
-игнорирует эти 7 ID до апгрейда, чтобы job ловил новые уязвимости.
-
-**Workaround:** Dependabot откроет PR на starlette; мажор проверять вручную —
-в рамках v0.3.0 (координированный апгрейд fastapi+starlette, полный прогон
-`test_access_matrix`, API, WS и e2e).
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
-
----
-
-### KI-016 · Accepted · Low · dev-deps · pytest 8.3.3 (dev-only advisory)
-
-**Описание:** `pytest 8.3.3` — PYSEC-2026-1845 (moderate, UNIX tmpdir).
-Зависимость только для разработки/CI, в runtime-образ не попадает; на
-Windows-машине разработки вектор не воспроизводится. Фикс — мажорный
-`pytest 9.x` вместе с dev-апгрейдом.
-
-**Workaround:** CI `pip-audit` игнорирует 1 ID (PYSEC-2026-1845); апгрейд —
-в плановом dev-обновлении.
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
-
----
-
-### KI-017 · Open · Low · окружение/инструменты · PyPI недоступен с хоста
-
-**Описание:** на машине разработки `pypi.org`/`files.pythonhosted.org`
-заблокированы (connection reset/timeout): `pip install`/`pip-audit` с хоста
-не работают, часть апгрейдов пришлось ставить вручную через Docker-wheelhouse.
-Docker-контейнеры PyPI видят, npm registry и `api.github.com` доступны.
-
-**Workaround:** аудит backend выполняется в контейнере (`python:3.12-slim`) —
-это же путь CI; для локальной разработки — `backend/scripts/audit_python_deps.py`
-по GitHub Advisory API (лимит 60 запросов/час, кэш, `--resume`, `--offline`,
-exit 2 при неполном прогоне). Закрепление версий — `requirements.txt` +
-Dependabot; авторитетный результат — CI `Security`.
-
-**План закрытия:** восстановление доступа к PyPI на рабочей машине
-(прокси/сеть) либо переход на локальное зеркало; до этого — процесс выше.
-
-**Обновлено 2026-10-30 (спринт 21):** нестабильность стала заметнее — job
-`lint` на self-hosted runner'е залипал в `pip install` на 20+ минут
-(TLS-хендшейк к `pypi.org` таймаутил, при этом из свежего контейнера PyPI
-отвечал). Для CI добавлен **офлайн-путь**: зависимости ставятся из wheelhouse
-(named volume `ai-teacher-wheelhouse`, `scripts/ci/build-wheelhouse.ps1`), PyPI —
-только fallback; плюс постоянные кэши pip/pnpm (`docs/CI.md` §12.5, RULES
-§11.20). Сам доступ с хоста не восстановлен.
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30 (спринт 21)
 
 ---
 
@@ -195,6 +133,65 @@ job'ов (Lint, Test, Frontend, Security, E2E, Docker), прогон **6/6 зе�
 
 ---
 
+### KI-015 · Resolved · High · deps: fastapi/starlette · starlette 0.41.3 → 1.10.0
+
+**Описание:** `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) содержал
+7 advisory: high — PYSEC-2026-161, PYSEC-2026-248; medium/low — PYSEC-2026-1941,
+1942, 2280, 2281, 249. Апгрейд требовал мажорного `starlette` (≥1.3.1) и
+координированного апгрейда `fastapi`.
+
+**Решение (S22-002, спринт 22):** `fastapi 0.115.5 → 0.162.0`,
+`starlette 0.41.3 → 1.10.0` (пин в requirements). Прогон: контрактные тесты
+S22-001 (68 операций, 92 схемы — breaking-изменений нет, обновлены только
+косметические `format`/`contentMediaType`/`ValidationError.ctx`), полный
+pytest **367 passed + 1 skipped**, e2e 12/12. Единственное поведенческое
+изменение — отсутствие `Authorization` теперь даёт **401** вместо 403
+(RFC 7235 в Starlette 1.x): тест `test_access_matrix` и SPEC §7 обновлены.
+`pip-audit` — без `--ignore-vuln` («No known vulnerabilities found»).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-002)
+
+---
+
+### KI-016 · Resolved · Low · dev-deps · pytest 8.3.3 → 9.2.0
+
+**Описание:** `pytest 8.3.3` — PYSEC-2026-1845 (moderate, UNIX tmpdir);
+зависимость только для разработки/CI.
+
+**Решение (S22-003):** `pytest 9.2.0`, `pytest-asyncio 1.4.1`,
+`pytest-cov 7.1.0`, `pytest-env 1.8.3`; конфиг `pyproject.toml` менять не
+потребовалось (`asyncio_mode`, `asyncio_default_fixture_loop_scope`,
+`testpaths` — без предупреждений об устаревших опциях). Полный прогон —
+367 passed + 1 skipped; `pip check` — OK; `pip-audit` — без игноров.
+`filterwarnings = error` намеренно не включён: в коде ~1 400 предупреждений
+`datetime.utcnow()`, это отдельная чистка (см. отчёт спринта 22).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-003)
+
+---
+
+### KI-017 · Resolved · Low · окружение/инструменты · PyPI недоступен с хоста
+
+**Описание:** pypi.org/iles.pythonhosted.org с машины разработки
+заблокированы (connection reset/timeout): pip install/pip-audit с хоста
+не работают. Docker-контейнеры PyPI видят (нестабильно), npm registry и
+pi.github.com доступны.
+
+**Решение (S22-005, спринт 22):** офлайн-установка формализована —
+scripts/wheelhouse.py: uild --out .wheelhouse --docker (скачивание всех
+пинов Linux-контейнером) и install --from .wheelhouse --python
+backend/venv/Scripts/python.exe (pip install --no-index --find-links). Для CI
+тот же скрипт наполняет named volume i-teacher-wheelhouse
+(scripts/ci/build-wheelhouse.ps1). Порядок — GETTING_STARTED §4 и RULES §11.21;
+аудит — pip-audit в контейнере / ackend/scripts/audit_python_deps.py,
+авторитетный результат — job Security.
+
+**Оговорка:** сам доступ к PyPI с хоста не восстановлен — это ограничение
+сети, а не проекта; основной путь остаётся CI (контейнер, зеркала, wheelhouse).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-005)
+
+---
 ### KI-019 · Resolved · Critical · deps/security · python-jose и PyJWT 2.10.0
 
 **Описание:** аудит backend (`pip-audit`, Docker/CI-путь) показал 66 записей

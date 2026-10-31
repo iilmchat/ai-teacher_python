@@ -9,15 +9,15 @@
 
 **Целевая версия:** v0.3.0 «Ops & Scale»  
 **Создан:** 2026-10-30  
-**Текущий спринт:** 21 — CI & Quality Gates (CI восстановлен на self-hosted
-runner'е; автоматический merge-gate — `KI-023`)  
+**Текущий спринт:** 22 завершён — Dependency Modernization (`fastapi` 0.162 +
+`starlette` 1.10, `pytest` 9.2, контрактные тесты API); следующий — 23
+(Sandbox Throughput, `KI-022`)  
 **Базис:** v0.2.0 (2026-10-30)  
-**Текущее состояние:** **354** backend-теста (+1 skip на Windows), 80 frontend-unit
+**Текущее состояние:** **367** backend-тестов (+1 skip на Windows), 80 frontend-unit
 + 12 e2e, миграции до `010`; CI — 6/6 job'ов зелёные (self-hosted runner);
-активных KI — 6: `KI-015` (fastapi/starlette, High, accepted), `KI-016` (dev
-pytest, Low, accepted), `KI-017` (PyPI с хоста, Low), `KI-018` (`.format` в
-песочнице, Low, accepted), `KI-022` (throughput submit, Med, accepted),
-`KI-023` (merge-gate, High). Следующий свободный номер — **KI-024**.
+`pip-audit` без игноров; активных KI — 3: `KI-018` (`.format` в песочнице, Low,
+accepted), `KI-022` (throughput submit, Med, accepted), `KI-023` (merge-gate/
+авто-мерж, High). Следующий свободный номер — **KI-024**.
 
 ---
 
@@ -234,46 +234,54 @@ KI-016; смягчает KI-017.
 **Зависит от:** спринт 21  
 **Оценка:** 2.5 дня
 
-### S22-001: Контрактные тесты API — [ ]
-- [ ] Снапшот `openapi.json` (`tests/contracts/openapi.json`) + тест сравнения
-      (разрешены только аддитивные изменения)
-- [ ] Фикстуры ответов ключевых эндпоинтов: auth, tasks list/detail/submit, chat
-      sessions/messages/search, classrooms/assignments, admin analytics
-- [ ] **Зависит от:** — · **Оценка:** 4 ч
+### S22-001: Контрактные тесты API — [x]
+- [x] Снапшот `openapi.json` (`tests/contracts/openapi.json`) + тест сравнения
+      (разрешены только аддитивные изменения) — `tests/contract_utils.py`,
+      `scripts/snapshot_openapi.py`
+- [x] Фикстуры ответов ключевых эндпоинтов: auth, tasks list/detail/submit, chat
+      sessions/messages/search, classrooms/assignments, admin analytics —
+      21 форма (`tests/contracts/endpoints.json`)
+- [x] **Зависит от:** — · **Оценка:** 4 ч
 
-### S22-002: `fastapi` 0.162 + `starlette` 1.x (KI-015) — [ ]
-- [ ] Локальный wheelhouse из Docker (см. S22-005), установка в venv/образ
-- [ ] Апгрейд `fastapi`, `starlette`, транзитивных (`typing-inspection`,
-      `annotated-doc`); проверить совместимость pydantic 2.x
-- [ ] Прогнать контрактные тесты, pytest, e2e; починить отличия (headers,
-      exception handlers, middleware)
-- [ ] `pip-audit` без `--ignore-vuln` для starlette; убрать игноры из CI
-- [ ] KI-015 → `Resolved`
-- [ ] **Зависит от:** S22-001 · **Оценка:** 8 ч
+### S22-002: `fastapi` 0.162 + `starlette` 1.x (KI-015) — [x]
+- [x] Локальный wheelhouse из Docker (см. S22-005), установка в venv/образ
+- [x] Апгрейд `fastapi` 0.115.5 → **0.162.0**, `starlette` 0.41.3 → **1.10.0**,
+      транзитивные `annotated-doc`/`opentelemetry-api`; pydantic 2.10.1 совместим
+- [x] Прогнать контрактные тесты, pytest, e2e; починить отличия — единственное
+      поведенческое: 401 вместо 403 без `Authorization` (SPEC §7, тест обновлены)
+- [x] `pip-audit` без `--ignore-vuln`; игноры убраны из CI
+- [x] KI-015 → `Resolved`
+- [x] **Зависит от:** S22-001 · **Оценка:** 8 ч
 
-### S22-003: `pytest` 9 и dev-зависимости (KI-016) — [ ]
-- [ ] `pytest` 9.x + `pytest-asyncio`/`pytest-cov`/`pytest-env` совместимые версии
-- [ ] Включить `filterwarnings = error` для новых deprecation (по согласованию)
-- [ ] KI-016 → `Resolved`
-- [ ] **Зависит от:** S22-001 · **Оценка:** 4 ч
+### S22-003: `pytest` 9 и dev-зависимости (KI-016) — [x]
+- [x] `pytest` **9.2.0** + `pytest-asyncio` 1.4.1 / `pytest-cov` 7.1.0 /
+      `pytest-env` 1.8.3; конфиг `pyproject.toml` без правок
+- [~] `filterwarnings = error` — **не включён**: ~1 400 `datetime.utcnow()`
+      deprecation требуют отдельной чистки (RULES §11.21 п. 8, отчёт STEP-02)
+- [x] KI-016 → `Resolved`
+- [x] **Зависит от:** S22-001 · **Оценка:** 4 ч
 
-### S22-004: Dependabot и авто-мерж minor/patch — [ ]
-- [ ] Авто-мерж minor/patch после зелёного CI (label `dependencies`), major — вручную
-- [ ] Проверить группировку PR (pip/npm/actions) и лимиты
-- [ ] **Зависит от:** S21-002 · **Оценка:** 3 ч
+### S22-004: Dependabot и авто-мерж minor/patch — [~]
+- [~] Авто-мерж minor/patch — **невозможен на GitHub Free/private** (нет
+      branch protection/auto-merge, KI-023); политика и группировка описаны
+      в `.github/dependabot.yml` и `docs/CI.md` §13, мерж — вручную
+- [x] Проверить группировку PR (pip/npm/actions) и лимиты; устаревшие PR после
+      ручного апгрейда закрыты (#18, #20, #22)
+- [x] **Зависит от:** S21-002 · **Оценка:** 3 ч
 
-### S22-005: Wheelhouse для offline-окружений (KI-017) — [ ]
-- [ ] `scripts/wheelhouse.py`: скачивание всех пинов через Docker (`python:3.12-slim`,
-      PyPI доступен из контейнера) в каталог, установка `--no-index --find-links`
-- [ ] Документация в `docs/GETTING_STARTED.md`; KI-017 → `Resolved` (с оговоркой,
-      что CI-путь остаётся основным)
-- [ ] **Зависит от:** — · **Оценка:** 3 ч
+### S22-005: Wheelhouse для offline-окружений (KI-017) — [x]
+- [x] `scripts/wheelhouse.py`: `build --docker` (python:3.12-slim, Linux-колёса)
+      в каталог/volume, `install --no-index --find-links`, `list`;
+      `scripts/ci/build-wheelhouse.ps1` — обёртка для CI
+- [x] Документация в `docs/GETTING_STARTED.md` §4; KI-017 → `Resolved`
+      (с оговоркой, что CI-путь остаётся основным)
+- [x] **Зависит от:** — · **Оценка:** 3 ч
 
-### S22-006: Документация — [ ]
-- [ ] `RULES.md` §11.20 «Обновление зависимостей»: контрактные тесты, wheelhouse,
-      порядок апгрейда, откат
-- [ ] `CHANGELOG`, `ARCHITECTURE` (версии зависимостей), README
-- [ ] **Зависит от:** S22-001…S22-005 · **Оценка:** 2 ч
+### S22-006: Документация — [x]
+- [x] `RULES.md` §11.21 «Обновление зависимостей»: контрактные тесты,
+      wheelhouse, порядок апгрейда, откат (нумерация: §11.20 занят CI)
+- [x] `CHANGELOG`, `ARCHITECTURE` (версии зависимостей), `CI.md` §13
+- [x] **Зависит от:** S22-001…S22-005 · **Оценка:** 2 ч
 
 **DoD:** `fastapi`/`starlette`/`pytest` обновлены; контрактные тесты и e2e зелёные;
 `pip-audit` без игнора (0 high/critical без обоснования); CI required checks
