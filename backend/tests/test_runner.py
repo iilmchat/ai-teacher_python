@@ -29,6 +29,12 @@ class StubExecutor(SandboxedExecutor):
             )
         return ExecutionResult(success=True, output=self.mapping[stdin_text])
 
+    async def execute_many(  # type: ignore[override]
+        self, code: str, stdins: list[str]
+    ) -> list[ExecutionResult]:
+        """Батчевый путь в тестах — через тот же `execute` (счётчик вызовов)"""
+        return [await self.execute(code, stdin) for stdin in stdins]
+
 
 def test_normalize_strips_trailing_newlines() -> None:
     """Хвостовые пустые строки не влияют на сравнение"""

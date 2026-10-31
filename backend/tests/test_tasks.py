@@ -38,6 +38,12 @@ class CaseAwareExecutor(SandboxedExecutor):
         output = self.expected.get(stdin_text, "")
         return ExecutionResult(success=True, output=output if self.correct else "неверно\n")
 
+    async def execute_many(  # type: ignore[override]
+        self, code: str, stdins: list[str]
+    ) -> list[ExecutionResult]:
+        """Фейк не ходит в песочницу: батч — это цикл по `execute`"""
+        return [await self.execute(code, stdin) for stdin in stdins]
+
 
 @pytest.fixture
 def executor() -> Iterator[CaseAwareExecutor]:

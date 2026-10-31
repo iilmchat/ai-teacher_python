@@ -10,10 +10,23 @@
 ## [Unreleased]
 
 Этап v0.3.0 «Ops & Scale» (спринты 21–30). Спринт 21 — CI & Quality Gates,
-спринт 22 — Dependency Modernization.
+спринт 22 — Dependency Modernization, спринт 23 — Sandbox Throughput.
 
 ### Добавлено
 
+**Производительность песочницы (S23, KI-022)**
+
+- Батч тест-кейсов: все кейсы задачи выполняет **один** дочерний
+  интерпретатор (построчный JSON-протокол, таймаут на кейс). Submit 5 RPS:
+  p95 **2219.7 → 395.0 мс**
+- Пул тёплых интерпретаторов (`EXECUTOR_POOL_SIZE`, `EXECUTOR_POOL_MAX_TASKS`):
+  переиспользование процесса между задачами, перезапуск после 50 задач и
+  после `TimeoutError`/`MemoryError`/сбоя; закрытие в `lifespan`. Submit
+  5 RPS: p95 **48.9 мс**, p50 34.8 мс
+- Нагрузочные гейты: job `Perf smoke (submit)` (0.5 RPS на PR) и ночной
+  `perf-nightly.yml` (2 RPS); отчёт `docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`
+- Тесты: батч (16), пул (11), безопасность батча/пула (36: 14 атакующих
+  векторов × 2 режима + восстановление после MemoryError/TimeoutError)
 **Контрактные тесты и зависимости (S22)**
 
 - Снапшот OpenAPI (`backend/tests/contracts/openapi.json`, 68 операций,

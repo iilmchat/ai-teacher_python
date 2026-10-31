@@ -24,6 +24,7 @@ from app.api.v1 import (
 )
 from app.config import settings
 from app.core.rate_limiter import RateLimitMiddleware
+from app.core.runner_pool import close_current_pool as close_executor_pool
 from app.db.database import async_session_factory
 from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
@@ -55,6 +56,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("seed_failed", error=str(exc))
 
     yield
+    # Пул песочницы (S23-002): тёплые интерпретаторы не должны переживать
+    # приложение — иначе они останутся висеть до выхода процесса.
+    await close_executor_pool()
     await close_redis()
     logger.info("app_stopped", app_name=settings.app_name)
 

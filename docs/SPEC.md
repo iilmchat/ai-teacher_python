@@ -409,9 +409,12 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 | Запрещённые модули | `os, sys, subprocess, socket, shutil, pathlib, importlib, builtins, ctypes, multiprocessing, threading, sqlite3, http, urllib, requests, pickle, marshal` |
 | Запрещённые вызовы | `open, eval, exec, compile, globals, locals, __import__` (прямой) |
 | Dunder-атрибуты | запрещены |
-| Таймаут | `EXECUTOR_TIMEOUT` (5 с), процесс убивается |
+| Таймаут | `EXECUTOR_TIMEOUT` (5 с) — **на каждый кейс**; процесс убивается |
 | Память | `EXECUTOR_MEMORY_LIMIT` (128 МБ): `RLIMIT_AS` / Job Object |
 | Параллельные запуски | `EXECUTOR_MAX_CONCURRENCY` (4), при перегрузке 503 |
+| Пул тёплых процессов (S23) | `EXECUTOR_POOL_SIZE` (2; 0 — выключен), перезапуск после `EXECUTOR_POOL_MAX_TASKS` (50) задач и после сбоя |
+| Батч тест-кейсов (S23) | все кейсы задачи — один процесс, результат по кейсам; зависший кейс → `TimeoutError`, остальные → `SandboxError` |
+| Throughput submit | 5 RPS, p95 ≤ 2000 мс (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`) |
 | Вывод | `EXECUTOR_MAX_OUTPUT` (100 000 символов), обрезка с пометкой |
 | Размер кода | ≤ 20 000 символов |
 | `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |

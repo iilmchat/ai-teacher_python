@@ -7,7 +7,7 @@
 **Версия:** v0.2.0 «Classroom» · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
-— 6 job'ов: lint, test, frontend, security, e2e, docker (self-hosted runner;
+— 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
 подробности — [docs/CI.md](docs/CI.md))
 
 **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · DeepSeek / LM Studio · Docker Compose

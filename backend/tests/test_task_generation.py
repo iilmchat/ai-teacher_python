@@ -82,6 +82,12 @@ class ExpectedOutputExecutor(SandboxedExecutor):
             success=True, output=self.outputs.get(stdin_text, "неверно")
         )
 
+    async def execute_many(  # type: ignore[override]
+        self, code: str, stdins: list[str]
+    ) -> list[ExecutionResult]:
+        """Фейк не ходит в песочницу: батч — это цикл по `execute`"""
+        return [await self.execute(code, stdin) for stdin in stdins]
+
 
 @pytest.fixture
 def fake_llm() -> Iterator[FakeLLM]:
