@@ -286,3 +286,42 @@ LLM/кэш/БД отдаются как gauge из in-memory счётчиков 
 
 **Аудит.** `audit_log` (кто/что/над чем/IP/время) + `GET /api/v1/admin/audit`
 с фильтрами. Retention — в спринте 26 (`RETENTION_AUDIT_DAYS`).
+
+---
+
+## 11. Экспорт данных и retention (S26)
+
+**Экспорт аналитики.** `GET /api/v1/admin/analytics/export` — только admin.
+Ответ потоковый (серверный курсор SQLAlchemy), поэтому большие выгрузки не
+занимают память процесса. Лимит `EXPORT_MAX_ROWS` (100 000) защищает БД от
+«выгрузить всё»; при обрезке в `audit_log` пишется `analytics.exported` с
+параметрами. Даты — ISO 8601, CSV в UTF-8.
+
+**Отчёт класса.** `GET /api/v1/classrooms/{id}/report` отдаёт CSV-матрицу
+«ученик × задача» с overdue-флагом и итоговой строкой; доступ — владелец
+класса/админ, действие аудируется.
+
+**Retention.** Скрипт `backend/scripts/apply_retention.py` (в контейнере:
+`docker compose exec backend python scripts/apply_retention.py --dry-run`):
+
+| Таблица | Настройка | По умолчанию |
+|---------|-----------|--------------|
+| `chat_messages` | `RETENTION_CHAT_MESSAGES_DAYS` | 90 |
+| `code_executions` | `RETENTION_CODE_EXECUTIONS_DAYS` | 90 |
+| `notifications` | `RETENTION_NOTIFICATIONS_DAYS` | 180 |
+| `audit_log` | `RETENTION_AUDIT_LOG_DAYS` | 365 |
+
+Cron на хосте (пример, раз в сутки в 03:30):
+
+```cron
+30 3 * * * cd /opt/ai-teacher && docker compose exec -T backend \
+  python scripts/apply_retention.py >> /var/log/ai-teacher/retention.log 2>&1
+```
+
+Каждый запуск пишет `retention_applied` с числом удалённых строк; `--dry-run`
+ничего не удаляет и показывает объём.
+
+**Удаление аккаунта.** Пользователь удаляет себя через `DELETE /auth/me`
+(пароль обязателен): анонимизация + блокировка входа. Администратор по-прежнему
+может удалить пользователя полностью (`DELETE /admin/users/{id}`). Политика
+данных — `docs/PRIVACY.md`.

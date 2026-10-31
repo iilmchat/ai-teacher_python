@@ -1343,6 +1343,22 @@
         "title": "CodeRequest",
         "type": "object"
       },
+      "DeleteAccountRequest": {
+        "description": "Подтверждение удаления аккаунта паролем (S26-004)",
+        "properties": {
+          "password": {
+            "maxLength": 72,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "DeleteAccountRequest",
+        "type": "object"
+      },
       "DeleteResponse": {
         "description": "Подтверждение удаления",
         "properties": {
@@ -3387,6 +3403,73 @@
         ]
       }
     },
+    "/api/v1/admin/analytics/export": {
+      "get": {
+        "description": "Экспорт аналитики CSV/JSON (S26-001), потоково, с лимитом строк.\n\nСтрим открывает **свою** сессию: сессия запроса закрывается вместе с\nответом, а генератор живёт дольше — общая сессия ломала бы выгрузку.",
+        "operationId": "export_analytics_api_v1_admin_analytics_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dataset",
+            "required": false,
+            "schema": {
+              "default": "users",
+              "enum": [
+                "users",
+                "tasks",
+                "attempts",
+                "activity"
+              ],
+              "title": "Dataset",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Analytics",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/audit": {
       "get": {
         "description": "Журнал действий teacher/admin (S25-004), новые сверху",
@@ -3832,6 +3915,44 @@
       }
     },
     "/api/v1/auth/me": {
+      "delete": {
+        "description": "Удалить свой аккаунт (S26-004): анонимизация и блокировка входа.\n\nНеобратимо: username/email заменяются заглушками, пароль сбрасывается,\nвход блокируется (`is_active=false`). Прогресс и история остаются, но\nобезличены (связь только по неизменному `user_id`). Требует пароль, чтобы\nчужой токен не мог удалить аккаунт.",
+        "operationId": "delete_me_api_v1_auth_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Me",
+        "tags": [
+          "Authentication"
+        ]
+      },
       "get": {
         "description": "Информация о текущем пользователе",
         "operationId": "get_me_api_v1_auth_me_get",
@@ -4808,6 +4929,53 @@
           }
         ],
         "summary": "Class Progress",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/report": {
+      "get": {
+        "description": "CSV-отчёт класса (S26-002): матрица «ученик × задача», overdue, итоги.\n\nДоступ — только владелец класса (или админ); участник-ученик получает 403.",
+        "operationId": "classroom_report_api_v1_classrooms__classroom_id__report_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Classroom Report",
         "tags": [
           "Classrooms"
         ]

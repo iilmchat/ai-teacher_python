@@ -4,13 +4,17 @@ Admin API (S10-004): пользователи, задачи, аналитика.
 Все маршруты требуют роль администратора (`require_role(UserRole.ADMIN)`).
 """
 
-from typing import Annotated
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.security import require_role
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
@@ -35,6 +39,7 @@ from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.audit_service import list_audit, record_audit
 from app.services.cache import cache_metrics
+from app.services.export_service import stream_csv, stream_json
 from app.services.llm.metrics import llm_metrics
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -210,3 +215,46 @@ async def get_analytics(_: AdminUser, db: DbSession) -> AnalyticsResponse:
         cache=AnalyticsCache(**cache_metrics.snapshot()),
         generated_at=str(raw["generated_at"]),
     )
+
+
+@router.get("/analytics/export")
+async def export_analytics(
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+    dataset: Literal["users", "tasks", "attempts", "activity"] = "users",
+    format_: Literal["csv", "json"] = Query(default="csv", alias="format"),
+) -> StreamingResponse:
+    """Экспорт аналитики CSV/JSON (S26-001), потоково, с лимитом строк.
+
+    Стрим открывает **свою** сессию: сессия запроса закрывается вместе с
+    ответом, а генератор живёт дольше — общая сессия ломала бы выгрузку.
+    """
+    limit = max(0, settings.export_max_rows)
+    await record_audit(
+        db,
+        actor=admin,
+        action="analytics.exported",
+        entity_type="analytics",
+        payload={"dataset": dataset, "format": format_, "limit": limit},
+        request=request,
+    )
+
+    async def body() -> AsyncIterator[bytes]:
+        stream = (
+            stream_csv(db, dataset, limit=limit)
+            if format_ == "csv"
+            else stream_json(db, dataset, limit=limit)
+        )
+        async for chunk in stream:
+            yield chunk
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    media_type = "text/csv; charset=utf-8" if format_ == "csv" else "application/json"
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="export-{dataset}-{stamp}.{format_}"'
+        ),
+        "X-Export-Limit": str(limit),
+    }
+    return StreamingResponse(body(), media_type=media_type, headers=headers)

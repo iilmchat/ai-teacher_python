@@ -3,9 +3,9 @@ Authentication API endpoints
 """
 from datetime import datetime
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,8 @@ from app.core.security import (
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
 from app.models.user import User, UserLevel, UserRole
-from app.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.schemas.user import DeleteAccountRequest, UserCreate, UserResponse, UserUpdate
+from app.services.audit_service import record_audit
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -182,3 +183,42 @@ async def update_me(
             detail="User not found",
         )
     return updated_user
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_me(
+    payload: DeleteAccountRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: DbSession,
+    request: Request,
+) -> Response:
+    """Удалить свой аккаунт (S26-004): анонимизация и блокировка входа.
+
+    Необратимо: username/email заменяются заглушками, пароль сбрасывается,
+    вход блокируется (`is_active=false`). Прогресс и история остаются, но
+    обезличены (связь только по неизменному `user_id`). Требует пароль, чтобы
+    чужой токен не мог удалить аккаунт.
+    """
+    if not verify_password(payload.password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный пароль: удаление отменено",
+        )
+
+    suffix = uuid4().hex[:12]
+    current_user.username = f"deleted_{suffix}"
+    current_user.email = f"deleted_{suffix}@invalid"
+    current_user.hashed_password = hash_password(uuid4().hex)
+    current_user.is_active = False
+    current_user.last_active = datetime.utcnow()
+
+    await record_audit(
+        db,
+        actor=current_user,
+        action="user.self_deleted",
+        entity_type="user",
+        entity_id=current_user.id,
+        request=request,
+    )
+    await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
