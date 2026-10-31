@@ -343,6 +343,6 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
 - **Зависимости:** `fastapi 0.162` + `starlette 1.10`, `pytest 9.2` (S22-002/003);
   контракт API зафиксирован снапшотом OpenAPI (S22-001), апгрейды проверяются
   им же. PyPI с хоста заблокирован (KI-017) → wheelhouse (`scripts/wheelhouse.py`).
-- **CI:** self-hosted runner, 6 job'ов (S21-003); GitHub-hosted минуты
+- **CI:** self-hosted runner, 7 job'ов (S21-003 + perf-smoke S23-003); GitHub-hosted минуты
   заблокированы биллингом (KI-014, workflow в ручном режиме), merge-gate —
   KI-023.

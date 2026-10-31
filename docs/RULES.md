@@ -88,7 +88,8 @@ test(auth): cover JWT token refresh scenarios (S3-005)
 - Название PR = `<type>(<scope>): <краткое описание> (S-N-NNN..S-M-MMM)`.
 - В описании — ссылки на задачи из `TODO.md` и отчёт спринта.
 - CI должен быть зелёным: обязательный набор — workflow **`CI (self-hosted
-  fallback)`** (6 job'ов: Lint, Test, Frontend, Security, E2E, Docker).
+  fallback)`** (6 обязательных job'ов: Lint, Test, Frontend, Security, E2E,
+  Docker; плюс advisory `Perf smoke (submit)`, S23-003).
   Красный CI — PR не мержится.
 - Ревьюер проверяет чек-лист §10.
 

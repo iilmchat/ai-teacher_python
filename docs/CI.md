@@ -5,9 +5,10 @@
 > §9 — итоговое решение (ADR), §10 — гейты и защита ветки, §11 — релиз,
 > §12 — эксплуатация runner'а.
 >
-> Обновлено: 2026-10-30. Статус: **CI работает** — self-hosted runner, 6/6
-> job'ов зелёные; merge-gate на GitHub Free/private недоступен (403) и
-> обеспечивается GitFlic-пилотом (ждёт токен/агент владельца — `KI-023`).
+> Обновлено: 2026-10-31. Статус: **CI работает** — self-hosted runner, 6/6
+> обязательных job'ов (плюс advisory `Perf smoke (submit)`, S23-003); merge-gate
+> на GitHub Free/private недоступен (403) и обеспечивается GitFlic-пилотом
+> (ждёт токен/агент владельца — `KI-023`).
 
 ---
 
@@ -304,7 +305,7 @@ Docs-only изменение не гоняет ни e2e, ни docker, ни ос�
   в том числе сам текст (gitleaks).
 
 Проверка: PR, меняющий только `docs/**`, не запускает `CI (self-hosted
-fallback)`; PR с кодом — запускает все 6 job'ов.
+fallback)`; PR с кодом — запускает все 7 job'ов (включая perf-smoke).
 
 ### 10.2. GitHub: required checks — заблокировано тарифом
 
@@ -433,8 +434,8 @@ gh run cancel <run_id>             # отменить (например, зал�
 ### 12.4. Таймауты
 
 Лимиты — `timeout-minutes` у job'ов (`lint` 15, `test` 30, `frontend` 20,
-`security` 20, `e2e` 30, `docker` 25); в GitFlic отдельного ключа нет —
-`Task Restart Timeout` в настройках CI/CD проекта (1800–2400 с).
+`security` 20, `e2e` 30, `docker` 25, `perf` 10); в GitFlic отдельного ключа
+нет — `Task Restart Timeout` в настройках CI/CD проекта (1800–2400 с).
 
 ### 12.5. Если PyPI недоступен (KI-017)
 
