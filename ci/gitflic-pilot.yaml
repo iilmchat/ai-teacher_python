@@ -1,0 +1,172 @@
+# =============================================================================
+# gitflic-pilot.yaml — МИНИМАЛЬНЫЙ конфиг для первого живого прогона в GitFlic
+# (спринт 21, S21-002). Два job'а: lint + test. Полный пайплайн —
+# `gitflic-ci.yaml` в корне (S21-003), он подключается ПОСЛЕ успешного пилота.
+#
+# Зачем отдельный файл: для пилота нужен только Docker-агент (tag `docker`).
+# e2e/docker-джобы полного конфига требуют второго PowerShell-агента
+# (`windows-dev`) и иначе висят «в ожидании исполнителя», делая конвейер
+# красным. Пилот доказывает главное: GitFlic запускает задачи, `services`
+# Postgres/Redis работают, секреты маскируются, время приемлемо.
+#
+# Как включить: GitFlic → проект → Настройки → CI/CD → «Путь конфигурационного
+# файла» = `ci/gitflic-pilot.yaml`; «Запуск конвейера слияния» = включено.
+# После пилота переключить путь на `gitflic-ci.yaml` и зарегистрировать
+# PowerShell-агент (docs/GITFLIC_RUNNER.md).
+#
+# Переменные проекта (маскировать): SECRET_KEY, POSTGRES_PASSWORD.
+# Секретов в файле нет: ниже только тестовые значения для CI-БД.
+# =============================================================================
+
+stages:
+  - lint
+  - test
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_TYPE == "merge_request_pipeline" || $CI_PIPELINE_TYPE == "merge_result_pipeline"
+      when: always
+    - if: $CI_PIPELINE_TYPE == "branch_pipeline"
+      when: always
+    - if: $CI_PIPELINE_TYPE == "tag_pipeline" && $CI_COMMIT_TAG
+      when: always
+    - when: never
+
+variables:
+  # Кэш pip обязан лежать внутри рабочего каталога проекта (cache:paths —
+  # только относительные пути).
+  PIP_CACHE_DIR: ".pip-cache"
+  PYTHONUNBUFFERED: "1"
+
+# -----------------------------------------------------------------------------
+# 1. LINT — ruff + mypy (pinned: unpinned ruff ломал lint, см. docs/CI.md §8)
+# -----------------------------------------------------------------------------
+lint:
+  stage: lint
+  image: python:3.12-slim
+  tags:
+    - docker
+  cache:
+    key:
+      - pip
+    paths:
+      - .pip-cache
+  before_script:
+    - python -m pip install --upgrade pip
+    # Ставим весь requirements.txt: mypy нужны импортируемые пакеты
+    # (на self-hosted прогоне иначе 295 import-not-found ошибок). ruff/mypy
+    # в requirements закреплены (ruff==0.8.1, mypy==1.13.0).
+    - pip install -r backend/requirements.txt
+  script:
+    - echo "==> ruff check app tests scripts"
+    - cd backend && ruff check app tests scripts
+    # Конфиг mypy лежит в корневом pyproject.toml — передаём явно (RULES §11.4).
+    - echo "==> mypy app --config-file ../pyproject.toml"
+    - cd backend && mypy app --config-file ../pyproject.toml
+
+# -----------------------------------------------------------------------------
+# 2. TEST — pytest на реальном PostgreSQL/pgvector + Redis.
+# Главная проверка пилота: доходят ли POSTGRES_*/REDIS_* до контейнеров
+# `services` (в документации GitFlic это не описано). Если env не доходят,
+# Postgres стартует с дефолтным паролем, и wait-цикл упадёт с понятной
+# ошибкой «Postgres открыт, но вход не удался».
+# -----------------------------------------------------------------------------
+test:
+  stage: test
+  image: python:3.12-slim
+  needs:
+    - lint
+  services:
+    - name: pgvector/pgvector:pg17
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  cache:
+    key:
+      - pip
+    paths:
+      - .pip-cache
+  variables:
+    POSTGRES_HOST: "postgres"
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: "test_user"
+    POSTGRES_PASSWORD: "test_pass"
+    POSTGRES_DB: "test_db"
+    REDIS_HOST: "redis"
+    REDIS_PORT: "6379"
+    SECRET_KEY: "ci_secret_key_do_not_use_in_production"
+    RATE_LIMIT_ENABLED: "false"
+  before_script:
+    - |
+      set -eu
+      # Адреса сервисов фиксируем явно: переменная проекта с тем же именем
+      # иначе перекрыла бы YAML (порядок override — docs GitFlic).
+      export POSTGRES_HOST=postgres
+      export POSTGRES_PORT=5432
+      export REDIS_HOST=redis
+      export REDIS_PORT=6379
+
+      echo "==> Установка зависимостей backend"
+      python -m pip install --upgrade pip
+      pip install -r backend/requirements.txt
+
+      echo "==> Ожидание PostgreSQL (до 60 с)"
+      python - <<'PY'
+      import os, socket, sys, time
+      import psycopg2
+
+      host = os.environ["POSTGRES_HOST"]
+      port = int(os.environ["POSTGRES_PORT"])
+
+      def tcp_open() -> bool:
+          try:
+              with socket.create_connection((host, port), timeout=2):
+                  return True
+          except OSError:
+              return False
+
+      deadline = time.monotonic() + 60
+      while time.monotonic() < deadline:
+          if tcp_open():
+              break
+          time.sleep(2)
+      else:
+          sys.exit(f"PostgreSQL {host}:{port} не открылся за 60 с")
+
+      try:
+          psycopg2.connect(
+              host=host, port=port,
+              user=os.environ["POSTGRES_USER"],
+              password=os.environ["POSTGRES_PASSWORD"],
+              dbname=os.environ["POSTGRES_DB"],
+          ).close()
+      except Exception as exc:  # noqa: BLE001 - нужен понятный текст
+          sys.exit(f"PostgreSQL открыт, но вход не удался ({host}:{port}): {exc}")
+      print(f"PostgreSQL готов: {host}:{port}")
+      PY
+
+      echo "==> Ожидание Redis (до 60 с)"
+      python - <<'PY'
+      import os, sys, time
+      import redis
+
+      host = os.environ["REDIS_HOST"]
+      port = int(os.environ["REDIS_PORT"])
+      deadline = time.monotonic() + 60
+      while time.monotonic() < deadline:
+          try:
+              if redis.Redis(host=host, port=port, socket_connect_timeout=2).ping():
+                  break
+          except Exception:  # noqa: BLE001 - сервис ещё поднимается
+              time.sleep(2)
+      else:
+          sys.exit(f"Redis {host}:{port} недоступен за 60 с")
+      print(f"Redis готов: {host}:{port}")
+      PY
+  script:
+    - echo "==> alembic upgrade head"
+    - cd backend && alembic upgrade head
+    - echo "==> alembic check (модели == миграции, RULES §11.5)"
+    - cd backend && alembic check
+    - echo "==> pytest"
+    - cd backend && pytest -q

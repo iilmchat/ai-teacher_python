@@ -7,6 +7,47 @@
 
 ---
 
+## [Unreleased]
+
+Этап v0.3.0 «Ops & Scale» (спринты 21–30). Спринт 21 — CI & Quality Gates.
+
+### Добавлено
+
+**CI (S21)**
+
+- CI снова запускает проверки: workflow `CI (self-hosted fallback)` на
+  Windows-runner'е (`C:\actions-runner`) — `Lint (backend)`, `Test (backend)`,
+  `Frontend`, `Security`, `E2E (Playwright)`, `Docker build`; прогон 6/6
+  зелёный, минуты GitHub не расходуются (KI-014)
+- Переиспользуемый набор гейтов (`workflow_call`) — его же вызывает релиз,
+  команды не дублируются
+- Path-фильтры: docs-only PR не гоняет e2e/docker (GitHub `paths-ignore`,
+  GitFlic `rules: changes:`)
+- Офлайн-путь зависимостей для CI: wheelhouse в named volume
+  `ai-teacher-wheelhouse` (`scripts/ci/build-wheelhouse.ps1`,
+  `scripts/ci/install-python-deps.sh`) + постоянные кэши pip/pnpm — job'ы не
+  зависят от нестабильного PyPI (KI-017)
+- Релиз одной командой: `.github/workflows/release.yml` (гейты → тег →
+  GitHub Release), dry-run по умолчанию, репетиция по тегу `v*-dryrun`,
+  заметки — из `docs/RELEASES.md`
+- `scripts/ci/protect-branch.ps1` — готовая защита ветки (6 required checks,
+  запрет force-push) с честной диагностикой 403 на GitHub Free/private
+- GitFlic: полный `gitflic-ci.yaml` (5 job'ов + 3 security + e2e/docker на
+  PowerShell-агенте + тег-джоб `release`), пилотный `ci/gitflic-pilot.yaml`,
+  рунбук `docs/GITFLIC_RUNNER.md`, настройка проекта `scripts/gitflic/setup.ps1`
+- `docs/CI.md` — платформа, гейты, релиз, эксплуатация runner'а; RULES §11.20
+
+### Изменено
+
+- `pytest`/`ruff`/`mypy` в CI ставятся из `backend/requirements.txt`
+  (закреплённые версии): unpinned ruff давал 54 ложных ошибки на неизменённом
+  коде, а mypy без runtime-зависимостей — 295 `import-not-found`
+- GitHub-hosted `ci.yml` переведён в ручной режим до восстановления биллинга
+  (KI-014) — красный workflow больше не висит на каждом PR
+- `E2E_PYTHON` для runner'а указывает на актуальный venv проекта
+
+---
+
 ## [0.2.0] - 2026-10-30
 
 Релиз «Classroom»: классы и назначения, достижения и дашборд, UX/тёмная

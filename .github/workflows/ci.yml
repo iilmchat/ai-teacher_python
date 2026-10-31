@@ -1,10 +1,20 @@
 name: CI
 
+# GitHub-hosted job'ы не запускаются с 2026-10-29: биллинг Actions (KI-014) —
+# job падает за 2–4 с без шагов с аннотацией «recent account payments have
+# failed or your spending limit needs to be increased» (docs/CI.md §1).
+# Поэтому workflow переведён в ручной режим и не висит красным на каждом PR:
+# PR-гейты даёт .github/workflows/ci-selfhosted.yml (те же команды, тот же
+# набор job'ов, self-hosted runner). Вернуть push/pull_request сюда — после
+# восстановления биллинга GitHub (KI-014) или при переезде на GitFlic
+# (gitflic-ci.yaml уже содержит полный порт).
 on:
-  push:
-    branches: [main, 'sprint/**']
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Причина ручного запуска (для истории)'
+        required: false
+        type: string
 
 jobs:
   lint:
@@ -17,14 +27,18 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+          cache: 'pip'
 
-      - name: Install linters
+      - name: Install dependencies (mypy нужны импортируемые пакеты)
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          # ruff/mypy закреплены в requirements.txt (dev), unpinned ruff ломал lint
+          pip install -r backend/requirements.txt
 
       - name: Run Ruff
-        run: ruff check backend/
+        run: |
+          cd backend
+          ruff check app tests scripts
 
       # Конфиг mypy лежит в корневом pyproject.toml, поэтому передаём его явно
       - name: Run MyPy (strict)

@@ -9,13 +9,15 @@
 
 **Целевая версия:** v0.3.0 «Ops & Scale»  
 **Создан:** 2026-10-30  
-**Текущий спринт:** 21 — восстановление CI (первый спринт этапа)  
+**Текущий спринт:** 21 — CI & Quality Gates (CI восстановлен на self-hosted
+runner'е; автоматический merge-gate — `KI-023`)  
 **Базис:** v0.2.0 (2026-10-30)  
-**Текущее состояние:** **341** backend-тест (+1 skip на Windows), 80 frontend-unit
-+ 12 e2e, миграции до `010`; активных KI — 6: `KI-014` (CI, High),
-`KI-015` (fastapi/starlette, High, accepted), `KI-016` (dev pytest, Low, accepted),
-`KI-017` (PyPI с хоста, Low), `KI-018` (`.format` в песочнице, Low, accepted),
-`KI-022` (throughput submit, Med, accepted). Следующий свободный номер — **KI-023**.
+**Текущее состояние:** **354** backend-теста (+1 skip на Windows), 80 frontend-unit
++ 12 e2e, миграции до `010`; CI — 6/6 job'ов зелёные (self-hosted runner);
+активных KI — 6: `KI-015` (fastapi/starlette, High, accepted), `KI-016` (dev
+pytest, Low, accepted), `KI-017` (PyPI с хоста, Low), `KI-018` (`.format` в
+песочнице, Low, accepted), `KI-022` (throughput submit, Med, accepted),
+`KI-023` (merge-gate, High). Следующий свободный номер — **KI-024**.
 
 ---
 
@@ -56,14 +58,15 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 
 | KI | Severity | Суть | Спринт | План |
 |----|----------|------|--------|------|
-| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 21 | диагностика billing; **пилот GitFlic** (SaaS/self-hosted) или self-hosted runner; required checks на выбранной платформе |
+| KI-014 | High | GitHub Actions не запускает job'ы (биллинг) | 21 | **закрыто**: self-hosted runner + `ci-selfhosted.yml`, 6/6 зелёные; merge-gate вынесен в KI-023 |
 | KI-015 | High | `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) | 22 | координированный апгрейд `fastapi` + `starlette`, `pip-audit` без игнора |
 | KI-016 | Low | dev-only advisory `pytest 8.3.3` | 22 | `pytest` 9.x + плагины, полный прогон |
-| KI-017 | Low | PyPI недоступен с хоста разработки | 22 | `scripts/wheelhouse.py` (офлайн-установка из Docker), документация |
+| KI-017 | Low | PyPI недоступен с хоста разработки | 22 | `scripts/wheelhouse.py` (офлайн-установка из Docker), документация; **в CI уже офлайн-wheelhouse** (S21) |
 | KI-018 | Low | `.format()` запрещён в песочнице (RP 8.5) | — | остаётся accepted; подсказка ученику уже есть (SPEC §5) |
 | KI-022 | Med | submit ≈2 RPS (песочница) | 23 | батчинг кейсов в одном процессе + пул; цель 5 RPS, p95 ≤ 2 с |
+| KI-023 | High | merge-gate: GitHub Free не даёт required checks, GitFlic ждёт токен/агент | 21 (перенос в 22) | `scripts/ci/protect-branch.ps1` (после Pro) или MR-гейт GitFlic; до этого — RULES §10 |
 
-Новые проблемы заводим сразу с `KI-NNN` (следующий свободный — **KI-023**).
+Новые проблемы заводим сразу с `KI-NNN` (следующий свободный — **KI-024**).
 Ожидаемые кандидаты: SMTP-зависимость уведомлений, лимиты Prometheus-метрик в
 памяти процесса, тонкости seccomp в контейнере-раннере.
 
@@ -135,57 +138,84 @@ v0.2.0 сделал продукт пригодным для класса. v0.3.
 подтвердятся — перенести origin в GitFlic в спринте 22, GitHub оставить зеркалом;
 если нет — GitHub + self-hosted runner.
 
-### S21-001: Диагностика GitHub и выбор пути — [ ]
-- [ ] Проверить GitHub → Settings → Billing & plans (Actions minutes/spending limit)
-- [ ] Если лимит можно поднять — поднять и перезапустить run (`gh run rerun <id>`)
-- [ ] Зафиксировать варианты из §21.0 (GitHub runner / GitFlic SaaS / GitFlic
-      self-hosted) и критерии решения в `docs/CI.md`
-- [ ] **Зависит от:** — · **Оценка:** 3 ч
+### S21-001: Диагностика GitHub и выбор пути — [x] (ADR принят; billing — за владельцем, CI обходится runner'ом)
+- [x] Проверить причину падений: аннотация API run `41063439319` —
+      «The job was not started because recent account payments have failed or
+      your spending limit needs to be increased» (подтверждает KI-014)
+- [ ] Поднять лимит/оплату в GitHub → Settings → Billing & plans (нужен доступ
+      владельца; API billing требует scope `user` — см. `docs/CI.md` §1) и
+      перезапустить run (`gh run rerun <id>`) — **не блокирует CI**: hosted-job'ы
+      обойдены self-hosted runner'ом (KI-014 закрыт, `docs/CI.md` §9)
+- [x] Зафиксировать варианты из §21.0 и критерии решения в `docs/CI.md` (ADR),
+      включая порядок импорта приватного репо и GitFlic-пилот
+- [x] **Зависит от:** — · **Оценка:** 3 ч
 
-### S21-002: Пилот GitFlic — импорт и агент — [ ]
-- [ ] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
+### S21-002: Пилот GitFlic — импорт и агент — [~] (импорт есть; живой прогон ждёт токен/агент владельца — KI-023)
+- [x] Подготовить `gitflic-ci.yaml`, минимальный пилотный `ci/gitflic-pilot.yaml`
+      и рунбук агентов (`docs/GITFLIC_RUNNER.md`); локально проверить все
+      Docker/PowerShell-команды job'ов (frontend, lint, test, e2e, docker —
+      PASS, см. `docs/CI.md` §8)
+- [x] Создать компанию/проект в GitFlic (Free, ≤5 участников), импортировать
       репозиторий из GitHub (PAT `repo`), сверить ветки/теги/коммиты, `main`
+      (`gitflic.ru/project/ruchating/ai-teacher_python`; расхождение: проект
+      **публичный** — требуется подтверждение владельца, см. STEP-03 §4.5)
 - [ ] Установить PowerShell-агент на машину проекта (Java 11 + Git, тег
       `windows-dev`) **или** Docker-агент; проверить захват задач
+      (на машине Java 1.8 — нужна установка 11; registration token выдаёт
+      `scripts/gitflic/setup.ps1`)
 - [ ] Минимальный `gitflic-ci.yaml`: `lint` (ruff/mypy) и `test` (pytest +
       `services` postgres/redis); измерить время и стабильность
 - [ ] Проверить: маскировка секретов, кэш, MR-пайплайн, поведение при падении
       job'а, ограничения Free-тарифа
 - [ ] Записать результат и решение (ADR) в `docs/CI.md`; при успехе — план
       переноса origin (S21-003), при неудаче — GitHub + runner
+      (ADR §9 уже фиксирует промежуточное решение: вариант A сейчас, GitFlic — цель)
 - [ ] **Зависит от:** S21-001 · **Оценка:** 6 ч
 
-### S21-003: Портирование CI на выбранную платформу — [ ]
-- [ ] GitHub-путь: self-hosted runner, существующие job'ы, кэш `pip`/`pnpm`/
-      Playwright, таймауты
-- [ ] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
-      `security`) в `gitflic-ci.yaml`; `docker build` — DinD-сервис или
-      PowerShell-агент; кэш и артефакты
-- [ ] `pip-audit`, `gitleaks`, `pnpm audit` — как job'ы; SAST GitFlic не
+### S21-003: Портирование CI на выбранную платформу — [x]
+- [x] GitHub-путь (fallback): self-hosted runner + `ci-selfhosted.yml`, 6/6 job'ов
+      зелёные (run 41070317162); кэш pip/pnpm — named volumes + офлайн-wheelhouse;
+      required checks на GitHub Free/private недоступны (403, нужен Pro) —
+      `docs/CI.md` §9–§10
+- [x] GitFlic-путь: перенос 5 job'ов (`lint`, `test`, `e2e`, `frontend`,
+      `security`) в `gitflic-ci.yaml`; `docker build` — на PowerShell-агенте;
+      кэш и артефакты (live-проверка — в S21-002)
+- [x] `pip-audit`, `gitleaks`, `pnpm audit` — как job'ы; SAST GitFlic не
       использовать (платно)
-- [ ] **Зависит от:** S21-002 · **Оценка:** 6 ч
+- [x] **Зависит от:** S21-002 · **Оценка:** 6 ч
 
-### S21-004: Required checks и защита ветки — [ ]
-- [ ] GitHub: branch protection с 5 required checks; запрет force-push; review
+### S21-004: Required checks и защита ветки — [~] (path-фильтры и скрипт готовы; автоматический гейт — KI-023)
+- [~] GitHub: branch protection с 5 required checks; запрет force-push; review —
+      **невозможно на Free/private (403)**; готов `scripts/ci/protect-branch.ps1`
+      (6 checks + force-push, `-DryRun`/`-Verify`, exit 3 с подсказкой)
 - [ ] GitFlic: правила слияния/одобрения + MR-пайплайн; **проверить на тестовом
       MR, что красный конвейер блокирует merge** (если нет — gate через
-      webhook/скрипт и запись в `docs/CI.md`)
-- [ ] Path-фильтры: docs-only PR не гоняет e2e/docker
+      webhook/скрипт и запись в `docs/CI.md`) — шаги описаны в `docs/CI.md` §10.3
+- [x] Path-фильтры: docs-only PR не гоняет e2e/docker (GitHub `paths-ignore`,
+      GitFlic `rules: changes:`)
 - [ ] **Зависит от:** S21-003 · **Оценка:** 3 ч
 
-### S21-005: Автоматизация релиза — [ ]
-- [ ] GitHub: `workflow_dispatch` release (гейты → tag → Release)
-- [ ] GitFlic: job с `release:` + API/CLI (notes из `RELEASES.md`), dry-run
-- [ ] Инструкция в `docs/CI.md`; при зеркалировании — порядок «тег в origin,
-      зеркало догоняет»
-- [ ] **Зависит от:** S21-003 · **Оценка:** 3 ч
+### S21-005: Автоматизация релиза — [x] GitHub-путь проверен живьём (dry-run);
+GitFlic-джоб тега готов, создание релиза — после пилота
+- [x] GitHub: `workflow_dispatch` release (гейты → tag → Release) —
+      `.github/workflows/release.yml` + `workflow_call` гейтов, dry-run по
+      умолчанию, репетиция по тегу `v*-dryrun`; живой dry-run выполнен
+      (run 41126158359: гейты 6/6 → версия 0.2.0 → заметки → DRY-RUN, тег и
+      Release не создавались)
+- [~] GitFlic: job с `release:` + API/CLI (notes из `RELEASES.md`), dry-run —
+      job `release` (тег-пайплайн) включён, проверка notes работает локально,
+      создание релиза через `release:` — после живого пилота (KI-023)
+- [x] Инструкция в `docs/CI.md` (§11); при зеркалировании — порядок «тег в
+      origin, зеркало догоняет»
+- [x] **Зависит от:** S21-003 · **Оценка:** 3 ч
 
-### S21-006: Документация, бейджи, KI-014 — [ ]
-- [ ] `docs/CI.md`: платформа, jobs, required checks, кэш, перезапуск, релиз,
-      зеркала/откат
-- [ ] `docs/RULES.md` §10: обязательность зелёного CI (снять оговорку KI-014)
-- [ ] README: бейдж CI/покрытия; `CHANGELOG`
-- [ ] **Зависит от:** S21-001…S21-005 · **Оценка:** 3 ч
+### S21-006: Документация, бейджи, KI-014 — [x]
+- [x] `docs/CI.md`: платформа, jobs, required checks, кэш, перезапуск, релиз,
+      зеркала/откат (§9–§13)
+- [x] `docs/RULES.md` §10: обязательность зелёного CI (оговорка KI-014 снята);
+      §11.20 — уроки CI
+- [x] README: бейдж CI; `CHANGELOG`, `RELEASES`, `KNOWN_ISSUES`
+- [x] **Зависит от:** S21-001…S21-005 · **Оценка:** 3 ч
 
 **DoD:** на выбранной платформе красный PR не мержится (проверено тестовым PR);
 5 job'ов зелёные; release dry-run; `docs/CI.md` описывает процессы и решение;

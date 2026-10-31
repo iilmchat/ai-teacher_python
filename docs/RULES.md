@@ -87,7 +87,9 @@ test(auth): cover JWT token refresh scenarios (S3-005)
 
 - Название PR = `<type>(<scope>): <краткое описание> (S-N-NNN..S-M-MMM)`.
 - В описании — ссылки на задачи из `TODO.md` и отчёт спринта.
-- CI должен быть зелёным. Красный CI — PR не мержится.
+- CI должен быть зелёным: обязательный набор — workflow **`CI (self-hosted
+  fallback)`** (6 job'ов: Lint, Test, Frontend, Security, E2E, Docker).
+  Красный CI — PR не мержится.
 - Ревьюер проверяет чек-лист §10.
 
 ### 2.4. Стандарт отчётов по спринту (7 разделов)
@@ -220,6 +222,7 @@ tests/
 - **`docs/PROMPT_CURRENT.md`** — инструкции ассистента и метрики.
 - **`docs/LLM_EVAL.md`** — оценка качества ответов LLM.
 - **`docs/DESIGN_ADMIN_AND_OPS.md`** — админка, LLMOps, FinOps, guardrails.
+- **`docs/CI.md`** — CI-платформа, job'ы, гейты, релиз, эксплуатация runner'а.
 - **`docs/README.md`** — навигационный хаб.
 - **`docs/RELEASES.md`** — журнал спринтов.
 - **`docs/CHANGELOG.md`** — по [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/).
@@ -367,6 +370,9 @@ tests/
 - [ ] `pytest -q` — все passed.
 - [ ] `pnpm --dir frontend typecheck` — 0 ошибок (если трогал frontend).
 - [ ] `pnpm --dir frontend build` — собирается (если трогал frontend).
+- [ ] **CI зелёный** — workflow `CI (self-hosted fallback)` на PR/push
+      (обязательно с S21; подробности — `docs/CI.md`). Локальные прогоны не
+      заменяют CI, но нужны до пуша.
 - [ ] Нет закомментированного кода "на будущее".
 - [ ] Нет `print()` / `console.log()`.
 - [ ] Нет секретов в коде и в диффе.
@@ -767,9 +773,50 @@ tests/
    `format_map`/`string.Formatter` запрещены — это ожидаемо (KI-018); не
    возвращать их ради «удобства». Подсказка (`RestrictedFeatureError`) и
    тесты на f-строки/% — обязательны; dunder в f-строках остаётся запрещён.
-10. **CI `Security` локально не запускается (KI-014).** Эквивалент: `pip-audit`
-    в контейнере, `gitleaks` бинарником по истории, `pnpm audit --audit-level=high`.
-    В отчёте писать «CI не запускался», а не «CI зелёный».
+10. **CI работает на self-hosted runner'е.** GitHub-hosted минуты заблокированы
+    биллингом (KI-014), поэтому PR-гейты выполняет `ci-selfhosted.yml` на
+    Windows-runner'е (`C:\actions-runner`, сессия пользователя — Docker Desktop
+    и Playwright). `security`-эквивалент локально: `pip-audit` в контейнере,
+    `gitleaks` по истории, `pnpm audit --audit-level=high`. Required checks на
+    GitHub Free/private недоступны (403) — гейт обеспечивает GitFlic-пилот
+    (KI-023); до этого мерж без зелёного CI — нарушение, а не «допущение».
+    Эксплуатация, перезапуск и wheelhouse — §11.20 и `docs/CI.md`.
+
+### 11.20. CI: платформа, гейты, runner (S21)
+
+1. **Биллинг GitHub не лечится кодом.** Hosted-job'ы падают за 2–4 с с
+   аннотацией про payments/spending limit; признак — `Test`/`Docker` = skipped.
+   Проверять аннотацию API (`check-runs/<id>/annotations`), а не только текст
+   в UI. Обход — self-hosted runner: его минуты не тарифицируются.
+2. **Lint-job ставит runtime-зависимости.** Без `pip install -r
+   backend/requirements.txt` mypy даёт ~295 `import-not-found`
+   (fastapi/sqlalchemy/structlog). ruff/mypy при этом закреплены в
+   `requirements.txt` — не ставить их «последними версиями»: unpinned ruff
+   находил 54 «ошибки» на неизменённом коде.
+3. **Runner — в сессии пользователя, не службой LocalSystem.** Иначе нет
+   доступа к Docker Desktop (npipe), Playwright-браузерам и профилю pnpm.
+   Процесс `Runner.Listener`, запуск `C:\actions-runner\run.cmd`.
+4. **PyPI нестабилен (KI-017) — офлайн-first.** Job'ы сначала ставят
+   зависимости из wheelhouse (named volume `ai-teacher-wheelhouse`,
+   `/wheelhouse`), и только потом идут в PyPI. Колеса качает **Linux**-контейнер
+   (`scripts/ci/build-wheelhouse.ps1`): Windows-wheelhouse даёт «not a supported
+   wheel». pip-кэш — тоже named volume; сброс `docker volume rm`.
+5. **Кэш между прогонами — named volumes, а не actions/cache.** На self-hosted
+   проще и надёжнее: `ai-teacher-pip-cache`, `ai-teacher-pnpm-store`.
+6. **Path-фильтры обязательны.** docs-only PR не гоняет e2e/docker
+   (`paths-ignore: docs/**, **.md` в GitHub; `rules: changes:` в GitFlic).
+7. **Required checks на GitHub Free/private нет.** `PUT .../protection` → 403.
+   Скрипт `scripts/ci/protect-branch.ps1` содержит готовый payload; гейт мержа —
+   GitFlic (KI-023). Не выдавать «зелёный CI» за «гейт включён».
+8. **Релиз — из журнала, а не из коммитов.** Версия сверяется в трёх местах
+   (`pyproject.toml`, `frontend/package.json`, `backend/app/config.py`);
+   заметки — раздел «## Релиз vX.Y.Z» в `docs/RELEASES.md`; dry-run — по
+   умолчанию, тег `v*-dryrun` — репетиция, повторный номер тега запрещён.
+9. **Не дублировать гейты в release.** `release.yml` вызывает
+   `ci-selfhosted.yml` через `workflow_call` — один набор команд для PR и релиза.
+10. **Диагностика залипшего job:** `docker ps` (контейнер job'а), `docker logs
+    <name>`, `C:\actions-runner\_diag\Runner_*.log`; отмена — `gh run cancel`,
+    перезапуск — `gh run rerun <id> --failed`.
 
 ---
 
@@ -825,6 +872,7 @@ curl -s http://localhost:8000/api/v1/health | python -m json.tool
 
 - [Design.md](../Design.md) — источник истины по архитектуре.
 - [SPEC.md](SPEC.md) — контракты API и БД.
+- [CI.md](CI.md) — CI-платформа: job'ы, гейты, релиз, runner.
 - [TODO.md](../TODO.md) — завершённый этап v0.1.0.
 - [TODO_V0.2.md](../TODO_V0.2.md) — текущий план (спринты 11–20).
 - [CHANGELOG.md](CHANGELOG.md) — история версий.
