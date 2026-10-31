@@ -67,6 +67,21 @@ export interface ChatTurn {
   assistant_message: ChatMessage;
 }
 
+export interface ChatSearchItem {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  score?: number;
+}
+
+export interface ChatSearchResponse {
+  query: string;
+  mode: 'semantic' | 'ilike';
+  items: ChatSearchItem[];
+  total: number;
+}
 export type TaskDifficulty = 'easy' | 'medium' | 'hard';
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed';
 

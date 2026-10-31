@@ -359,3 +359,20 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
 - **CI:** self-hosted runner, 7 job'ов (S21-003 + perf-smoke S23-003); GitHub-hosted минуты
   заблокированы биллингом (KI-014, workflow в ручном режиме), merge-gate —
   KI-023.
+
+---
+
+## RAG v2: backfill и порог релевантности (S27)
+
+- **Backfill.** `app/services/backfill.py` выбирает сообщения с
+  `embedding IS NULL` батчами, зовёт провайдера эмбеддингов и пишет векторы;
+  обработанные id исключаются из следующих выборок — поэтому dry-run и сбои
+  провайдера не приводят к бесконечному циклу. CLI —
+  `backend/scripts/backfill_embeddings.py`.
+- **Порог.** `settings.rag_min_score` фильтрует семантические попадания
+  (`score >= RAG_MIN_SCORE`) до fallback-логики в `app/services/rag.py`;
+  пустая выдача → ILIKE. Это защищает от «уверенных» ответов на нерелевантный
+  запрос при выключенном RAG-индексе.
+- **Метрики качества.** `backend/tests/fixtures/rag_queries.json` — набор
+  запросов с ожидаемыми сообщениями; тест `test_precision_on_fixture_queries`
+  проверяет precision@k на детерминированных эмбеддингах.
