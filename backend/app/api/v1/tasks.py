@@ -8,7 +8,7 @@ Task API: список задач, проверка решений, прогре
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, UploadFile, status
+from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -39,6 +39,7 @@ from app.schemas.task import (
     TaskVersionList,
     TestCase,
 )
+from app.services.audit_service import record_audit
 from app.services.cache import (
     cache_get_json,
     cache_set_json,
@@ -300,9 +301,20 @@ async def create_task(
     payload: TaskCreate,
     author: TeacherUser,
     service: TaskServiceDep,
+    db: DbSession,
+    request: Request,
 ) -> TaskAdminDetail:
     """Создать задачу (только преподаватель или админ)"""
     task: Task = await service.create_task(payload, author)
+    await record_audit(
+        db,
+        actor=author,
+        action="task.created",
+        entity_type="task",
+        entity_id=task.id,
+        payload={"title": task.title, "difficulty": str(task.difficulty)},
+        request=request,
+    )
     return _admin_detail(task)
 
 
@@ -312,20 +324,41 @@ async def update_task(
     payload: TaskUpdate,
     author: TeacherUser,
     service: TaskServiceDep,
+    db: DbSession,
+    request: Request,
 ) -> TaskAdminDetail:
     """Обновить задачу (старое состояние — в историю версий)"""
     task = await service.update_task(task_id, payload, author)
+    await record_audit(
+        db,
+        actor=author,
+        action="task.updated",
+        entity_type="task",
+        entity_id=task_id,
+        payload={"fields": sorted(payload.model_dump(exclude_unset=True))},
+        request=request,
+    )
     return _admin_detail(task)
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
     task_id: UUID,
-    _: TeacherUser,
+    author: TeacherUser,
     service: TaskServiceDep,
+    db: DbSession,
+    request: Request,
 ) -> None:
     """Удалить или деактивировать задачу"""
     await service.delete_task(task_id)
+    await record_audit(
+        db,
+        actor=author,
+        action="task.deleted",
+        entity_type="task",
+        entity_id=task_id,
+        request=request,
+    )
 
 
 def _admin_detail(task: Task) -> TaskAdminDetail:

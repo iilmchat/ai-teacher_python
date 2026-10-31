@@ -623,3 +623,22 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 | React / Vite / TypeScript | 19 / 6 / 5.8 |
 | Vitest / coverage | 4.1.12 |
 | API | v1 (`/api/v1`), обратная совместимость внутри major |
+
+---
+
+## 15. Наблюдаемость и аудит (S25)
+
+| Что | Контракт |
+|-----|----------|
+| Request-ID | заголовок `X-Request-ID` принимается и возвращается; если не передан — `uuid4`; значение попадает в логи (`request_id`) |
+| `/metrics` | Prometheus text format, **без авторизации**, только внутренняя сеть; в nginx не публикуется. `METRICS_ENABLED=false` отключает |
+| `/health/live` | 200, если процесс жив; зависимости не проверяются |
+| `/health/ready` | 200, если БД и Redis доступны (LLM — только конфиг); иначе 503 со списком `checks` |
+| `/api/v1/health` | обратно совместим: детальный статус LLM |
+| `GET /api/v1/admin/audit` | admin; пагинация `skip`/`limit` (≤200), фильтры `action`, `entity_type`, `actor_id`; новые записи сверху |
+
+**Аудит (таблица `audit_log`, миграция 011):** актор (`actor_id`, `actor_role`),
+действие, сущность (`entity_type`, `entity_id`), сводка `payload` (без PII),
+IP, время. Записываются: `user.updated`, `user.deleted`, `task.created`,
+`task.updated`, `task.deleted`, `classroom.created`, `assignment.created`.
+Запись best-effort: ошибка аудита не ломает действие (warning в лог).

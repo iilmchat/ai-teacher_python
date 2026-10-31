@@ -59,8 +59,9 @@ httpx==0.28.1
 # Task import/export (S14-001)
 PyYAML==6.0.2
 
-# Logging
+# Logging & metrics (S25)
 structlog==24.4.0
+prometheus-client==0.26.0
 
 # Linting & Testing (dev)
 # S22-003 (KI-016): pytest 8.3.3 → 9.2.0 + плагины (asyncio 1.4.1, cov 7.1.0,

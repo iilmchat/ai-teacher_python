@@ -5,7 +5,7 @@ Classrooms API (S16): классы, вступление, назначения, 
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +33,7 @@ from app.schemas.classroom import (
     ProgressStudent,
     ProgressTask,
 )
+from app.services.audit_service import record_audit
 from app.services.classroom_service import ClassroomService
 
 router = APIRouter(tags=["Classrooms"])
@@ -61,11 +62,23 @@ def _classroom_response(
     "/classrooms", response_model=ClassroomResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_classroom(
-    payload: ClassroomCreate, current_user: TeacherUser, db: DbSession
+    payload: ClassroomCreate,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
 ) -> ClassroomResponse:
     """Создать класс (teacher/admin)"""
     service = ClassroomService(db)
     classroom = await service.create_classroom(current_user, payload.name)
+    await record_audit(
+        db,
+        actor=current_user,
+        action="classroom.created",
+        entity_type="classroom",
+        entity_id=classroom.id,
+        payload={"name": classroom.name},
+        request=request,
+    )
     return _classroom_response(classroom, await service.members_count(classroom.id))
 
 
@@ -173,11 +186,24 @@ async def create_assignment(
     payload: AssignmentCreate,
     current_user: TeacherUser,
     db: DbSession,
+    request: Request,
 ) -> AssignmentItem:
     """Назначить задачу классу"""
     service = ClassroomService(db)
     assignment = await service.add_assignment(
         classroom_id, current_user, payload.task_id, payload.due_at
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="assignment.created",
+        entity_type="assignment",
+        entity_id=assignment.id,
+        payload={
+            "classroom_id": str(classroom_id),
+            "task_id": str(assignment.task_id),
+        },
+        request=request,
     )
     task = await db.get(Task, assignment.task_id)
     assert task is not None

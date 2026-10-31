@@ -7,7 +7,7 @@ Admin API (S10-004): пользователи, задачи, аналитика.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,7 +31,9 @@ from app.schemas.admin import (
     AnalyticsUsers,
     DeleteResponse,
 )
+from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
+from app.services.audit_service import list_audit, record_audit
 from app.services.cache import cache_metrics
 from app.services.llm.metrics import llm_metrics
 
@@ -79,6 +81,7 @@ async def update_user(
     payload: AdminUserUpdate,
     admin: AdminUser,
     db: DbSession,
+    request: Request,
 ) -> AdminUserItem:
     """Изменить роль или уровень пользователя"""
     repo = UserRepository(db)
@@ -100,6 +103,15 @@ async def update_user(
     updated = await repo.update(user_id, **data)
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    await record_audit(
+        db,
+        actor=admin,
+        action="user.updated",
+        entity_type="user",
+        entity_id=user_id,
+        payload={key: str(value) for key, value in data.items()},
+        request=request,
+    )
     return AdminUserItem.model_validate(updated)
 
 
@@ -108,6 +120,7 @@ async def delete_user(
     user_id: UUID,
     admin: AdminUser,
     db: DbSession,
+    request: Request,
 ) -> DeleteResponse:
     """Удалить пользователя со всеми его данными"""
     if user_id == admin.id:
@@ -120,7 +133,40 @@ async def delete_user(
     deleted = await repo.delete(user_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    await record_audit(
+        db,
+        actor=admin,
+        action="user.deleted",
+        entity_type="user",
+        entity_id=user_id,
+        request=request,
+    )
     return DeleteResponse(deleted=True)
+
+
+@router.get("/audit", response_model=AuditLogListResponse)
+async def list_audit_log(
+    _: AdminUser,
+    db: DbSession,
+    action: str | None = Query(default=None, max_length=64),
+    entity_type: str | None = Query(default=None, max_length=64),
+    actor_id: UUID | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> AuditLogListResponse:
+    """Журнал действий teacher/admin (S25-004), новые сверху"""
+    items, total = await list_audit(
+        db,
+        action=action,
+        entity_type=entity_type,
+        actor_id=actor_id,
+        skip=skip,
+        limit=limit,
+    )
+    return AuditLogListResponse(
+        items=[AuditLogItem.model_validate(item) for item in items],
+        total=total,
+    )
 
 
 @router.get("/tasks", response_model=AdminTaskListResponse)

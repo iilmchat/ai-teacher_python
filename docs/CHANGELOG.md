@@ -14,6 +14,19 @@
 
 ### Добавлено
 
+**Наблюдаемость и аудит (S25)**
+
+- `X-Request-ID` (входящий или `uuid4`) в ответе, в structlog-контексте и во
+  всех записях логов; middleware пишет `http_request` с методом, путём, статусом
+  и длительностью
+- `GET /metrics` (Prometheus): HTTP, песочница, LLM, кэш, пул БД; LLM/кэш —
+  gauge из счётчиков процесса; в nginx `/metrics` и `/health/*` → 404
+- `/health/live` (процесс) и `/health/ready` (БД, Redis, конфиг LLM; 503 при
+  недоступности); `/api/v1/health` сохранён; compose healthcheck → readiness
+- Аудит `audit_log` (миграция 011) + `GET /api/v1/admin/audit` (фильтры,
+  пагинация): роли, задачи, классы, назначения, удаление; best-effort запись
+- `LOG_LEVEL`/`LOG_FORMAT` в конфиге (JSON по умолчанию, console — dev)
+
 **Изоляция песочницы (S24)**
 
 - Контейнер-раннер `ai-teacher-sandbox-runner` (`backend/sandbox_runner`):

@@ -263,3 +263,16 @@ Redis должен быть запущен (`docker compose up -d redis`); API �
 (CI-биллинг), KI-015 (starlette/fastapi — принятый риск), KI-016 (dev pytest),
 KI-017 (PyPI с хоста), KI-018 (`.format()` в песочнице). Закрытые в v0.2.0:
 KI-001…KI-013, KI-019…KI-021.
+
+## 16. Наблюдаемость и аудит (S25)
+
+| # | Проверка | Ожидание |
+|---|----------|----------|
+| 16.1 | `GET /health/live` | 200 `{"status":"ok"}` |
+| 16.2 | `GET /health/ready` при остановленном Redis | 503, `checks.redis=false`, `checks.database=true` |
+| 16.3 | `GET /api/v1/health` | 200, обратная совместимость (секция `llm`) |
+| 16.4 | Любой запрос с `X-Request-ID: trace-1` | ответ с тем же заголовком, в JSON-логе `request_id=trace-1` |
+| 16.5 | `GET /metrics` | 200, `http_requests_total`, `sandbox_runs_total`; через nginx — 404 |
+| 16.6 | Создать/изменить/удалить задачу учителем, затем `GET /api/v1/admin/audit` админом | 3 записи `task.created/updated/deleted`, поля `actor_role`, `ip`, `payload` |
+| 16.7 | `GET /api/v1/admin/audit` под учеником | 403 |
+| 16.8 | Смена роли пользователя админом | запись `user.updated` с `payload.role` |
