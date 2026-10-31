@@ -3,9 +3,9 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** 23 завершён (этап v0.3.0 «Ops & Scale»,
-[TODO_V0.3.md](../TODO_V0.3.md)) — Sandbox Throughput: батч + пул, submit 5 RPS
-p95 49 мс (KI-022 закрыт); следующий — спринт 24 (Sandbox Runner Isolation)
+**Текущий спринт:** 24 завершён (этап v0.3.0 «Ops & Scale»,
+[TODO_V0.3.md](../TODO_V0.3.md)) — Sandbox Runner Isolation: контейнер-раннер,
+self-check изоляции, EXECUTOR_MODE; следующий — спринт 25 (Observability & Audit Log)
 
 ---
 
@@ -36,6 +36,7 @@ p95 49 мс (KI-022 закрыт); следующий — спринт 24 (Sandb
 - [Спринт 21: CI & Quality Gates](#спринт-21-ci--quality-gates)
 - [Спринт 22: Dependency Modernization](#спринт-22-dependency-modernization)
 - [Спринт 23: Sandbox Throughput](#спринт-23-sandbox-throughput)
+- [Спринт 24: Sandbox Runner Isolation](#спринт-24-sandbox-runner-isolation)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1313,6 +1314,58 @@ S21-002/S21-004 закрыты частично
 
 ---
 
+## Спринт 24: Sandbox Runner Isolation
+
+**Период:** 2026-10-31  
+**Статус:** ✅ контейнер-раннер реализован и проверен (self-check + 21 тест
+изоляции), режим по умолчанию — `native` (включается `EXECUTOR_MODE=container`)
+
+### Задачи
+- [x] S24-001: Контейнер-раннер (образ, протокол, `EXECUTOR_MODE`)
+- [x] S24-002: Fallback на native без Docker + сборка образа по требованию
+- [x] S24-003: Тесты изоляции (self-check, атаки, лимиты) — 21 тест
+- [x] S24-004: Метрики контейнерного режима (заглушка до `/metrics` в S25)
+- [x] S24-005: Документация
+
+### Что сделано
+- **Образ `ai-teacher-sandbox-runner`** (`backend/sandbox_runner`): python:3.12-slim
+  + RestrictedPython + чистое ядро `app/core/sandbox_runtime.py` (вынесено из
+  `executor.py`), non-root 65534, без зависимостей приложения и без монтирования
+  исходников — код приходит по stdin, ответ уходит в stdout.
+- **Запуск:** `--network none --read-only --cap-drop ALL --security-opt
+  no-new-privileges --user 65534:65534 --tmpfs /tmp:rw,noexec,nosuid,size=64m
+  --memory … --memory-swap … --pids-limit 64 --pull never`.
+- **`EXECUTOR_MODE=native|container`** (по умолчанию native) + `EXECUTOR_IMAGE`;
+  при недоступном Docker/образе — warning (один раз), счётчик `fallbacks` и
+  нативный путь. Windows dev остаётся на Job Object/RLIMIT_AS.
+- **`--self-check`** подтверждает изоляцию изнутри: `uid=65534`, read-only rootfs,
+  tmpfs пишется, сеть недоступна, `CapEff=0`. Проверяется в CI (job `Docker build`)
+  и `scripts/ci/docker.ps1`.
+- **Метрики:** `runs`, `errors`, `timeouts`, `fallbacks`, `start_ms_avg/last`,
+  `memory_limit_mb` (снимок — `container_sandbox.metrics`), основа для `/metrics` в S25.
+- **Тесты:** 9 unit (команда/протокол/fallback) + 21 isolation (self-check,
+  батч, изоляция кейсов, 14 атакующих векторов, память, таймаут, обрезка вывода).
+
+### Метрики
+- Полный backend: **460 passed + 1 skipped**; контейнерные тесты — 30 passed.
+- Время исполнения контейнерного батча (3 кейса) — ~0.7–1 с против ~0.05 с у
+  тёплого нативного пула; поэтому режим включается осознанно (S24 DoD).
+
+### Проблемы
+- **Пул контейнеров не сделан** — каждый батч поднимает новый контейнер; при
+  нагрузке >5 RPS это станет узким местом (кандидат в v0.3.x).
+- **Контейнерные тесты пропускаются в CI `test`-job** (внутри контейнера нет
+  Docker socket): они идут на машине разработки/runner'е, а в CI проверяется
+  self-check образа в job `Docker build`.
+- **Windows-шим Docker CLI** (`shutil.which` → файл без `.exe`) давал WinError 193;
+  исправлено поиском `docker.exe`.
+
+### DoD
+- ✅ Контейнерный режим проходит атакующие кейсы и лимиты (21 тест).
+- ✅ Fallback документирован и покрыт тестами; влияние на p95 зафиксировано.
+- ✅ Выбор режима — флаг `EXECUTOR_MODE`, по умолчанию `native`.
+
+---
 ## Шаблон отчёта по спринту
 
 ```

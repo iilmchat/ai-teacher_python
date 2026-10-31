@@ -549,6 +549,19 @@ tests/
     p95 ≤ 2000 мс (`scripts/load_test.py --scenario submit --rps 5`). После
     оптимизаций: батч — 395 мс, батч+пул — 49 мс (см.
     `docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`).
+16. **Контейнерный раннер — отдельное ядро (S24).** Образ
+    `ai-teacher-sandbox-runner` собирается из `backend/sandbox_runner` и
+    содержит только stdlib + RestrictedPython + `app/core/sandbox_runtime.py`.
+    Не импортировать в это ядро `app.config`/`app.errors`/БД: контейнер не должен
+    уметь ничего из стека приложения.
+17. **Изоляция проверяется self-check'ом, а не доверием флагам.** `--self-check`
+    внутри контейнера подтверждает `uid=65534`, read-only rootfs, доступный
+    tmpfs, недоступную сеть и `CapEff=0`; CI (job `Docker build`) и
+    `scripts/ci/docker.ps1` падают, если проверка не прошла.
+18. **Windows: `shutil.which("docker")` возвращает шим без `.exe`.** CreateProcess
+    на нём падает с `WinError 193`; ищите `docker.exe`/`docker.cmd`
+    (`container_sandbox.docker_path`), иначе контейнерный режим ложно
+    «недоступен» и всё уходит в fallback.
 
 ### 11.9. Промпты уровней
 

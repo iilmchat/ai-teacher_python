@@ -128,6 +128,19 @@ dunder-атрибуты.
 - **Эффект:** submit 5 RPS — p95 2219 мс → **49 мс**
   (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`).
 
+Слой 6 — контейнерный раннер (S24, `EXECUTOR_MODE=container`):
+
+- образ `ai-teacher-sandbox-runner` (`backend/sandbox_runner/Dockerfile`):
+  `python:3.12-slim` + `RestrictedPython` + чистое ядро
+  (`app/core/sandbox_runtime.py`), без зависимостей приложения;
+- запуск на батч: `--network none --read-only --cap-drop ALL
+  --security-opt no-new-privileges --user 65534:65534 --tmpfs /tmp ... --memory`;
+- протокол — тот же stdin/stdout JSON, что у нативного батча;
+- `--self-check` проверяет изоляцию изнутри (uid, read-only, сеть, `CapEff`);
+  в CI вызывается в job `Docker build`;
+- Docker недоступен/образа нет → warning + счётчик `fallbacks` + нативный путь;
+- по умолчанию `native` (контейнер добавляет ~0.6–1 с на старт).
+
 ```
 POST /code/execute {code, stdin?} → {success, output, error, error_type,
                                     violations, memory_limit_enforced,
