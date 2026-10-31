@@ -289,18 +289,10 @@ security-backend:
     - |
       set -eu
       echo "==> pip-audit (backend/requirements.txt)"
-      # --ignore-vuln: принятые residual-риски (KI-015/KI-016), синхронизировано
-      # с .github/workflows/ci.yml и docs/reports/sprint-20/SECURITY_AUDIT.md §8.
-      # После апгрейда starlette/pytest игноры удалить, иначе они скроют новые ID.
-      pip-audit -r backend/requirements.txt --strict --desc \
-        --ignore-vuln PYSEC-2026-161 \
-        --ignore-vuln PYSEC-2026-1941 \
-        --ignore-vuln PYSEC-2026-1942 \
-        --ignore-vuln PYSEC-2026-2280 \
-        --ignore-vuln PYSEC-2026-2281 \
-        --ignore-vuln PYSEC-2026-248 \
-        --ignore-vuln PYSEC-2026-249 \
-        --ignore-vuln PYSEC-2026-1845
+      # Аудит без игноров: starlette 1.10 (S22-002) и pytest 9 (S22-003)
+      # закрыли прежние advisory. Синхронизировано с .github/workflows/ci.yml
+      # и scripts/ci/security-backend.sh.
+      pip-audit -r backend/requirements.txt --strict --desc
 
 security-frontend:
   stage: security
