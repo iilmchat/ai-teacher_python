@@ -478,7 +478,24 @@ E2E-джоб поднимает `docker compose up -d postgres redis` сам и 
 
 ---
 
-## 13. Ссылки
+## 13. Зависимости и Dependabot (S22-004)
+
+- **Dependabot** (`.github/dependabot.yml`): три экосистемы — pip (`/backend`),
+  npm/pnpm (`/frontend`), GitHub Actions (`/`); еженедельно (пн, 06:00 MSK);
+  minor/patch группируются в один PR на экосистему (`backend-minor-patch`,
+  `frontend-minor-patch`), major приходят отдельно; лимит 5 открытых PR.
+- **Политика мержа:** minor/patch — после зелёного `CI (self-hosted fallback)`;
+  major — ручная проверка конфигов и полный прогон (контрактные тесты, e2e).
+- **Авто-мерж недоступен** на GitHub Free/private (нет branch protection и
+  auto-merge; см. KI-023) — мерж выполняет владелец по RULES §10.
+- **После ручного апгрейда** (S22-002/003: fastapi/starlette/pytest) устаревшие
+  PR закрыты, чтобы Dependabot пересобрал группы от актуальных пинов.
+- **Порядок безопасного апгрейда** — RULES §11.21 (контрактные тесты →
+  установка → pytest/e2e → пины → `pip-audit` без игноров → CHANGELOG/SPEC).
+
+---
+
+## 14. Ссылки
 
 - Тарифы GitFlic: <https://gitflic.ru/price>
 - Справочник `gitflic-ci.yaml`: <https://docs.gitflic.ru/latest/en/cicd/gitflic-ci-yaml/>

@@ -283,12 +283,13 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
 ### 9.2. Аудит зависимостей и секреты
 
 - **CI job `Security`:** `pip-audit` (backend), `gitleaks` по всей истории,
-  `pnpm audit --audit-level=high`. Временно `--ignore-vuln` для
-  задокументированных остатков (starlette 0.41.3 — KI-015, dev pytest —
-  KI-016): job должен ловить **новые** уязвимости, а не повторять известные.
-- **Локально:** PyPI с хоста заблокирован (KI-017) → аудит в Docker-контейнере
-  или `backend/scripts/audit_python_deps.py` (GitHub Advisory API, лимит
-  60/час, кэш, `--resume`, exit 2 при неполном прогоне).
+  `pnpm audit --audit-level=high`. С S22-002/003 `--ignore-vuln` больше нет:
+  `fastapi 0.162`/`starlette 1.10` и `pytest 9.2` закрыли прежние advisory,
+  job должен ловить **новые** уязвимости.
+- **Локально:** PyPI с хоста заблокирован (KI-017) → офлайн-wheelhouse
+  (`scripts/wheelhouse.py`: `build --docker` + `install --no-index`) или аудит
+  в Docker-контейнере / `backend/scripts/audit_python_deps.py` (GitHub
+  Advisory API, лимит 60/час, кэш, `--resume`, exit 2 при неполном прогоне).
 - **Секреты:** `.gitleaks.toml` (встроенные + проектные правила, allowlist —
   только плейсхолдеры), `.env`/`backups/` вне git; prod-compose требует
   `POSTGRES_PASSWORD`/`SECRET_KEY` (`:?`), `DEBUG=false`, БД/Redis не
@@ -324,8 +325,9 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
   провайдер покрыт фейком (SPRINT-19 §5).
 - **Кэш:** метрики в памяти процесса (не общие между воркерами); каталог
   после `submit` обновляется с задержкой до TTL (60 с).
-- **Зависимости:** координированный апгрейд `fastapi`/`starlette` отложен
-  (KI-015, v0.3.0), dev-апгрейд `pytest` 9.x — KI-016; PyPI с хоста
-  заблокирован (KI-017).
-- **CI:** GitHub Actions не запускает job'ы (KI-014, биллинг) — проверки
-  выполняются локально/эквивалентными командами.
+- **Зависимости:** `fastapi 0.162` + `starlette 1.10`, `pytest 9.2` (S22-002/003);
+  контракт API зафиксирован снапшотом OpenAPI (S22-001), апгрейды проверяются
+  им же. PyPI с хоста заблокирован (KI-017) → wheelhouse (`scripts/wheelhouse.py`).
+- **CI:** self-hosted runner, 6 job'ов (S21-003); GitHub-hosted минуты
+  заблокированы биллингом (KI-014, workflow в ручном режиме), merge-gate —
+  KI-023.

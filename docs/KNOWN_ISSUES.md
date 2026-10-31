@@ -4,7 +4,7 @@
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
 **Последнее обновление:** 2026-10-31 (спринт 22 / v0.3.0 — Dependency Modernization)  
-**Всего проблем:** 23 (активных: 4, закрытых: 19)
+**Всего проблем:** 23 (активных: 3, закрытых: 20)
 
 ---
 
@@ -48,40 +48,15 @@ ADR и инструкции — `docs/CI.md` §10; проверка того, ч
 
 **Workaround:** RULES §10 — мерж только при зелёном `CI (self-hosted fallback)`
 (проверка глазами), зелёный прогон 6/6 известен (run 41070317162).
+С S22-004 это же ограничение закрывает авто-мерж Dependabot minor/patch: на
+Free/private нет ни branch protection, ни auto-merge — группа обновлений
+мержится вручную после зелёного CI.
 
 **План закрытия:** (1) владелец выдаёт GitFlic-токен/регистрирует агент →
 прогнать пилот → включить гейт и проверить красным MR; либо (2) GitHub Pro /
 публичный репозиторий → `pwsh scripts/ci/protect-branch.ps1`.
 
 **Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-10-30
-
----
-
-### KI-017 · Open · Low · окружение/инструменты · PyPI недоступен с хоста
-
-**Описание:** на машине разработки `pypi.org`/`files.pythonhosted.org`
-заблокированы (connection reset/timeout): `pip install`/`pip-audit` с хоста
-не работают, часть апгрейдов пришлось ставить вручную через Docker-wheelhouse.
-Docker-контейнеры PyPI видят, npm registry и `api.github.com` доступны.
-
-**Workaround:** аудит backend выполняется в контейнере (`python:3.12-slim`) —
-это же путь CI; для локальной разработки — `backend/scripts/audit_python_deps.py`
-по GitHub Advisory API (лимит 60 запросов/час, кэш, `--resume`, `--offline`,
-exit 2 при неполном прогоне). Закрепление версий — `requirements.txt` +
-Dependabot; авторитетный результат — CI `Security`.
-
-**План закрытия:** восстановление доступа к PyPI на рабочей машине
-(прокси/сеть) либо переход на локальное зеркало; до этого — процесс выше.
-
-**Обновлено 2026-10-30 (спринт 21):** нестабильность стала заметнее — job
-`lint` на self-hosted runner'е залипал в `pip install` на 20+ минут
-(TLS-хендшейк к `pypi.org` таймаутил, при этом из свежего контейнера PyPI
-отвечал). Для CI добавлен **офлайн-путь**: зависимости ставятся из wheelhouse
-(named volume `ai-teacher-wheelhouse`, `scripts/ci/build-wheelhouse.ps1`), PyPI —
-только fallback; плюс постоянные кэши pip/pnpm (`docs/CI.md` §12.5, RULES
-§11.20). Сам доступ с хоста не восстановлен.
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30 (спринт 21)
 
 ---
 
@@ -195,6 +170,28 @@ pytest **367 passed + 1 skipped**, e2e 12/12. Единственное пове�
 
 ---
 
+### KI-017 · Resolved · Low · окружение/инструменты · PyPI недоступен с хоста
+
+**Описание:** pypi.org/iles.pythonhosted.org с машины разработки
+заблокированы (connection reset/timeout): pip install/pip-audit с хоста
+не работают. Docker-контейнеры PyPI видят (нестабильно), npm registry и
+pi.github.com доступны.
+
+**Решение (S22-005, спринт 22):** офлайн-установка формализована —
+scripts/wheelhouse.py: uild --out .wheelhouse --docker (скачивание всех
+пинов Linux-контейнером) и install --from .wheelhouse --python
+backend/venv/Scripts/python.exe (pip install --no-index --find-links). Для CI
+тот же скрипт наполняет named volume i-teacher-wheelhouse
+(scripts/ci/build-wheelhouse.ps1). Порядок — GETTING_STARTED §4 и RULES §11.21;
+аудит — pip-audit в контейнере / ackend/scripts/audit_python_deps.py,
+авторитетный результат — job Security.
+
+**Оговорка:** сам доступ к PyPI с хоста не восстановлен — это ограничение
+сети, а не проекта; основной путь остаётся CI (контейнер, зеркала, wheelhouse).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-005)
+
+---
 ### KI-019 · Resolved · Critical · deps/security · python-jose и PyJWT 2.10.0
 
 **Описание:** аудит backend (`pip-audit`, Docker/CI-путь) показал 66 записей

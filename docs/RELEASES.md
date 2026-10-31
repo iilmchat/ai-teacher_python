@@ -3,8 +3,10 @@
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
 **Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** 21 (этап v0.3.0 «Ops & Scale», [TODO_V0.3.md](../TODO_V0.3.md)) —
-CI & Quality Gates: CI восстановлен на self-hosted runner'е, merge-gate — KI-023
+**Текущий спринт:** 22 завершён (этап v0.3.0 «Ops & Scale»,
+[TODO_V0.3.md](../TODO_V0.3.md)) — Dependency Modernization: `fastapi` 0.162 +
+`starlette` 1.10, `pytest` 9.2, контрактные тесты API; следующий — спринт 23
+(Sandbox Throughput, KI-022)
 
 ---
 
@@ -33,6 +35,7 @@ CI & Quality Gates: CI восстановлен на self-hosted runner'е, merg
 - [Спринт 19: Performance & Scale](#спринт-19-performance--scale)
 - [Спринт 20: Security Audit & Release](#спринт-20-security-audit--release)
 - [Спринт 21: CI & Quality Gates](#спринт-21-ci--quality-gates)
+- [Спринт 22: Dependency Modernization](#спринт-22-dependency-modernization)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1168,6 +1171,87 @@ S21-002/S21-004 закрыты частично
   реальная ветка релиза — на v0.3.0 (S30-004).
 - ✅ `docs/CI.md` описывает процессы и решение; KI-014 → `Resolved`; KI-023
   заведена с планом.
+
+---
+
+## Спринт 22: Dependency Modernization
+
+**Период:** 2026-10-31  
+**Статус:** ✅ завершён: `fastapi`/`starlette`/`pytest` обновлены, контракт API
+зафиксирован тестами, `pip-audit` без игноров; авто-мерж Dependabot недоступен
+на Free/private (KI-023) — политика ручная
+
+### Задачи
+- [x] S22-001: Контрактные тесты API (снапшот OpenAPI + формы ответов)
+- [x] S22-002: `fastapi` 0.162 + `starlette` 1.10 (KI-015) — закрыт
+- [x] S22-003: `pytest` 9.2 + плагины (KI-016) — закрыт (`filterwarnings` отложен)
+- [~] S22-004: Dependabot: группировка/лимиты/политика — сделано; авто-мерж
+      невозможен на текущем тарифе (KI-023)
+- [x] S22-005: `scripts/wheelhouse.py` для offline-окружений (KI-017) — закрыт
+- [x] S22-006: Документация (RULES §11.21, GETTING_STARTED, ARCHITECTURE, CI.md §13)
+
+### Что сделано
+- **Контракт (S22-001):** снапшот `backend/tests/contracts/openapi.json`
+  (68 операций, 92 схемы), компаратор `tests/contract_utils.py` (разрешены
+  только аддитивные изменения: новые пути/поля/значения enum; breaking →
+  падение), 12 юнит-тестов правил и 21 форма ответов ключевых эндпоинтов
+  (`tests/test_api_contract_shapes.py` + `contracts/endpoints.json`).
+  Перегенерация — `scripts/snapshot_openapi.py` и
+  `UPDATE_CONTRACT_FIXTURES=1 pytest`.
+- **Апгрейд (S22-002):** `fastapi 0.115.5 → 0.162.0`, `starlette 0.41.3 →
+  1.10.0` (пин), транзитивные `annotated-doc`, `opentelemetry-api`; pydantic
+  2.10.1 совместим. Единственное поведенческое изменение — без заголовка
+  `Authorization` теперь **401** вместо 403 (RFC 7235, Starlette 1.x): SPEC §7,
+  `test_access_matrix` и CHANGELOG обновлены; фронтенд уже обрабатывал 401.
+  Снапшот перегенерирован (косметика: `format: password`, `contentMediaType`,
+  `ValidationError.ctx/input` — без удалений).
+- **Dev-зависимости (S22-003):** `pytest 9.2.0`, `pytest-asyncio 1.4.1`,
+  `pytest-cov 7.1.0`, `pytest-env 1.8.3`; конфиг `pyproject.toml` менять не
+  пришлось. `filterwarnings = error` осознанно не включён (~1 400
+  `datetime.utcnow()` предупреждений — отдельная чистка).
+- **Аудит:** `pip-audit` в CI **без `--ignore-vuln`** («No known
+  vulnerabilities found»); 7 starlette- и dev-pytest-игноры убраны из
+  `ci.yml`, `gitflic-ci.yaml`, `scripts/ci/security-backend.sh`.
+- **Wheelhouse (S22-005):** `scripts/wheelhouse.py` (`build --docker`,
+  `install --no-index`, `list`); CI volume `ai-teacher-wheelhouse` пересобран
+  (101 колесо, 75 МБ, Linux), `build-wheelhouse.ps1` — тонкая обёртка.
+- **Dependabot (S22-004):** политика в `.github/dependabot.yml` и `CI.md` §13
+  (minor/patch группой после зелёного CI, major вручную); 3 устаревших PR
+  после ручного апгрейда закрыты.
+- **Документация (S22-006):** RULES §11.21 «Обновление зависимостей» (порядок,
+  контрактные тесты, wheelhouse, откат), GETTING_STARTED §4 (wheelhouse),
+  ARCHITECTURE (версии, аудит), CHANGELOG `[Unreleased]`, KNOWN_ISSUES.
+
+### Что не сделано
+- **`filterwarnings = error`** — отложено: ~1 400 предупреждений
+  `datetime.utcnow()`; нужна отдельная чистка кода (кандидат — спринт 25/30).
+- **Авто-мерж Dependabot** — невозможен на GitHub Free/private (нет branch
+  protection/auto-merge), KI-023; мерж minor/patch — вручную после зелёного CI.
+- **Мажорные PR GitHub Actions** (#12–#14: `checkout@7`, `setup-python@7`,
+  `setup-node@7`) не разобраны: мажор, требуется проверка self-hosted job'ов.
+
+### Метрики
+- Backend: **367 passed + 1 skipped** (113 с; +13 контрактных тестов), ruff 0,
+  mypy strict 0, `pip check` — OK
+- Контракт: 68 операций / 92 схемы / 21 форма ответов; breaking-изменений 0
+- `pip-audit` — 0 находок без игноров; `pnpm audit --audit-level=high` — 0
+- CI: 6/6 job'ов (PR), `main` зелёный после мержа спринта 21 (run 41214317323)
+- e2e: 12/12
+
+### Проблемы
+- **401 вместо 403** — поведенческое изменение апгрейда; риск для внешних
+  клиентов минимален (наш фронтенд обрабатывает 401), но зафиксировано в SPEC
+  и CHANGELOG как осознанное.
+- **PyPI/зеркала** — апгрейд ставился из `mirrors.aliyun.com`; wheelhouse
+  пересобран, но `docker volume rm` не всегда очищает том (остались колёса
+  старых версий — на установку не влияет).
+- **Dependabot PR** — 13 открытых; major-обновления требуют ручного разбора.
+
+### DoD
+- ✅ `fastapi`/`starlette`/`pytest` обновлены; контрактные тесты и e2e зелёные.
+- ✅ `pip-audit` без игнора (0 high/critical без обоснования).
+- ✅ CI required checks проходят (self-hosted, 6/6).
+- ✅ KI-015/016/017 закрыты; KI-023 (merge-gate/авто-мерж) — остаётся.
 
 ---
 
