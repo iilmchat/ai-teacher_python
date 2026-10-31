@@ -52,7 +52,7 @@ jobs:
     runs-on: [self-hosted, windows, ai-teacher]
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Ruff + MyPy в python:3.12-slim
         run: |
           # Кэш pip + офлайн-wheelhouse: PyPI с runner'а нестабилен (KI-017).
@@ -69,7 +69,7 @@ jobs:
     needs: [lint]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Alembic + pytest c Postgres/Redis
         run: |
           $ErrorActionPreference = 'Stop'
@@ -103,7 +103,7 @@ jobs:
     runs-on: [self-hosted, windows, ai-teacher]
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: typecheck / lint / test / build в node:22-alpine
         run: |
           # pnpm-store — named volume: npm-реестр тоже нестабилен, а без кэша
@@ -118,7 +118,7 @@ jobs:
     runs-on: [self-hosted, windows, ai-teacher]
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: pip-audit (backend)
         run: |
           docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
@@ -144,7 +144,7 @@ jobs:
     needs: [lint, test]
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Playwright e2e на Windows-хосте
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}
@@ -170,7 +170,7 @@ jobs:
     needs: [lint, test]
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Сборка образов и проверка prod-compose
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -185,7 +185,7 @@ jobs:
     needs: [lint]
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: submit 0.5 RPS, p95 ≤ 2000 мс
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}
