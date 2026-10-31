@@ -1,0 +1,44 @@
+# =============================================================================
+# Ночной perf-прогон песочницы (S23-003, KI-022).
+#
+# Бюджет: submit 2 RPS, p95 ≤ 2000 мс (см. backend/scripts/load_test.py).
+# PR-гейт — быстрый smoke 0.5 RPS в ci-selfhosted.yml (`Perf smoke (submit)`).
+#
+# Запускается на self-hosted runner'е: GitHub-hosted минуты заблокированы
+# биллингом (KI-014, docs/CI.md). Требования к машине — как у e2e: Docker
+# Desktop, compose-кластер Postgres/Redis, venv с зависимостями backend.
+# =============================================================================
+name: Perf night (submit)
+
+on:
+  schedule:
+    # 02:00 UTC = 05:00 MSK
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    name: submit 2 RPS
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: submit 2 RPS, p95 ≤ 2000 мс
+        env:
+          E2E_PYTHON: ${{ vars.E2E_PYTHON }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
+          E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
+        run: |
+          pwsh -NoProfile -File ./scripts/ci/perf.ps1 -Rps 2 -Duration 60
+      - name: Загрузить артефакт perf
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-night
+          path: docs/reports/sprint-23/load-test.json
+          if-no-files-found: ignore
+          retention-days: 14

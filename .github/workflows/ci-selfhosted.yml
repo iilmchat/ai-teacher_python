@@ -176,3 +176,20 @@ jobs:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: pwsh -NoProfile -File ./scripts/ci/docker.ps1
+
+  # Perf-smoke песочницы (S23-003, KI-022): быстрый прогон submit на 0.5 RPS.
+  # Ночной прогон 2 RPS — отдельный workflow perf-nightly.yml.
+  perf:
+    name: Perf smoke (submit)
+    runs-on: [self-hosted, windows, ai-teacher]
+    needs: [lint]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: submit 0.5 RPS, p95 ≤ 2000 мс
+        env:
+          E2E_PYTHON: ${{ vars.E2E_PYTHON }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
+          E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
+        run: pwsh -NoProfile -File ./scripts/ci/perf.ps1 -Rps 0.5 -Duration 20

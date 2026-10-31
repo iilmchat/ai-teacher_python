@@ -109,9 +109,24 @@ dunder-атрибуты.
 |-------|----------|-----------|
 | Память, POSIX | `resource.setrlimit(RLIMIT_AS)` в дочернем процессе | `EXECUTOR_MEMORY_LIMIT` |
 | Память, Windows | Job Object + `JOB_OBJECT_LIMIT_PROCESS_MEMORY` | `EXECUTOR_MEMORY_LIMIT` |
-| Время | `subprocess.run(timeout=...)`, процесс убивается | `EXECUTOR_TIMEOUT` |
+| Время | таймаут на **кейс** в родителе, процесс убивается | `EXECUTOR_TIMEOUT` |
 | Параллелизм | `threading.BoundedSemaphore`, отказ 503 | `EXECUTOR_MAX_CONCURRENCY`, `EXECUTOR_QUEUE_TIMEOUT` |
 | Вывод | обрезка до JSON-сериализации | `EXECUTOR_MAX_OUTPUT` |
+| Пул процессов | idle-интерпретаторы, перезапуск после N задач/сбоя | `EXECUTOR_POOL_SIZE`, `EXECUTOR_POOL_MAX_TASKS` |
+
+Слой 5 — батч и пул (S23, KI-022):
+
+- **Батч:** все кейсы задачи выполняет один дочерний интерпретатор
+  (`_BATCH_RUNNER`). Протокол — построчный JSON: на кейс строка результата,
+  в конце `{"done": true}`. Родитель держит таймаут на каждый кейс, поэтому
+  зависший кейс не ждёт весь батч; процесс убивается, остальные кейсы
+  помечаются `SandboxError`.
+- **Пул:** до `EXECUTOR_POOL_SIZE` поднятых процессов переиспользуются между
+  задачами (`runner_pool.py`); изоляция — свежие `globals`/`builtins` на каждый
+  кейс, перезапуск после `EXECUTOR_POOL_MAX_TASKS` задач, после
+  `TimeoutError`/`MemoryError` и при shutdown приложения.
+- **Эффект:** submit 5 RPS — p95 2219 мс → **49 мс**
+  (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`).
 
 ```
 POST /code/execute {code, stdin?} → {success, output, error, error_type,

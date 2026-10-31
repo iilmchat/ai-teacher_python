@@ -1,9 +1,15 @@
 """
-Прогон тест-кейсов задачи (S7-004).
+Прогон тест-кейсов задачи (S7-004, S23-001).
 
-Каждый кейс выполняется в песочнице с подставленным `stdin`. Сравнение
-вывода мягкое: сравниваются строки без завершающих пробелов и переводов
-строк — так ученик не наказывается за лишний `\n` от `print`.
+Каждый кейс выполняется в песочнице с подставленным `stdin`. С S23-001 все
+кейсы задачи выполняются **одним** дочерним интерпретатором (батч): на задачах
+с 2–20 кейсами это убирает повторный старт интерпретатора на каждый кейс и
+даёт кратный рост throughput submit (KI-022). Изоляция между кейсами
+сохраняется: `_run_restricted` создаёт свежие globals/builtins на каждый вызов,
+а лимиты (память/таймаут) действуют на процесс и на кейс соответственно.
+
+Сравнение вывода мягкое: сравниваются строки без завершающих пробелов и
+переводов строк — так ученик не наказывается за лишний `\n` от `print`.
 """
 
 from dataclasses import dataclass, field
@@ -72,13 +78,20 @@ async def run_test_cases(
     results: list[CaseOutcome] = []
     violations: list[str] = []
 
-    for index, case in enumerate(test_cases[:max_cases]):
-        case_input = str(case.get("input", ""))
+    selected = test_cases[:max_cases]
+    inputs = [str(case.get("input", "")) for case in selected]
+
+    # Один дочерний интерпретатор на все кейсы (S23-001); fallback внутри
+    # execute_many, если батчевый протокол недоступен.
+    executions: list[ExecutionResult] = await executor.execute_many(code, inputs)
+
+    for index, (case, case_input, result) in enumerate(
+        zip(selected, inputs, executions, strict=True)
+    ):
         expected = str(case.get("expected_output", ""))
         description = case.get("description")
         description_text = str(description) if description is not None else None
 
-        result: ExecutionResult = await executor.execute(code, case_input)
         violations.extend(result.violations)
 
         actual = result.output
