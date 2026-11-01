@@ -327,6 +327,21 @@
       "statusNotStarted": "not started",
       "statusInProgress": "in progress",
       "statusCompleted": "completed"
+    },
+    "templates": {
+      "title": "Assignment templates",
+      "select": "Choose a template",
+      "apply": "Apply",
+      "name": "Template name",
+      "namePlaceholder": "For example: intro block",
+      "save": "Save selection",
+      "saved": "Template saved",
+      "saveError": "Could not save the template",
+      "applyError": "Could not apply the template",
+      "loadError": "Could not load templates",
+      "delete": "Delete template",
+      "deleteError": "Could not delete the template",
+      "empty": "No templates yet — select tasks and save a set"
     }
   },
   "dashboard": {

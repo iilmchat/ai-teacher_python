@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { AssignmentTemplates } from '@/components/teacher/AssignmentTemplates';
 import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import { saveBlob } from '@/lib/download';
@@ -254,6 +255,13 @@ export function ClassroomDetailPage() {
               </span>
             </div>
           </div>
+        )}
+        {isOwner && (
+          <AssignmentTemplates
+            classroomId={classroomId}
+            selectedTaskIds={selectedTaskIds}
+            onApplied={() => void load()}
+          />
         )}
         <div className="overflow-x-auto">
           <Table>

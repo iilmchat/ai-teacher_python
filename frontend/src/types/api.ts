@@ -469,3 +469,15 @@ export interface GradebookResponse {
   completion_rate: number;
   overdue: number;
 }
+
+export interface AssignmentTemplateItem {
+  id: string;
+  name: string;
+  task_ids: string[];
+  created_at: string;
+}
+
+export interface AssignmentTemplateList {
+  items: AssignmentTemplateItem[];
+  total: number;
+}

@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.3.0 «Ops & Scale» · **© 2026 RuChating (iilmchat)**
+**Версия:** v0.3.1 · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -82,7 +82,7 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.3.0 «Ops & Scale»** (2026-11-01) |
+| Версия | **v0.3.1** (2026-11-01) |
 | Спринты | 1–30 (этап v0.3.0 завершён) |
 | Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
 | Миграции | Alembic head **010** (10 миграций; `chat_messages` HNSW-индекс) |
