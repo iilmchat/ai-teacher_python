@@ -14,6 +14,16 @@
 
 ### Добавлено
 
+**RAG v2 и поиск (S27)**
+
+- `RAG_MIN_SCORE` — порог релевантности семантической выдачи; пустая выдача
+  после фильтра уходит в ILIKE-fallback
+- `scripts/backfill_embeddings.py` + `app/services/backfill.py`: идемпотентный
+  backfill (батчи, лимит, dry-run, продолжение после ошибок провайдера)
+- UI поиска в `ChatPage`: панель «Поиск по чату», подсветка `<mark>`,
+  aria-live, i18n ru/en; e2e-сценарий
+- Фикстуры `tests/fixtures/rag_queries.json` + precision@k тест
+
 **Данные и приватность (S26)**
 
 - `GET /api/v1/admin/analytics/export` — CSV/JSON, потоково, лимит

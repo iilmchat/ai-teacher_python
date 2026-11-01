@@ -156,6 +156,9 @@ class Settings(BaseSettings):
     rag_enabled: bool = False
     #: Сколько сообщений возвращать по умолчанию
     rag_top_k: int = 5
+    #: Минимальная близость (0..1) для семантической выдачи (S27-002);
+    #: 0 — без порога. Ниже порога — fallback на ILIKE.
+    rag_min_score: float = 0.0
     #: Размерность эмбеддингов; должна совпадать с колонкой chat_messages.embedding
     rag_embedding_dim: int = 1536
     #: Модель эмбеддингов на OpenAI-совместимом endpoint (LM Studio)

@@ -87,6 +87,22 @@ async def search_chat_messages(
             semantic_rows = await repository.search_user_messages_semantic(
                 user_id, vector, limit
             )
+            # S27-002: порог релевантности. Вектор «не про то» даёт низкую
+            # близость; такие попадания хуже, чем честный ILIKE-поиск.
+            threshold = settings.rag_min_score
+            if semantic_rows and threshold > 0:
+                before = len(semantic_rows)
+                semantic_rows = [
+                    (message, score)
+                    for message, score in semantic_rows
+                    if score >= threshold
+                ]
+                logger.info(
+                    "rag_semantic_threshold",
+                    threshold=threshold,
+                    kept=len(semantic_rows),
+                    filtered=before - len(semantic_rows),
+                )
             if semantic_rows:
                 logger.info(
                     "rag_search",

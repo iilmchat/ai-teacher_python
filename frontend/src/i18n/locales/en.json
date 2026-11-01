@@ -67,7 +67,21 @@
     "levelLabel": "Help level",
     "connected": "Streaming connected",
     "disconnected": "Streaming unavailable, replies arrive complete",
-    "policyWarning": "The basic level should not give a ready solution — please tell your teacher"
+    "policyWarning": "The basic level should not give a ready solution — please tell your teacher",
+    "search": {
+      "title": "Search chat",
+      "label": "Search query",
+      "placeholder": "For example: for loop",
+      "submit": "Search",
+      "loading": "Searching…",
+      "empty": "Nothing found — try different words",
+      "found": "Found: {{count}} ({{mode}})",
+      "error": "Search is unavailable, try again later",
+      "modes": {
+        "semantic": "semantic",
+        "ilike": "substring"
+      }
+    }
   },
   "code": {
     "title": "Playground",
