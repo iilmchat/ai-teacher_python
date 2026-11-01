@@ -14,6 +14,16 @@
 
 ### Добавлено
 
+**Teacher & Classroom v3 (S28)**
+
+- `POST /classrooms/{id}/assignments/bulk` — идемпотентные массовые назначения
+  (`{created, skipped, unknown}`), уведомления только по новым
+- Шаблоны назначений: таблица `assignment_templates` (миграция 013) и
+  `/teacher/assignment-templates` (создание/список/удаление, применение к классу)
+- `GET /classrooms/{id}/gradebook` + `/gradebook/csv` — журнал оценок с
+  `completed_at` и `overdue`
+- Email-уведомления за флагом `NOTIFICATIONS_EMAIL_ENABLED` (SMTP, best-effort)
+
 **RAG v2 и поиск (S27)**
 
 - `RAG_MIN_SCORE` — порог релевантности семантической выдачи; пустая выдача

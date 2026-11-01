@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.task import TaskDifficulty, TaskStatus
 
@@ -122,3 +122,67 @@ class ClassProgress(BaseModel):
     cells: list[ProgressCell]
     completion_rate: float
     problem_tasks: list[ProblemTask] = Field(default_factory=list)
+
+class BulkAssignmentRequest(BaseModel):
+    """Массовое назначение задач классу (S28-001)"""
+
+    task_ids: list[UUID] = Field(..., min_length=1, max_length=50)
+    due_at: datetime | None = None
+
+
+class BulkAssignmentResult(BaseModel):
+    """Итог массового назначения: созданные/пропущенные/неизвестные задачи"""
+
+    created: list[UUID] = Field(default_factory=list)
+    skipped: list[UUID] = Field(default_factory=list)
+    unknown: list[UUID] = Field(default_factory=list)
+
+
+class TemplateCreate(BaseModel):
+    """Создание шаблона назначений учителя (S28-002)"""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    task_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class TemplateItem(BaseModel):
+    """Шаблон назначений"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    task_ids: list[UUID] = Field(default_factory=list)
+    created_at: datetime
+
+
+class TemplateList(BaseModel):
+    items: list[TemplateItem]
+    total: int
+
+
+class GradebookCell(BaseModel):
+    """Ячейка журнала оценок (S28-003)"""
+
+    student_id: UUID
+    task_id: UUID
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None = None
+
+
+class GradebookResponse(BaseModel):
+    """Журнал оценок: матрица ученик × задача + сводка"""
+
+    students: list[ProgressStudent]
+    tasks: list[ProgressTask]
+    cells: list[GradebookCell]
+    completion_rate: float
+    overdue: int
+
+
+class TemplateApplyRequest(BaseModel):
+    """Применение шаблона к классу (S28-002)"""
+
+    template_id: UUID
+    due_at: datetime | None = None

@@ -20,12 +20,16 @@ from app.schemas.classroom import (
     AssignmentCreate,
     AssignmentItem,
     AssignmentList,
+    BulkAssignmentRequest,
+    BulkAssignmentResult,
     ClassProgress,
     ClassroomCreate,
     ClassroomDetail,
     ClassroomList,
     ClassroomMemberItem,
     ClassroomResponse,
+    GradebookCell,
+    GradebookResponse,
     JoinClassroomRequest,
     MyAssignment,
     MyAssignmentList,
@@ -33,6 +37,7 @@ from app.schemas.classroom import (
     ProgressCell,
     ProgressStudent,
     ProgressTask,
+    TemplateApplyRequest,
 )
 from app.services.audit_service import record_audit
 from app.services.classroom_service import ClassroomService
@@ -330,4 +335,131 @@ async def classroom_report(
         content=text.encode("utf-8-sig"),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+# --- Массовые назначения и журнал оценок (S28) ------------------------------
+
+
+@router.post(
+    "/classrooms/{classroom_id}/assignments/bulk",
+    response_model=BulkAssignmentResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def bulk_assign(
+    classroom_id: UUID,
+    payload: BulkAssignmentRequest,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> BulkAssignmentResult:
+    """Массовое назначение задач (S28-001), идемпотентно.
+
+    Дубликаты и уже назначенные задачи не ошибка: они в `skipped`; неизвестные
+    и неактивные — в `unknown`. Уведомления отправляются только по новым.
+    """
+    created, skipped, unknown = await ClassroomService(db).add_assignments_bulk(
+        classroom_id, current_user, payload.task_ids, payload.due_at
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="assignment.bulk_created",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={
+            "created": len(created),
+            "skipped": len(skipped),
+            "unknown": len(unknown),
+        },
+        request=request,
+    )
+    return BulkAssignmentResult(created=created, skipped=skipped, unknown=unknown)
+
+
+@router.post(
+    "/classrooms/{classroom_id}/assignments/from-template",
+    response_model=BulkAssignmentResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def assign_from_template(
+    classroom_id: UUID,
+    payload: TemplateApplyRequest,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> BulkAssignmentResult:
+    """Применить шаблон назначений к классу (S28-002)"""
+    created, skipped, unknown = await ClassroomService(db).apply_template(
+        classroom_id, current_user, payload.template_id, payload.due_at
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="assignment.template_applied",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={"template_id": str(payload.template_id), "created": len(created)},
+        request=request,
+    )
+    return BulkAssignmentResult(created=created, skipped=skipped, unknown=unknown)
+
+
+@router.get(
+    "/classrooms/{classroom_id}/gradebook", response_model=GradebookResponse
+)
+async def class_gradebook(
+    classroom_id: UUID, current_user: TeacherUser, db: DbSession
+) -> GradebookResponse:
+    """Журнал оценок класса (S28-003): матрица + completed_at + overdue"""
+    data = await ClassroomService(db).class_gradebook(classroom_id, current_user)
+    return GradebookResponse(
+        students=[
+            ProgressStudent(id=student.id, username=student.username)
+            for student in data.students
+        ],
+        tasks=[ProgressTask(id=task.id, title=task.title) for task in data.tasks],
+        cells=[
+            GradebookCell(
+                student_id=cell.student_id,
+                task_id=cell.task_id,
+                status=cell.status,
+                attempts=cell.attempts,
+                completed_at=cell.completed_at,
+            )
+            for cell in data.cells
+        ],
+        completion_rate=data.completion_rate,
+        overdue=data.overdue,
+    )
+
+
+@router.get("/classrooms/{classroom_id}/gradebook/csv")
+async def class_gradebook_csv(
+    classroom_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> Response:
+    """Журнал оценок CSV (S28-003, формат — как отчёт класса S26-002)"""
+    from app.services.class_report import build_class_report
+
+    text, rows = await build_class_report(db, classroom_id, current_user)
+    await record_audit(
+        db,
+        actor=current_user,
+        action="gradebook.exported",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={"rows": rows},
+        request=request,
+    )
+    return Response(
+        content=text.encode("utf-8-sig"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="gradebook-{classroom_id}.csv"'
+            )
+        },
     )

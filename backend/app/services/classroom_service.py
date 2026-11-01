@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.errors import AccessDeniedError, ConflictError, NotFoundError, ValidationError
-from app.models.classroom import Assignment, Classroom, ClassroomMember, ClassroomRole
+from app.models.classroom import (
+    Assignment,
+    AssignmentTemplate,
+    Classroom,
+    ClassroomMember,
+    ClassroomRole,
+)
 from app.models.task import Task, TaskStatus, UserTaskProgress
 from app.models.user import User
 
@@ -446,6 +452,248 @@ class ClassroomService:
 # --- Внутренние dataclass-структуры (без Pydantic в сервисе) -------------
 
 
+    # --- Массовые назначения, шаблоны и журнал (S28) -------------------
+
+    async def add_assignments_bulk(
+        self,
+        classroom_id: UUID,
+        actor: User,
+        task_ids: list[UUID],
+        due_at: datetime | None,
+    ) -> tuple[list[UUID], list[UUID], list[UUID]]:
+        """Идемпотентно назначить набор задач: (created, skipped, unknown).
+
+        Дубликаты и уже назначенные задачи попадают в `skipped`, неактивные и
+        несуществующие — в `unknown`; ни одна из них не ломает запрос.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Назначать задачи может только владелец")
+
+        unique_ids = list(dict.fromkeys(task_ids))
+        duplicates = {
+            task_id for task_id in unique_ids if task_ids.count(task_id) > 1
+        }
+        tasks = (
+            await self.db.execute(select(Task).where(Task.id.in_(unique_ids)))
+        ).scalars().all()
+        active = {task.id: task for task in tasks if task.is_active}
+        existing = set(
+            (
+                await self.db.execute(
+                    select(Assignment.task_id).where(
+                        Assignment.classroom_id == classroom_id,
+                        Assignment.task_id.in_(unique_ids),
+                    )
+                )
+            ).scalars().all()
+        )
+
+        created: list[UUID] = []
+        skipped: list[UUID] = []
+        unknown: list[UUID] = []
+        new_assignments: list[tuple[Assignment, Task]] = []
+        for task_id in unique_ids:
+            if task_id in existing:
+                skipped.append(task_id)
+                continue
+            task = active.get(task_id)
+            if task is None:
+                unknown.append(task_id)
+                continue
+            assignment = Assignment(
+                classroom_id=classroom_id, task_id=task_id, due_at=due_at
+            )
+            self.db.add(assignment)
+            new_assignments.append((assignment, task))
+            created.append(task_id)
+        for duplicate in duplicates:
+            if duplicate not in skipped:
+                skipped.append(duplicate)
+        await self.db.commit()
+
+        if not new_assignments:
+            return created, skipped, unknown
+
+        for assignment, _ in new_assignments:
+            await self.db.refresh(assignment)
+
+        members = await self.get_members(classroom_id)
+        student_ids = [
+            member.user_id
+            for member in members
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        if student_ids:
+            from app.services.engagement_service import (
+                create_assignment_notifications,
+            )
+
+            for assignment, task in new_assignments:
+                await create_assignment_notifications(
+                    self.db,
+                    student_ids,
+                    classroom_id=classroom.id,
+                    classroom_name=classroom.name,
+                    assignment_id=assignment.id,
+                    task_title=task.title,
+                    due_at=due_at,
+                )
+            await self._send_assignment_emails(
+                classroom, student_ids, [task for _, task in new_assignments], due_at
+            )
+        return created, skipped, unknown
+
+    async def _send_assignment_emails(
+        self,
+        classroom: Classroom,
+        student_ids: list[UUID],
+        tasks: list[Task],
+        due_at: datetime | None,
+    ) -> None:
+        """Best-effort email-уведомления (S28-004): SMTP-сбой не ломает API"""
+        from app.config import settings
+        from app.services.email import get_email_sender, send_assignment_email
+
+        if not settings.notifications_email_enabled or not student_ids:
+            return
+        emails = (
+            await self.db.execute(
+                select(User.email).where(User.id.in_(student_ids))
+            )
+        ).scalars().all()
+        sender = get_email_sender()
+        due = due_at.isoformat() if due_at else None
+        for task in tasks:
+            for email in emails:
+                await send_assignment_email(
+                    sender,
+                    to=email,
+                    classroom_name=classroom.name,
+                    task_title=task.title,
+                    due_at=due,
+                )
+
+    async def create_template(
+        self, owner: User, name: str, task_ids: list[UUID]
+    ) -> AssignmentTemplate:
+        """Создать шаблон назначений учителя (S28-002)"""
+        from app.models.user import UserRole
+
+        if owner.role not in (UserRole.TEACHER, UserRole.ADMIN):
+            raise AccessDeniedError("Шаблоны доступны преподавателю")
+        unique = list(dict.fromkeys(task_ids))
+        if not unique:
+            raise ValidationError("Шаблон должен содержать хотя бы одну задачу")
+        template = AssignmentTemplate(
+            owner_id=owner.id, name=name, task_ids=[str(task_id) for task_id in unique]
+        )
+        self.db.add(template)
+        await self.db.commit()
+        await self.db.refresh(template)
+        return template
+
+    async def list_templates(self, owner: User) -> list[AssignmentTemplate]:
+        """Шаблоны текущего учителя, новые сверху"""
+        rows = (
+            await self.db.execute(
+                select(AssignmentTemplate)
+                .where(AssignmentTemplate.owner_id == owner.id)
+                .order_by(AssignmentTemplate.created_at.desc())
+            )
+        ).scalars().all()
+        return list(rows)
+
+    async def delete_template(self, template_id: UUID, owner: User) -> bool:
+        """Удалить свой шаблон (404/403 через None)"""
+        template = await self.db.get(AssignmentTemplate, template_id)
+        if template is None:
+            raise NotFoundError("Шаблон не найден")
+        if template.owner_id != owner.id:
+            raise AccessDeniedError("Можно удалить только свой шаблон")
+        await self.db.delete(template)
+        await self.db.commit()
+        return True
+
+    async def apply_template(
+        self,
+        classroom_id: UUID,
+        actor: User,
+        template_id: UUID,
+        due_at: datetime | None,
+    ) -> tuple[list[UUID], list[UUID], list[UUID]]:
+        """Применить шаблон к классу (массовое назначение)"""
+        template = await self.db.get(AssignmentTemplate, template_id)
+        if template is None:
+            raise NotFoundError("Шаблон не найден")
+        if template.owner_id != actor.id:
+            raise AccessDeniedError("Можно применить только свой шаблон")
+        task_ids = [UUID(str(value)) for value in (template.task_ids or [])]
+        return await self.add_assignments_bulk(
+            classroom_id, actor, task_ids, due_at
+        )
+
+    async def class_gradebook(self, classroom_id: UUID, actor: User) -> GradebookData:
+        """Журнал оценок: ячейки с completed_at и числом просрочек (S28-003)"""
+        progress = await self.class_progress(classroom_id, actor)
+        member_ids = [student.id for student in progress.students]
+        task_ids = [task.id for task in progress.tasks]
+        rows = []
+        if member_ids and task_ids:
+            rows = list(
+                (
+                    await self.db.execute(
+                        select(UserTaskProgress).where(
+                            UserTaskProgress.user_id.in_(member_ids),
+                            UserTaskProgress.task_id.in_(task_ids),
+                        )
+                    )
+                ).scalars().all()
+            )
+        completed_at_map = {
+            (row.user_id, row.task_id): row.completed_at for row in rows
+        }
+
+        due_rows = (
+            await self.db.execute(
+                select(Assignment.task_id, Assignment.due_at).where(
+                    Assignment.classroom_id == classroom_id
+                )
+            )
+        ).all()
+        due_by_task: dict[UUID, datetime | None] = {}
+        for due_task_id, due_at_value in due_rows:
+            due_by_task[due_task_id] = due_at_value
+
+        now = datetime.utcnow()
+        cells = []
+        overdue = 0
+        for cell in progress.cells:
+            due_at = due_by_task.get(cell.task_id)
+            completed = completed_at_map.get((cell.student_id, cell.task_id))
+            if (
+                due_at is not None
+                and due_at < now
+                and cell.status != TaskStatus.COMPLETED
+            ):
+                overdue += 1
+            cells.append(
+                GradebookCellData(
+                    student_id=cell.student_id,
+                    task_id=cell.task_id,
+                    status=cell.status,
+                    attempts=cell.attempts,
+                    completed_at=completed,
+                )
+            )
+        return GradebookData(
+            students=progress.students,
+            tasks=progress.tasks,
+            cells=cells,
+            completion_rate=progress.completion_rate,
+            overdue=overdue,
+        )
+
 @dataclass(slots=True)
 class AssignmentItemData:
     assignment: Assignment
@@ -479,7 +727,6 @@ class ProblemTaskData:
     attempts: int
     completed: int
 
-
 @dataclass(slots=True)
 class ProgressStudentData:
     id: UUID
@@ -499,3 +746,21 @@ class ClassProgressData:
     cells: list[ProgressCellData]
     completion_rate: float
     problem_tasks: list[ProblemTaskData]
+
+
+@dataclass(slots=True)
+class GradebookCellData:
+    student_id: UUID
+    task_id: UUID
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None
+
+
+@dataclass(slots=True)
+class GradebookData:
+    students: list[ProgressStudentData]
+    tasks: list[ProgressTaskData]
+    cells: list[GradebookCellData]
+    completion_rate: float
+    overdue: int
