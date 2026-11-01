@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Modal } from '@/components/ui/Modal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { TabPanel, Tabs } from '@/components/ui/Tabs';
-import { Table, Td, Th } from '@/components/ui/Table';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { ToastStack } from '@/components/ui/Toast';
 
@@ -53,18 +53,18 @@ export function DevUiPage() {
           <Card title="Table">
             <Table caption="Demo table">
               <thead>
-                <tr>
+                <Tr>
                   <Th>Task</Th>
                   <Th>Status</Th>
-                </tr>
+                </Tr>
               </thead>
               <tbody>
-                <tr>
+                <Tr>
                   <Td>Loops</Td>
                   <Td>
                     <Badge tone="success">done</Badge>
                   </Td>
-                </tr>
+                </Tr>
               </tbody>
             </Table>
           </Card>

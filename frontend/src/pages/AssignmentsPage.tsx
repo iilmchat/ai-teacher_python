@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Alert } from '@/components/ui/Alert';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import type { MyAssignmentList } from '@/types/api';
 
@@ -49,33 +50,33 @@ export function AssignmentsPage() {
       ) : (
         <Card title={t('classrooms.assignments')}>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <Table>
               <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2">{t('teacher.colTask')}</th>
-                  <th className="py-2">{t('classrooms.class')}</th>
-                  <th className="py-2">{t('classrooms.dueAt')}</th>
-                  <th className="py-2">{t('teacher.colStatus')}</th>
-                </tr>
+                <Tr>
+                  <Th className="py-2">{t('teacher.colTask')}</Th>
+                  <Th className="py-2">{t('classrooms.class')}</Th>
+                  <Th className="py-2">{t('classrooms.dueAt')}</Th>
+                  <Th className="py-2">{t('teacher.colStatus')}</Th>
+                </Tr>
               </thead>
               <tbody>
                 {items.map((item) => (
-                  <tr key={item.id} className="border-t border-slate-100">
-                    <td className="py-2">
+                  <Tr key={item.id} className="border-t border-slate-100">
+                    <Td className="py-2">
                       <Link
                         to={`/tasks/${item.task_id}`}
                         className="font-medium text-indigo-700 hover:underline"
                       >
                         {item.title}
                       </Link>
-                    </td>
-                    <td className="py-2 text-slate-600">{item.classroom_name}</td>
-                    <td className="py-2 text-slate-600">
+                    </Td>
+                    <Td className="py-2 text-slate-600">{item.classroom_name}</Td>
+                    <Td className="py-2 text-slate-600">
                       {item.due_at
                         ? new Date(item.due_at).toLocaleString('ru-RU')
                         : '—'}
-                    </td>
-                    <td className="py-2">
+                    </Td>
+                    <Td className="py-2">
                       {item.overdue ? (
                         <span className="rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-700">
                           {t('classrooms.overdue')}
@@ -85,18 +86,18 @@ export function AssignmentsPage() {
                           {t(`tasks.status.${item.status}`)}
                         </span>
                       )}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
                 {items.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="py-4 text-center text-slate-500">
+                  <Tr>
+                    <Td colSpan={4} className="py-4 text-center text-slate-500">
                       {t('classrooms.noMyAssignments')}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
               </tbody>
-            </table>
+            </Table>
           </div>
         </Card>
       )}

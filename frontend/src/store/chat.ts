@@ -5,6 +5,7 @@
  * недоступен, используется REST-эндпоинт (без стриминга).
  */
 
+import i18n from '@/i18n';
 import { create } from 'zustand';
 
 import { api } from '@/lib/api';
@@ -77,7 +78,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const sessions = await api.get<ChatSession[]>('/chat/sessions');
       set({ sessions, loading: false });
     } catch {
-      set({ loading: false, error: 'Не удалось загрузить список чатов' });
+      set({ loading: false, error: i18n.t('errors.chatList') });
     }
   },
 
@@ -98,7 +99,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
       set({ active, loading: false, streaming: false });
     } catch {
-      set({ loading: false, error: 'Не удалось открыть чат' });
+      set({ loading: false, error: i18n.t('errors.chatOpen') });
     }
   },
 
@@ -182,7 +183,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         loading: false,
       });
     } catch {
-      set({ loading: false, error: 'Не удалось отправить сообщение' });
+      set({ loading: false, error: i18n.t('errors.chatSend') });
     }
   },
 }));

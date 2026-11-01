@@ -27,6 +27,8 @@ echo "==> typecheck"
 pnpm typecheck
 echo "==> lint"
 pnpm lint
+echo "==> i18n audit (S29-002)"
+node scripts/check-i18n.mjs
 echo "==> unit tests (vitest)"
 pnpm test
 echo "==> build"

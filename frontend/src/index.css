@@ -125,3 +125,45 @@ body {
 .dark .shadow {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.4);
 }
+
+/* Карточный вид таблиц на мобильных (S29-001): без горизонтального скролла */
+@media (max-width: 639px) {
+  table[data-cards] thead {
+    display: none;
+  }
+
+  table[data-cards],
+  table[data-cards] tbody,
+  table[data-cards] tr,
+  table[data-cards] td {
+    display: block;
+    width: 100%;
+  }
+
+  table[data-cards] tr {
+    margin-bottom: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background-color: var(--surface);
+  }
+
+  table[data-cards] td {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.25rem 0;
+    border: 0;
+  }
+
+  table[data-cards] td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    color: var(--app-fg);
+    opacity: 0.65;
+  }
+}
