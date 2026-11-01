@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
+import { saveBlob } from '@/lib/download';
 import { useAuthStore } from '@/store/auth';
 import type {
   Assignment,
@@ -27,6 +28,9 @@ export function ClassroomDetailPage() {
   const [tasks, setTasks] = useState<TeacherTaskItem[]>([]);
   const [progress, setProgress] = useState<ClassProgress | null>(null);
   const [taskId, setTaskId] = useState('');
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [dueAt, setDueAt] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +66,48 @@ export function ClassroomDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function bulkAssign() {
+    if (selectedTaskIds.length === 0) {
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const result = await api.post<{ created: string[]; skipped: string[]; unknown: string[] }>(
+        `/classrooms/${classroomId}/assignments/bulk`,
+        {
+          task_ids: selectedTaskIds,
+          due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        },
+      );
+      setNotice(
+        t('classrooms.bulkAssigned', {
+          created: result.created.length,
+          skipped: result.skipped.length + result.unknown.length,
+        }),
+      );
+      setSelectedTaskIds([]);
+      await load();
+    } catch {
+      setError(t('classrooms.bulkError'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function downloadReport() {
+    setDownloading(true);
+    setError(null);
+    try {
+      const blob = await api.download(`/classrooms/${classroomId}/report`);
+      saveBlob(blob, `classroom-${classroomId}-report.csv`);
+    } catch {
+      setError(t('classrooms.reportError'));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function addAssignment() {
     if (!taskId) {
@@ -135,6 +181,16 @@ export function ClassroomDetailPage() {
 
       <Card title={t('classrooms.assignments')}>
         {isOwner && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Button onClick={() => void downloadReport()} loading={downloading}>
+              {t('classrooms.report')}
+            </Button>
+            <Link to={`/classrooms/${classroomId}/gradebook`}>
+              <Button variant="ghost">{t('classrooms.gradebookLink')}</Button>
+            </Link>
+          </div>
+        )}
+        {isOwner && (
           <div className="mb-3 flex flex-col gap-2 sm:flex-row">
             <select
               value={taskId}
@@ -159,6 +215,44 @@ export function ClassroomDetailPage() {
             <Button onClick={() => void addAssignment()} disabled={!taskId}>
               {t('classrooms.assign')}
             </Button>
+          </div>
+        )}
+        {isOwner && (
+          <div className="mb-3 flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="bulk-tasks">
+              {t('classrooms.bulk')}
+            </label>
+            <select
+              id="bulk-tasks"
+              multiple
+              size={Math.min(4, Math.max(2, tasks.length))}
+              value={selectedTaskIds}
+              onChange={(event) =>
+                setSelectedTaskIds(
+                  Array.from(event.target.selectedOptions).map((option) => option.value),
+                )
+              }
+              aria-describedby="bulk-hint"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {tasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => void bulkAssign()}
+                disabled={selectedTaskIds.length === 0}
+                loading={bulkBusy}
+              >
+                {t('classrooms.assign')}
+              </Button>
+              <span id="bulk-hint" className="text-xs text-slate-500">
+                {t('classrooms.bulkHint')}
+              </span>
+            </div>
           </div>
         )}
         <div className="overflow-x-auto">

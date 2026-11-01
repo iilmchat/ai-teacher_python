@@ -7,10 +7,45 @@
 
 ---
 
+## [0.3.0] — 2026-11-01 «Ops & Scale»
+
+Этап v0.3.0 (спринты 21–30): CI и релиз-процесс, современные зависимости,
+производительность и изоляция песочницы, наблюдаемость, приватность, поиск,
+инструменты учителя и завершение UX/a11y/i18n.
+
+### Добавлено
+- Наблюдаемость: `X-Request-ID`, структурированные логи (JSON), `/metrics`
+  (Prometheus), `/health/live` и `/health/ready`
+- Аудит действий teacher/admin: `audit_log` (миграция 011) и `GET /admin/audit`
+- Экспорт: `GET /admin/analytics/export` (CSV/JSON), `GET /classrooms/{id}/report`,
+  `GET /classrooms/{id}/gradebook` (+`/csv`); retention-скрипт и `RETENTION_*`
+- Приватность: `DELETE /auth/me` (анонимизация, `users.is_active` — миграция 012),
+  `docs/PRIVACY.md`
+- RAG v2: `RAG_MIN_SCORE`, backfill эмбеддингов, панель поиска в чате
+- Учителю: массовые назначения, шаблоны назначений (миграция 013), журнал
+  оценок, email-уведомления за флагом
+- UX: адаптивные таблицы-карточки, аудит локализации в CI, axe-контраст (light/dark)
+- Песочница: контейнерный раннер (`EXECUTOR_MODE=container`) с self-check изоляции,
+  пул воркеров и батч-исполнение
+
+### Изменено
+- FastAPI 0.162 / Starlette 1.x: отсутствующий `Authorization` → 401 (было 403)
+- Логи по умолчанию — JSON, режим `console` — для разработки
+- Compose healthcheck использует `/health/ready`
+
+### Исправлено
+- Windows: `docker.exe` вместо extension-less shim (WinError 193)
+- Контейнерный батч: чтение stderr после kill (устранён hang)
+- Async-тесты: фейковые исполнители реализуют `execute_many`
+
+### Безопасность
+- 0 открытых уязвимостей в зависимостях (`pip-audit`, OSV fallback)
+- `/metrics` и `/health/*` не публикуются через nginx
+- Аудит без PII; удаление аккаунта необратимо и логируется
+
 ## [Unreleased]
 
-Этап v0.3.0 «Ops & Scale» (спринты 21–30). Спринт 21 — CI & Quality Gates,
-спринт 22 — Dependency Modernization, спринт 23 — Sandbox Throughput.
+Изменения после v0.3.0.
 
 ### Добавлено
 

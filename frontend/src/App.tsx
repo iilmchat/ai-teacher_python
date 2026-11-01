@@ -20,6 +20,12 @@ const AssignmentsPage = lazy(() =>
 const ChatPage = lazy(() =>
   import('@/pages/ChatPage').then((module) => ({ default: module.ChatPage })),
 );
+const GradebookPage = lazy(() =>
+  import('@/pages/GradebookPage').then((module) => ({
+    default: module.GradebookPage,
+  })),
+);
+
 const ClassroomsPage = lazy(() =>
   import('@/pages/ClassroomsPage').then((module) => ({
     default: module.ClassroomsPage,
@@ -153,6 +159,16 @@ export function App() {
               element={
                 <ProtectedRoute>
                   <ClassroomDetailPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="classrooms/:classroomId/gradebook"
+              element={
+                <ProtectedRoute>
+                  <TeacherRoute>
+                    <GradebookPage />
+                  </TeacherRoute>
                 </ProtectedRoute>
               }
             />

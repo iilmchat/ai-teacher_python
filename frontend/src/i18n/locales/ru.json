@@ -307,7 +307,27 @@
     "class": "Класс",
     "overdue": "просрочено",
     "noMyAssignments": "Заданий пока нет",
-    "assignmentsError": "Не удалось загрузить задания"
+    "assignmentsError": "Не удалось загрузить задания",
+    "report": "Скачать отчёт",
+    "reportError": "Не удалось скачать отчёт",
+    "gradebookLink": "Журнал оценок",
+    "bulk": "Массовое назначение",
+    "bulkAssigned": "Создано: {{created}}, пропущено: {{skipped}}",
+    "bulkError": "Не удалось выполнить массовое назначение",
+    "bulkHint": "Выберите несколько задач (Ctrl/Cmd)",
+    "gradebook": {
+      "title": "Журнал оценок",
+      "caption": "Матрица «ученик × задача»",
+      "summary": "Средний процент решения: {{rate}}%, просрочено: {{overdue}}",
+      "download": "Скачать CSV",
+      "downloadError": "Не удалось скачать CSV",
+      "loadError": "Не удалось загрузить журнал",
+      "attempts": "Попыток: {{count}}",
+      "empty": "В классе пока нет учеников",
+      "statusNotStarted": "не начато",
+      "statusInProgress": "в процессе",
+      "statusCompleted": "выполнено"
+    }
   },
   "dashboard": {
     "title": "Мой прогресс",
@@ -351,6 +371,7 @@
   "common": {
     "loading": "Загрузка…",
     "retry": "Повторить",
-    "close": "Закрыть"
+    "close": "Закрыть",
+    "back": "Назад"
   }
 }

@@ -2,7 +2,7 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
+**Текущая версия:** v0.3.0 «Ops & Scale» (2026-11-01)  
 **Текущий спринт:** 29 завершён (этап v0.3.0 «Ops & Scale»,
 [TODO_V0.3.md](../TODO_V0.3.md)) — UX, A11y & i18n: карточки таблиц,
 аудит локализации, axe-контраст; следующий — спринт 30 (Release v0.3.0)
@@ -1609,6 +1609,90 @@ S21-002/S21-004 закрыты частично
 - ✅ Таблицы-карточки на мобильных без горизонтального скролла.
 - ✅ 0 RU-fallback в UI-коде; аудит в CI.
 - ✅ axe-контраст 0 нарушений (light/dark); e2e a11y зелёные.
+
+---
+
+## Релиз v0.3.0 «Ops & Scale»
+
+**Дата:** 2026-11-01 · **Тег:** `v0.3.0` · **Предыдущий:** [v0.2.0](#релиз-v020-classroom)
+
+### Что вошло
+- **CI и релиз:** self-hosted runner, 7 job'ов (lint/test/frontend/security/e2e/
+  docker/perf), контрактные тесты API, релиз-workflow с проверкой версии и
+  заметками из этого журнала
+- **Зависимости:** FastAPI 0.162 / Starlette 1.x / React 19, `pip-audit` и
+  Dependabot, 0 открытых уязвимостей
+- **Песочница:** батч-исполнение и пул воркеров, контейнерный раннер с
+  `--network none --read-only --cap-drop ALL`, self-check изоляции
+- **Наблюдаемость:** `X-Request-ID`, JSON-логи, `/metrics`, liveness/readiness,
+  аудит действий teacher/admin
+- **Данные и приватность:** экспорт CSV/JSON, отчёт и журнал класса, retention,
+  удаление аккаунта с анонимизацией, PRIVACY.md
+- **RAG v2:** порог релевантности, backfill эмбеддингов, поиск в UI
+- **Учителю:** массовые назначения, шаблоны, журнал оценок, email за флагом
+- **UX/a11y/i18n:** карточки таблиц на мобильных, полная локализация с CI-аудитом,
+  axe-контраст 0 нарушений
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 501 passed + 1 skipped |
+| Frontend-тесты | 90 passed |
+| E2E | 17 passed / 1 skipped |
+| Миграции | 001–013 (аддитивные) |
+| CI | 7/7 job'ов зелёные |
+
+### Обновление
+См. [UPGRADE.md](UPGRADE.md): миграции `011–013`, новые `EXECUTOR_*`,
+`RETENTION_*`, `METRICS_*`, `RAG_MIN_SCORE`, `NOTIFICATIONS_*`; откат — до `010`.
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-024 (метрики LLM/кэша считаются на процесс), KI-025 (retention — ручной/cron).
+
+---
+
+## Спринт 30: Release v0.3.0
+
+**Период:** 2026-11-01  
+**Статус:** ✅ релиз собран: UPGRADE, полные гейты, версия 0.3.0, тег и
+GitHub Release через release-workflow
+
+### Задачи
+- [x] S30-001: Руководство по апгрейду v0.2.0 → v0.3.0
+- [x] S30-002: Полные гейты
+- [x] S30-003: Документация v0.3.0
+- [x] S30-004: Версия, тег, релиз
+
+### Что сделано
+- **S30-001.** [UPGRADE.md](UPGRADE.md): таблица изменений эксплуатации, порядок
+  обновления (бэкап → env → миграции 011–013 → пересборка → проверки), новые
+  переменные, опциональный контейнерный раннер, откат до `010`, ограничения.
+- **S30-002.** Локально и в CI: `ruff`/`mypy`/`pytest` (501 passed + 1 skipped),
+  `alembic upgrade/check`, frontend `typecheck`/`lint`/`test` (90)/`build`/
+  `test:offline`, e2e 17 passed / 1 skipped, security, docker.
+- **S30-003.** Версия 0.3.0 в `pyproject.toml`/`package.json`/`config.py`; README,
+  CHANGELOG `[0.3.0]`, RELEASES (релиз + спринт 30), KNOWN_ISSUES (KI-024/025),
+  MANUAL_TESTING_GUIDE §18.
+- **S30-004.** PR → merge; тег `v0.3.0` и GitHub Release создаются
+  `release.yml` (`gh workflow run release.yml -f version=0.3.0 -f dry_run=false`).
+
+### Гейты
+| Проверка | Результат |
+|----------|-----------|
+| backend ruff/mypy | 0 |
+| backend pytest | 501 passed + 1 skipped |
+| alembic upgrade/check | OK (013) |
+| frontend typecheck/lint/test | 0 / 0 / 90 passed |
+| frontend build/offline | OK |
+| e2e | 17 passed / 1 skipped |
+| version check | 0.3.0 везде |
+| CI | 7/7 success |
+
+### DoD
+- ✅ Обновление с v0.2.0 описано и проверено (миграции, env, откат).
+- ✅ Все гейты зелёные; CI зелёный.
+- ✅ Тег `v0.3.0` и GitHub Release созданы автоматизированно.
 
 ---
 

@@ -150,6 +150,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T;
 }
 
+
+async function downloadRequest(path: string): Promise<Blob> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, i18n.t('errors.network'));
+  }
+  return response.blob();
+}
+
 export const api = {
   get: <T>(path: string) => apiRequest<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -161,6 +173,7 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
+  download: (path: string) => downloadRequest(path),
   anonymousPostForm: <T>(path: string, form: Record<string, string>) =>
     apiRequest<T>(path, { method: 'POST', form, anonymous: true }),
   anonymousPost: <T>(path: string, body?: unknown) =>
