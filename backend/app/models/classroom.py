@@ -7,6 +7,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
@@ -104,3 +105,29 @@ class Assignment(Base):
 
     def __repr__(self) -> str:
         return f"<Assignment classroom={self.classroom_id} task={self.task_id}>"
+
+class AssignmentTemplate(Base):
+    """Шаблон назначений учителя (S28-002).
+
+    Набор задач, который можно применить к классу одним действием. Принадлежит
+    учителю; `task_ids` хранится как JSONB-массив UUID-строк, чтобы шаблон не
+    ломался при удалении задачи (при применении несуществующие id пропускаются).
+    """
+
+    __tablename__ = "assignment_templates"
+    __table_args__ = (
+        Index("idx_assignment_templates_owner", "owner_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    owner_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    task_ids: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<AssignmentTemplate {self.name} owner={self.owner_id}>"

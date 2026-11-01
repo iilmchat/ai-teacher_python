@@ -138,6 +138,15 @@ class Settings(BaseSettings):
     retention_code_executions_days: int = 90
     retention_notifications_days: int = 180
     retention_audit_log_days: int = 365
+    #: Email-уведомления (S28-004): выключены по умолчанию; в dev — лог
+    notifications_email_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "noreply@ai-teacher.local"
+    #: Окно напоминания о дедлайне (S28-004)
+    notifications_deadline_hours: int = 72
     #: Максимум строк в одном экспорте (S26-001); 0 — без лимита (не рекомендуется)
     export_max_rows: int = 100_000
 

@@ -831,6 +831,69 @@
         "title": "Body_login_api_v1_auth_login_post",
         "type": "object"
       },
+      "BulkAssignmentRequest": {
+        "description": "Массовое назначение задач классу (S28-001)",
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "task_ids"
+        ],
+        "title": "BulkAssignmentRequest",
+        "type": "object"
+      },
+      "BulkAssignmentResult": {
+        "description": "Итог массового назначения: созданные/пропущенные/неизвестные задачи",
+        "properties": {
+          "created": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Created",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "unknown": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Unknown",
+            "type": "array"
+          }
+        },
+        "title": "BulkAssignmentResult",
+        "type": "object"
+      },
       "CategoriesResponse": {
         "description": "Список категорий задач",
         "properties": {
@@ -1492,6 +1555,91 @@
           "success"
         ],
         "title": "ExecutionResponse",
+        "type": "object"
+      },
+      "GradebookCell": {
+        "description": "Ячейка журнала оценок (S28-003)",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "student_id": {
+            "format": "uuid",
+            "title": "Student Id",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "student_id",
+          "task_id",
+          "status",
+          "attempts"
+        ],
+        "title": "GradebookCell",
+        "type": "object"
+      },
+      "GradebookResponse": {
+        "description": "Журнал оценок: матрица ученик × задача + сводка",
+        "properties": {
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/GradebookCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "completion_rate": {
+            "title": "Completion Rate",
+            "type": "number"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "students": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressStudent"
+            },
+            "title": "Students",
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/ProgressTask"
+            },
+            "title": "Tasks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "students",
+          "tasks",
+          "cells",
+          "completion_rate",
+          "overdue"
+        ],
+        "title": "GradebookResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -3026,6 +3174,115 @@
           "items"
         ],
         "title": "TeacherTaskList",
+        "type": "object"
+      },
+      "TemplateApplyRequest": {
+        "description": "Применение шаблона к классу (S28-002)",
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "template_id": {
+            "format": "uuid",
+            "title": "Template Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id"
+        ],
+        "title": "TemplateApplyRequest",
+        "type": "object"
+      },
+      "TemplateCreate": {
+        "description": "Создание шаблона назначений учителя (S28-002)",
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "task_ids"
+        ],
+        "title": "TemplateCreate",
+        "type": "object"
+      },
+      "TemplateItem": {
+        "description": "Шаблон назначений",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "task_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "title": "TemplateItem",
+        "type": "object"
+      },
+      "TemplateList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "TemplateList",
         "type": "object"
       },
       "TestCase": {
@@ -4774,6 +5031,220 @@
         ]
       }
     },
+    "/api/v1/classrooms/{classroom_id}/assignments/bulk": {
+      "post": {
+        "description": "Массовое назначение задач (S28-001), идемпотентно.\n\nДубликаты и уже назначенные задачи не ошибка: они в `skipped`; неизвестные\nи неактивные — в `unknown`. Уведомления отправляются только по новым.",
+        "operationId": "bulk_assign_api_v1_classrooms__classroom_id__assignments_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignmentResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Bulk Assign",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/assignments/from-template": {
+      "post": {
+        "description": "Применить шаблон назначений к классу (S28-002)",
+        "operationId": "assign_from_template_api_v1_classrooms__classroom_id__assignments_from_template_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkAssignmentResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assign From Template",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/gradebook": {
+      "get": {
+        "description": "Журнал оценок класса (S28-003): матрица + completed_at + overdue",
+        "operationId": "class_gradebook_api_v1_classrooms__classroom_id__gradebook_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GradebookResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Class Gradebook",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/gradebook/csv": {
+      "get": {
+        "description": "Журнал оценок CSV (S28-003, формат — как отчёт класса S26-002)",
+        "operationId": "class_gradebook_csv_api_v1_classrooms__classroom_id__gradebook_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Class Gradebook Csv",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
     "/api/v1/classrooms/{classroom_id}/join": {
       "post": {
         "description": "Вступить в конкретный класс по коду (проверяет совпадение)",
@@ -6338,6 +6809,120 @@
         "summary": "Restore Task Version",
         "tags": [
           "Tasks"
+        ]
+      }
+    },
+    "/api/v1/teacher/assignment-templates": {
+      "get": {
+        "description": "Шаблоны текущего учителя",
+        "operationId": "list_assignment_templates_api_v1_teacher_assignment_templates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Assignment Templates",
+        "tags": [
+          "Teacher"
+        ]
+      },
+      "post": {
+        "description": "Сохранить набор задач как шаблон (teacher/admin)",
+        "operationId": "create_assignment_template_api_v1_teacher_assignment_templates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Assignment Template",
+        "tags": [
+          "Teacher"
+        ]
+      }
+    },
+    "/api/v1/teacher/assignment-templates/{template_id}": {
+      "delete": {
+        "description": "Удалить свой шаблон",
+        "operationId": "delete_assignment_template_api_v1_teacher_assignment_templates__template_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "template_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Template Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Assignment Template",
+        "tags": [
+          "Teacher"
         ]
       }
     },

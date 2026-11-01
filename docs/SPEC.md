@@ -669,3 +669,21 @@ IP, время. Записываются: `user.updated`, `user.deleted`, `task.
 
 `score` в ответе — косинусная близость `1 - distance` (4 знака). При
 `RAG_MIN_SCORE=0` поведение совпадает с S19-005.
+
+---
+
+## 18. Teacher & Classroom v3 (S28)
+
+| Что | Контракт |
+|-----|----------|
+| `POST /api/v1/classrooms/{id}/assignments/bulk` | teacher/admin, владелец класса; `{task_ids: [1…50], due_at?}` → `{created, skipped, unknown}`; дубликаты и уже назначенные — `skipped`, неизвестные/неактивные — `unknown`; 201 |
+| `POST /api/v1/classrooms/{id}/assignments/from-template` | `{template_id, due_at?}` → тот же результат (шаблон применяется как массовое назначение) |
+| `POST/GET /api/v1/teacher/assignment-templates`, `DELETE /{id}` | шаблоны учителя: `name` (1…120), `task_ids` (1…100); удалить может только владелец (403) |
+| `GET /api/v1/classrooms/{id}/gradebook` | матрица `students/tasks/cells` (status, attempts, completed_at), `completion_rate`, `overdue`; только владелец/админ |
+| `GET /api/v1/classrooms/{id}/gradebook/csv` | CSV-выгрузка журнала (формат как S26-002), аудит `gradebook.exported` |
+
+**Email (S28-004).** `NOTIFICATIONS_EMAIL_ENABLED=false` по умолчанию; при
+включении — SMTP (`SMTP_HOST/PORT/USER/PASSWORD/FROM`). Письмо уходит по
+каждому новому назначению; ошибка SMTP не ломает запрос (warning в лог).
+`NOTIFICATIONS_DEADLINE_HOURS` (72) — окно напоминаний (CLI
+`scripts/notify_deadlines.py`).
