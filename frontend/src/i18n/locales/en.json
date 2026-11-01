@@ -333,7 +333,20 @@
     "notFoundTitle": "Page not found",
     "notFoundText": "Check the address or go back home.",
     "toHome": "Go home",
-    "generic": "Something went wrong"
+    "generic": "Something went wrong",
+    "network": "Request failed",
+    "sessionExpired": "Session expired, please sign in again",
+    "login": "Sign-in failed, please try again",
+    "register": "Registration failed",
+    "chat": "Chat error",
+    "chatConnect": "Could not connect to chat",
+    "chatList": "Could not load chat list",
+    "chatOpen": "Could not open chat",
+    "chatSend": "Could not send the message",
+    "tasksLoad": "Could not load tasks",
+    "taskNotFound": "Task not found",
+    "progressLoad": "Could not load progress",
+    "submit": "Could not check the solution"
   },
   "common": {
     "loading": "Loading…",

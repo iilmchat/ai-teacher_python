@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type {
@@ -161,37 +162,37 @@ export function ClassroomDetailPage() {
           </div>
         )}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <Table>
             <thead className="text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2">{t('teacher.colTask')}</th>
-                <th className="py-2">{t('classrooms.dueAt')}</th>
-                <th className="py-2">{t('classrooms.done')}</th>
-              </tr>
+              <Tr>
+                <Th className="py-2">{t('teacher.colTask')}</Th>
+                <Th className="py-2">{t('classrooms.dueAt')}</Th>
+                <Th className="py-2">{t('classrooms.done')}</Th>
+              </Tr>
             </thead>
             <tbody>
               {assignments.map((item) => (
-                <tr key={item.id} className="border-t border-slate-100">
-                  <td className="py-2 font-medium text-slate-800">{item.title}</td>
-                  <td className="py-2 text-slate-600">
+                <Tr key={item.id} className="border-t border-slate-100">
+                  <Td className="py-2 font-medium text-slate-800">{item.title}</Td>
+                  <Td className="py-2 text-slate-600">
                     {item.due_at
                       ? new Date(item.due_at).toLocaleString('ru-RU')
                       : '—'}
-                  </td>
-                  <td className="py-2 text-slate-600">
+                  </Td>
+                  <Td className="py-2 text-slate-600">
                     {item.completed_count}/{item.total_members}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {assignments.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-3 text-center text-slate-500">
+                <Tr>
+                  <Td colSpan={3} className="py-3 text-center text-slate-500">
                     {t('classrooms.noAssignments')}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               )}
             </tbody>
-          </table>
+          </Table>
         </div>
       </Card>
 
@@ -201,32 +202,32 @@ export function ClassroomDetailPage() {
             {t('classrooms.completionRate')}: {progress.completion_rate}%
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <Table className="text-xs">
               <thead className="text-slate-500">
-                <tr>
-                  <th className="py-2">{t('classrooms.student')}</th>
+                <Tr>
+                  <Th className="py-2">{t('classrooms.student')}</Th>
                   {progress.tasks.map((task) => (
-                    <th key={task.id} className="max-w-24 truncate py-2">
+                    <Th key={task.id} className="max-w-24 truncate py-2">
                       {task.title}
-                    </th>
+                    </Th>
                   ))}
-                </tr>
+                </Tr>
               </thead>
               <tbody>
                 {progress.students.map((student) => (
-                  <tr key={student.id} className="border-t border-slate-100">
-                    <td className="py-2 font-medium text-slate-800">
+                  <Tr key={student.id} className="border-t border-slate-100">
+                    <Td className="py-2 font-medium text-slate-800">
                       {student.username}
-                    </td>
+                    </Td>
                     {progress.tasks.map((task) => (
-                      <td key={task.id} className="py-2 text-slate-600">
+                      <Td key={task.id} className="py-2 text-slate-600">
                         {cell(student.id, task.id)}
-                      </td>
+                      </Td>
                     ))}
-                  </tr>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           {progress.problem_tasks.length > 0 && (
             <div className="mt-3 text-xs text-amber-700">

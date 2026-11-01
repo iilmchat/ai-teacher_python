@@ -4,6 +4,7 @@
  * Токены живут в `lib/token.ts` (localStorage), стор хранит профиль и статус.
  */
 
+import i18n from '@/i18n';
 import { create } from 'zustand';
 
 import { api, ApiError, UNAUTHORIZED_EVENT } from '@/lib/api';
@@ -65,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ user, loading: false, initializing: false });
     } catch (error) {
       const message =
-        error instanceof ApiError ? error.message : 'Не удалось войти, попробуйте ещё раз';
+        error instanceof ApiError ? error.message : i18n.t('errors.login');
       set({ loading: false, error: message });
       throw error;
     }
@@ -78,7 +79,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       await get().login(username, password);
     } catch (error) {
       const message =
-        error instanceof ApiError ? error.message : 'Не удалось зарегистрироваться';
+        error instanceof ApiError ? error.message : i18n.t('errors.register');
       set({ loading: false, error: message });
       throw error;
     }

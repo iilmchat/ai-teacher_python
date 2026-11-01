@@ -2,6 +2,7 @@
  * Стор задач: каталог, детали, отправка решения, прогресс.
  */
 
+import i18n from '@/i18n';
 import { create } from 'zustand';
 
 import { api } from '@/lib/api';
@@ -66,7 +67,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       );
       set({ tasks, loading: false });
     } catch {
-      set({ loading: false, error: 'Не удалось загрузить задачи' });
+      set({ loading: false, error: i18n.t('errors.tasksLoad') });
     }
   },
 
@@ -76,7 +77,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       const detail = await api.get<TaskDetail>(`/tasks/${taskId}`);
       set({ detail, loading: false });
     } catch {
-      set({ loading: false, error: 'Задача не найдена' });
+      set({ loading: false, error: i18n.t('errors.taskNotFound') });
     }
   },
 
@@ -85,7 +86,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       const progress = await api.get<ProgressSummary>('/tasks/progress');
       set({ progress });
     } catch {
-      set({ error: 'Не удалось загрузить прогресс' });
+      set({ error: i18n.t('errors.progressLoad') });
     }
   },
 
@@ -112,7 +113,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       }
       void get().loadProgress();
     } catch {
-      set({ submitting: false, error: 'Не удалось проверить решение' });
+      set({ submitting: false, error: i18n.t('errors.submit') });
     }
   },
 

@@ -7,6 +7,7 @@
  *             warnings?}
  */
 
+import i18n from '@/i18n';
 import { getAccessToken } from '@/lib/token';
 
 export interface ChatSocketHandlers {
@@ -84,7 +85,7 @@ export function openChatSocket(
         break;
       }
       case 'error':
-        handlers.onError?.(payload.detail ?? 'Ошибка чата');
+        handlers.onError?.(payload.detail ?? i18n.t('errors.chat'));
         break;
       default:
         break;
@@ -98,7 +99,7 @@ export function openChatSocket(
 
   socket.onerror = () => {
     ready = false;
-    handlers.onError?.('Не удалось подключиться к чату');
+    handlers.onError?.(i18n.t('errors.chatConnect'));
   };
 
   return {

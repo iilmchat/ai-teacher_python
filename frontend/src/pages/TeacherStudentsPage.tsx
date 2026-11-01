@@ -6,6 +6,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import type {
   TeacherStudent,
@@ -96,49 +97,49 @@ export function TeacherStudentsPage() {
           <Spinner />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <Table>
               <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2">{t('teacher.colStudent')}</th>
-                  <th className="py-2">{t('teacher.colEmail')}</th>
-                  <th className="py-2">{t('teacher.colLevel')}</th>
-                  <th className="py-2">{t('teacher.colCompleted')}</th>
-                  <th className="py-2">{t('teacher.colAttempts')}</th>
-                  <th className="py-2">{t('teacher.colLastActive')}</th>
-                  <th className="py-2" />
-                </tr>
+                <Tr>
+                  <Th className="py-2">{t('teacher.colStudent')}</Th>
+                  <Th className="py-2">{t('teacher.colEmail')}</Th>
+                  <Th className="py-2">{t('teacher.colLevel')}</Th>
+                  <Th className="py-2">{t('teacher.colCompleted')}</Th>
+                  <Th className="py-2">{t('teacher.colAttempts')}</Th>
+                  <Th className="py-2">{t('teacher.colLastActive')}</Th>
+                  <Th className="py-2" />
+                </Tr>
               </thead>
               <tbody>
                 {visible.map((student) => (
-                  <tr key={student.id} className="border-t border-slate-100">
-                    <td className="py-2 font-medium text-slate-800">
+                  <Tr key={student.id} className="border-t border-slate-100">
+                    <Td className="py-2 font-medium text-slate-800">
                       {student.username}
-                    </td>
-                    <td className="py-2 text-slate-600">{student.email}</td>
-                    <td className="py-2 text-slate-600">
+                    </Td>
+                    <Td className="py-2 text-slate-600">{student.email}</Td>
+                    <Td className="py-2 text-slate-600">
                       {t(`levels.${student.level}`)}
-                    </td>
-                    <td className="py-2 text-slate-600">{student.completed_tasks}</td>
-                    <td className="py-2 text-slate-600">{student.attempts}</td>
-                    <td className="py-2 text-slate-500">
+                    </Td>
+                    <Td className="py-2 text-slate-600">{student.completed_tasks}</Td>
+                    <Td className="py-2 text-slate-600">{student.attempts}</Td>
+                    <Td className="py-2 text-slate-500">
                       {new Date(student.last_active).toLocaleDateString('ru-RU')}
-                    </td>
-                    <td className="py-2">
+                    </Td>
+                    <Td className="py-2">
                       <Button variant="ghost" onClick={() => void openStudent(student)}>
                         {t('teacher.openProgress')}
                       </Button>
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
                 {visible.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={7} className="py-4 text-center text-slate-500">
+                  <Tr>
+                    <Td colSpan={7} className="py-4 text-center text-slate-500">
                       {t('teacher.noStudents')}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
               </tbody>
-            </table>
+            </Table>
           </div>
         )}
       </Card>
@@ -163,26 +164,26 @@ export function TeacherStudentsPage() {
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <Table>
               <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2">{t('teacher.colTask')}</th>
-                  <th className="py-2">{t('teacher.colStatus')}</th>
-                  <th className="py-2">{t('teacher.colAttempts')}</th>
-                </tr>
+                <Tr>
+                  <Th className="py-2">{t('teacher.colTask')}</Th>
+                  <Th className="py-2">{t('teacher.colStatus')}</Th>
+                  <Th className="py-2">{t('teacher.colAttempts')}</Th>
+                </Tr>
               </thead>
               <tbody>
                 {selected.items.map((item) => (
-                  <tr key={item.task_id} className="border-t border-slate-100">
-                    <td className="py-2 text-slate-800">{item.title}</td>
-                    <td className="py-2 text-slate-600">
+                  <Tr key={item.task_id} className="border-t border-slate-100">
+                    <Td className="py-2 text-slate-800">{item.title}</Td>
+                    <Td className="py-2 text-slate-600">
                       {t(`tasks.status.${item.status}`)}
-                    </td>
-                    <td className="py-2 text-slate-600">{item.attempts}</td>
-                  </tr>
+                    </Td>
+                    <Td className="py-2 text-slate-600">{item.attempts}</Td>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
         </Card>
       )}

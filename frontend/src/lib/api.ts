@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 /**
  * HTTP-клиент API (RULES §3.2): единая точка для запросов, типизированные
  * ответы, автоматическая подстановка токена и обновление по refresh-токену.
@@ -56,7 +57,7 @@ function extractDetail(payload: unknown): string {
       }
     }
   }
-  return 'Не удалось выполнить запрос';
+  return i18n.t('errors.network');
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -135,7 +136,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (!newToken) {
       clearTokens();
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
-      throw new ApiError(401, 'Сессия истекла, войдите заново');
+      throw new ApiError(401, i18n.t('errors.sessionExpired'));
     }
     response = await send(path, options);
   }
