@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.2.0 «Classroom» · **© 2026 RuChating (iilmchat)**
+**Версия:** v0.3.0 «Ops & Scale» · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -82,8 +82,8 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.2.0 «Classroom»** (2026-10-30) |
-| Спринты | 1–20 (этап v0.2.0 завершён) |
+| Версия | **v0.3.0 «Ops & Scale»** (2026-11-01) |
+| Спринты | 1–30 (этап v0.3.0 завершён) |
 | Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
 | Миграции | Alembic head **010** (10 миграций; `chat_messages` HNSW-индекс) |
 | Тесты frontend | **80** unit + **12** e2e (Playwright; 12/12 green) |
@@ -112,7 +112,8 @@ pnpm dev
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [TODO_V0.3.md](TODO_V0.3.md) — **текущий этап v0.3.0** (спринты 21–30);
+- [UPGRADE.md](docs/UPGRADE.md) — обновление v0.2.0 → v0.3.0;
+- [TODO_V0.3.md](TODO_V0.3.md) — этап v0.3.0 (спринты 21–30, завершён);
   завершённые [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0 и [TODO.md](TODO.md) — v0.1.0
 
 ---

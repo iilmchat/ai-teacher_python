@@ -447,3 +447,25 @@ export interface NotificationsResponse {
   items: AppNotification[];
   unread: number;
 }
+
+export interface BulkAssignmentResult {
+  created: string[];
+  skipped: string[];
+  unknown: string[];
+}
+
+export interface GradebookCell {
+  student_id: string;
+  task_id: string;
+  status: TaskStatus;
+  attempts: number;
+  completed_at: string | null;
+}
+
+export interface GradebookResponse {
+  students: { id: string; username: string }[];
+  tasks: { id: string; title: string }[];
+  cells: GradebookCell[];
+  completion_rate: number;
+  overdue: number;
+}

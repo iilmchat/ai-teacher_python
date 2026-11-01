@@ -307,7 +307,27 @@
     "class": "Class",
     "overdue": "overdue",
     "noMyAssignments": "No assignments yet",
-    "assignmentsError": "Could not load assignments"
+    "assignmentsError": "Could not load assignments",
+    "report": "Download report",
+    "reportError": "Could not download the report",
+    "gradebookLink": "Gradebook",
+    "bulk": "Bulk assignment",
+    "bulkAssigned": "Created: {{created}}, skipped: {{skipped}}",
+    "bulkError": "Bulk assignment failed",
+    "bulkHint": "Select several tasks (Ctrl/Cmd)",
+    "gradebook": {
+      "title": "Gradebook",
+      "caption": "Student × task matrix",
+      "summary": "Average completion: {{rate}}%, overdue: {{overdue}}",
+      "download": "Download CSV",
+      "downloadError": "Could not download CSV",
+      "loadError": "Could not load the gradebook",
+      "attempts": "Attempts: {{count}}",
+      "empty": "No students yet",
+      "statusNotStarted": "not started",
+      "statusInProgress": "in progress",
+      "statusCompleted": "completed"
+    }
   },
   "dashboard": {
     "title": "My progress",
@@ -351,6 +371,7 @@
   "common": {
     "loading": "Loading…",
     "retry": "Retry",
-    "close": "Close"
+    "close": "Close",
+    "back": "Back"
   }
 }
