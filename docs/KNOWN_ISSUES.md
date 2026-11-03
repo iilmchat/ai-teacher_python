@@ -82,7 +82,38 @@ Free/private нет ни branch protection, ни auto-merge — группа о�
 
 ---
 
+### KI-024 · Accepted · Low · core/metrics · метрики LLM/кэша считаются на процесс
+
+**Описание:** `llm_requests`, `cache_hits` и т.п. отдаются как gauge из in-memory
+счётчиков процесса; при нескольких воркерах значения не суммируются.
+**Workaround:** один процесс API в compose (текущая конфигурация) либо
+`sum by (instance)` в Prometheus.
+**План:** общий экспортёр при переходе на несколько воркеров (v0.4.0).
+**Создано:** 2026-11-01
+
+---
+
 ## Закрытые проблемы
+
+### KI-025 · Resolved · Low · scripts/apply_retention · retention запускается вручную
+
+**Описание:** очистка по `RETENTION_*_DAYS` выполнялась скриптом/по cron, а не
+самим приложением; автоматического планировщика не было — на self-hosted
+установке retention легко забыть, хотя сроки хранения заявлены в PRIVACY.md.
+
+**Решение (S32, v0.3.2):** встроенный планировщик
+`app/services/scheduler.py`: одна asyncio-задача в lifespan, включается
+`RETENTION_SCHEDULER_ENABLED` (в production — из `docker-compose.prod.yml`),
+время запуска `RETENTION_SCHEDULER_AT` (UTC). На время прогона берётся
+advisory-lock PostgreSQL (`pg_try_advisory_lock`) — при нескольких инстансах
+двойного запуска нет; остановка приложения даёт доиграть текущий прогон.
+Добавлены счётчики `retention_rows_deleted_total` / `retention_runs_total`
+(в т.ч. для CLI). Покрыто `tests/test_scheduler.py` (18 тестов), описано в
+DESIGN_ADMIN_AND_OPS §11 и PRIVACY §4. Cron остаётся альтернативой.
+
+**Создано:** 2026-11-01 · **Закрыто:** 2026-11-03 (спринт 32, S32-001…S32-002)
+
+---
 
 ### KI-014 · Resolved · High · CI · GitHub Actions не запускает job'ы (биллинг)
 
@@ -434,23 +465,3 @@ Backend поднимается на отдельной БД `ai_teacher_e2e` с 
 - **High** — блокирует текущий спринт
 - **Med** — блокирует одну задачу
 - **Low** — не блокирует, но стоит починить
-
----
-
-### KI-024 · Accepted · Low · core/metrics · метрики LLM/кэша считаются на процесс
-
-Описание: `llm_requests`, `cache_hits` и т.п. отдаются как gauge из in-memory
-счётчиков процесса; при нескольких воркерах значения не суммируются.
-Workaround: один процесс API в compose (текущая конфигурация) либо
-`sum by (instance)` в Prometheus.
-План: общий экспортёр при переходе на несколько воркеров.
-Создано: 2026-11-01
-
-### KI-025 · Accepted · Low · scripts/apply_retention · retention запускается вручную
-
-Описание: очистка по `RETENTION_*_DAYS` выполняется скриптом/по cron, а не самим
-приложением; автоматического планировщика нет.
-Workaround: cron из `docs/DESIGN_ADMIN_AND_OPS.md` §11 (раз в сутки, `--dry-run`
-перед первым запуском).
-План: встроенный планировщик при переходе на несколько инстансов (v0.4.0).
-Создано: 2026-11-01

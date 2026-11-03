@@ -34,6 +34,7 @@ from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
 from app.services.llm import LLMError, LLMUnavailableError, create_llm_provider
 from app.services.llm.health import check_provider_health
+from app.services.scheduler import SchedulerHandle, start_scheduler, stop_scheduler
 from app.services.seed_service import seed_tasks
 
 configure_logging()
@@ -61,7 +62,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as exc:  # noqa: BLE001 — seed не должен валить старт
             logger.warning("seed_failed", error=str(exc))
 
+    scheduler: SchedulerHandle | None = None
+    if settings.retention_scheduler_enabled:
+        scheduler = start_scheduler(
+            batch_size=settings.retention_scheduler_batch_size
+        )
+
     yield
+    # Планировщик retention (KI-025): сначала остановить его (ему нужна БД),
+    # затем закрыть пул песочницы и Redis.
+    await stop_scheduler(scheduler)
     # Пул песочницы (S23-002): тёплые интерпретаторы не должны переживать
     # приложение — иначе они останутся висеть до выхода процесса.
     await close_executor_pool()

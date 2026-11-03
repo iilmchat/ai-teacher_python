@@ -4,8 +4,9 @@
 переиспользовать; CLI — `backend/scripts/apply_retention.py`.
 
 Сроки — `RETENTION_*_DAYS` (0 — таблица не обрабатывается). Удаление батчами,
-каждый запуск пишет `retention_applied` с числом строк (метрика до появления
-Prometheus-счётчика удалённых записей).
+каждый запуск пишет `retention_applied` с числом строк и обновляет
+Prometheus-счётчики `retention_runs_total` / `retention_rows_deleted_total`
+(KI-025).
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.metrics import RETENTION_ROWS, RETENTION_RUNS
 from app.db.database import async_session_factory
 from app.models.audit import AuditLog
 from app.models.chat import ChatMessage
@@ -100,12 +102,14 @@ async def apply_retention(
             cutoff = table.cutoff()
             if cutoff is None:
                 results[table.name] = 0
+                RETENTION_RUNS.labels(table.name, "disabled").inc()
                 logger.info("retention_skipped", table=table.name, reason="disabled")
                 continue
 
             candidates = await _count(db, table, cutoff)
             if dry_run:
                 results[table.name] = candidates
+                RETENTION_RUNS.labels(table.name, "dry_run").inc()
                 logger.info(
                     "retention_dry_run",
                     table=table.name,
@@ -121,6 +125,8 @@ async def apply_retention(
                     break
                 deleted += chunk
             results[table.name] = deleted
+            RETENTION_ROWS.labels(table.name).inc(deleted)
+            RETENTION_RUNS.labels(table.name, "applied").inc()
             logger.info(
                 "retention_applied",
                 table=table.name,

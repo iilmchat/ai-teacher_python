@@ -301,7 +301,13 @@ LLM/кэш/БД отдаются как gauge из in-memory счётчиков 
 «ученик × задача» с overdue-флагом и итоговой строкой; доступ — владелец
 класса/админ, действие аудируется.
 
-**Retention.** Скрипт `backend/scripts/apply_retention.py` (в контейнере:
+**Retention.** Встроенный планировщик (KI-025) — `RETENTION_SCHEDULER_ENABLED`:
+приложение раз в сутки в `RETENTION_SCHEDULER_AT` (UTC, по умолчанию 03:30)
+само применяет `RETENTION_*_DAYS`. На время прогона берётся advisory-lock
+PostgreSQL, поэтому при нескольких инстансах retention не выполнится дважды;
+остановка приложения даёт доиграть текущий прогон. В production флаг включён в
+`docker-compose.prod.yml`. Ручной запуск и `--dry-run` — через скрипт
+`backend/scripts/apply_retention.py` (в контейнере:
 `docker compose exec backend python scripts/apply_retention.py --dry-run`):
 
 | Таблица | Настройка | По умолчанию |
@@ -311,15 +317,17 @@ LLM/кэш/БД отдаются как gauge из in-memory счётчиков 
 | `notifications` | `RETENTION_NOTIFICATIONS_DAYS` | 180 |
 | `audit_log` | `RETENTION_AUDIT_LOG_DAYS` | 365 |
 
-Cron на хосте (пример, раз в сутки в 03:30):
+Cron на хосте — альтернатива планировщику (если приложение запускать без флага;
+пример, раз в сутки в 03:30):
 
 ```cron
 30 3 * * * cd /opt/ai-teacher && docker compose exec -T backend \
   python scripts/apply_retention.py >> /var/log/ai-teacher/retention.log 2>&1
 ```
 
-Каждый запуск пишет `retention_applied` с числом удалённых строк; `--dry-run`
-ничего не удаляет и показывает объём.
+Каждый запуск пишет `retention_applied` с числом удалённых строк и увеличивает
+Prometheus-счётчики `retention_rows_deleted_total` / `retention_runs_total`;
+`--dry-run` ничего не удаляет и показывает объём.
 
 **Удаление аккаунта.** Пользователь удаляет себя через `DELETE /auth/me`
 (пароль обязателен): анонимизация + блокировка входа. Администратор по-прежнему
