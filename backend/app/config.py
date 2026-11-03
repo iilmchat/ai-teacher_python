@@ -138,6 +138,14 @@ class Settings(BaseSettings):
     retention_code_executions_days: int = 90
     retention_notifications_days: int = 180
     retention_audit_log_days: int = 365
+    #: Встроенный планировщик retention (KI-025): раз в сутки сам применяет
+    #: `RETENTION_*_DAYS`, cron становится опциональным. По умолчанию выключен:
+    #: включается в production (`docker-compose.prod.yml`) или через ENV.
+    retention_scheduler_enabled: bool = False
+    #: Время суточного запуска в UTC, формат ``HH:MM``
+    retention_scheduler_at: str = "03:30"
+    #: Размер батча удаления (как у CLI `--batch-size`)
+    retention_scheduler_batch_size: int = 1000
     #: Email-уведомления (S28-004): выключены по умолчанию; в dev — лог
     notifications_email_enabled: bool = False
     smtp_host: str = ""

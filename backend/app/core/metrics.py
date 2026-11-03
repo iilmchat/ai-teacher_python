@@ -90,6 +90,21 @@ DB_POOL = Gauge(
 )
 DB_POOL_SIZE = Gauge("db_pool_size", "Размер пула БД", registry=registry)
 
+# Retention (KI-025): число прогонов и удалённых строк по таблицам. Счётчики
+# (а не gauge) — значения накапливаются и суммируются Prometheus'ом.
+RETENTION_RUNS = Counter(
+    "retention_runs_total",
+    "Прогоны retention по таблице и результату",
+    ["table", "result"],
+    registry=registry,
+)
+RETENTION_ROWS = Counter(
+    "retention_rows_deleted_total",
+    "Удалённые retention-строки",
+    ["table"],
+    registry=registry,
+)
+
 
 class HTTPMetricsMiddleware(BaseHTTPMiddleware):
     """Счётчики/гистограмма HTTP по шаблону маршрута (без uuid в label)"""
@@ -181,6 +196,14 @@ def render_metrics() -> tuple[bytes, str]:
 
 
 def reset_metrics() -> None:
-    """Сбросить HTTP/sandbox-метрики (тесты)"""
-    for metric in (HTTP_REQUESTS, HTTP_DURATION, SANDBOX_RUNS, SANDBOX_DURATION, SANDBOX_TIMEOUTS):
+    """Сбросить HTTP/sandbox/retention-метрики (тесты)"""
+    for metric in (
+        HTTP_REQUESTS,
+        HTTP_DURATION,
+        SANDBOX_RUNS,
+        SANDBOX_DURATION,
+        SANDBOX_TIMEOUTS,
+        RETENTION_RUNS,
+        RETENTION_ROWS,
+    ):
         metric.clear()
