@@ -2,10 +2,10 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.3.1 (2026-11-01)  
-**Текущий спринт:** 29 завершён (этап v0.3.0 «Ops & Scale»,
-[TODO_V0.3.md](../TODO_V0.3.md)) — UX, A11y & i18n: карточки таблиц,
-аудит локализации, axe-контраст; следующий — спринт 30 (Release v0.3.0)
+**Текущая версия:** v0.3.2 (2026-11-03)  
+**Текущий этап:** v0.3.0 «Ops & Scale» (спринты 21–30,
+[TODO_V0.3.md](../TODO_V0.3.md)) завершён; далее — патчи v0.3.1 и v0.3.2
+(закрытие API-only UI-пробела и ops-hardening: встроенный retention-планировщик)
 
 ---
 
@@ -1609,6 +1609,71 @@ S21-002/S21-004 закрыты частично
 - ✅ Таблицы-карточки на мобильных без горизонтального скролла.
 - ✅ 0 RU-fallback в UI-коде; аудит в CI.
 - ✅ axe-контраст 0 нарушений (light/dark); e2e a11y зелёные.
+
+---
+
+## Спринт 32: Ops hardening — retention-планировщик (v0.3.2)
+
+**Период:** 2026-11-03  
+**Статус:** ✅ Завершён  
+**Задачи:** S32-001…S32-003 (закрытие KI-025)
+
+### Задачи
+- [x] S32-001: `app/services/scheduler.py` — asyncio-задача в lifespan, флаги
+      `RETENTION_SCHEDULER_*`, advisory-lock PostgreSQL, graceful stop
+- [x] S32-002: Prometheus-счётчики `retention_rows_deleted_total` /
+      `retention_runs_total`; 18 backend-тестов планировщика и счётчиков
+- [x] S32-003: докчистка — чекбоксы TODO (UI-остатки 26/28 уже реализованы),
+      шапки TODO/RELEASES, UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS, `.env.example`
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 520 собрано (519 passed + 1 skipped в CI-окружении) |
+| Новые тесты | 18 (`tests/test_scheduler.py`) |
+| Frontend-тесты | 94 passed (без изменений) |
+| Миграции | нет (014 не требуется) |
+
+### DoD
+- ✅ Retention запускается приложением без cron; двойного запуска нет
+  (advisory-lock); cli-скрипт продолжает работать
+- ✅ ruff/mypy/pytest зелёные; check_version — 0.3.2 везде
+- ✅ Документация описывает новое поведение и обновление
+
+---
+
+## Релиз v0.3.2
+
+**Дата:** 2026-11-03 · **Тег:** `v0.3.2` · **Предыдущий:** [v0.3.1](#релиз-v031)
+
+### Что вошло
+- **Встроенный retention-планировщик (KI-025):** `RETENTION_SCHEDULER_ENABLED`
+  + `RETENTION_SCHEDULER_AT` (UTC) → приложение само раз в сутки применяет
+  `RETENTION_*_DAYS`; advisory-lock PostgreSQL защищает от двойного запуска
+  при нескольких инстансах, остановка даёт доиграть текущий прогон
+- **Метрики retention:** `retention_rows_deleted_total` и
+  `retention_runs_total` — видны в `/metrics` для scheduler и CLI
+- **Документация:** актуализированы TODO (UI-остатки S26/S28 уже сделаны),
+  UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS, `.env.example`
+- **`.env.example`:** убрана переменная `VERSION` — версия больше не дублируется
+  и не устаревает (источник — `backend/app/config.py`)
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 520 собрано (519 passed + 1 skipped) |
+| Frontend-тесты | 94 passed |
+| Миграции | нет |
+| Новые ENV | `RETENTION_SCHEDULER_ENABLED`, `RETENTION_SCHEDULER_AT`, `RETENTION_SCHEDULER_BATCH_SIZE` |
+
+### Обновление
+Миграций нет. Пересобрать backend (в production планировщик уже включён через
+`docker-compose.prod.yml`); если в `.env` осталась строка `VERSION=...` —
+удалить её. Подробно — [UPGRADE.md](UPGRADE.md).
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-024 (метрики LLM/кэша считаются на процесс — план v0.4.0).
 
 ---
 

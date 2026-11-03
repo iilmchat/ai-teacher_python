@@ -7,6 +7,25 @@
 
 ---
 
+## [0.3.2] — 2026-11-03
+
+### Добавлено
+- Встроенный планировщик retention (KI-025): при `RETENTION_SCHEDULER_ENABLED`
+  приложение раз в сутки (`RETENTION_SCHEDULER_AT`, UTC) само применяет
+  `RETENTION_*_DAYS`; cron на хосте становится опциональным. На время прогона
+  берётся advisory-lock PostgreSQL — при нескольких инстансах двойного запуска
+  нет; остановка приложения даёт доиграть текущий прогон
+- Prometheus-счётчики retention: `retention_rows_deleted_total{table}` и
+  `retention_runs_total{table,result}` (в т.ч. для CLI-запусков)
+
+### Изменено
+- Версия 0.3.2; в `docker-compose.prod.yml` планировщик включён по умолчанию
+- `.env.example`: убрана переменная `VERSION` (перекрывала версию из
+  `backend/app/config.py` и устаревала при каждом релизе); добавлены
+  `RETENTION_SCHEDULER_*`
+- Документация: актуализированы чекбоксы TODO (UI-остатки 26/28 уже сделаны),
+  шапки TODO/RELEASES, UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS
+
 ## [0.3.0] — 2026-11-01 «Ops & Scale»
 
 Этап v0.3.0 (спринты 21–30): CI и релиз-процесс, современные зависимости,

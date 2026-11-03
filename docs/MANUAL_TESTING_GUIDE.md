@@ -1,8 +1,8 @@
 # MANUAL_TESTING_GUIDE — ручные кейсы и чек-лист приёмки
 
 Проверки, которые нельзя (или пока невыгодно) автоматизировать. Автотесты —
-backend **341 passed + 1 skipped** + frontend 80 unit / 12 e2e; здесь — то,
-что смотрит человек.
+backend **520** тестов (519 passed + 1 skipped в CI-окружении) + frontend 94
+unit / 12 e2e; здесь — то, что смотрит человек.
 
 ---
 
@@ -259,10 +259,10 @@ Redis должен быть запущен (`docker compose up -d redis`); API �
 
 ## Известные ограничения (не дефекты приёмки)
 
-Активные и принятые риски — [KNOWN_ISSUES.md](KNOWN_ISSUES.md): KI-014
-(CI-биллинг), KI-015 (starlette/fastapi — принятый риск), KI-016 (dev pytest),
-KI-017 (PyPI с хоста), KI-018 (`.format()` в песочнице). Закрытые в v0.2.0:
-KI-001…KI-013, KI-019…KI-021.
+Активные и принятые риски — [KNOWN_ISSUES.md](KNOWN_ISSUES.md): KI-018
+(`.format()` в песочнице), KI-023 (merge-gate на GitHub Free), KI-024 (метрики
+LLM/кэша на процесс, v0.4.0). Закрытые: KI-001…KI-017, KI-019…KI-021, KI-025
+(retention-планировщик — v0.3.2).
 
 ## 16. Наблюдаемость и аудит (S25)
 
@@ -302,3 +302,13 @@ KI-001…KI-013, KI-019…KI-021.
 | 18.8 | Удаление аккаунта | 204, вход невозможен, аудит `user.self_deleted` |
 | 18.9 | Retention dry-run | счётчики без удаления |
 | 18.10 | Мобильный 375px | таблицы карточками, контраст AA |
+
+## 19. Встроенный retention-планировщик (v0.3.2, KI-025)
+
+| # | Проверка | Ожидание |
+|---|----------|----------|
+| 19.1 | Запустить API с `RETENTION_SCHEDULER_ENABLED=true` | в логах `retention_scheduler_started` и `retention_scheduler_wait` с числом секунд |
+| 19.2 | `curl -s http://127.0.0.1:8000/metrics \| grep retention_` | присутствуют `retention_rows_deleted_total` / `retention_runs_total` |
+| 19.3 | Второй экземпляр API с тем же флагом во время прогона | в логах второго — `retention_scheduler_skipped` (`lock_held`), повторного удаления нет |
+| 19.4 | Остановить API (`Ctrl+C`) во время ожидания | процесс завершается быстро, в БД не остаётся зависшего lock (`SELECT count(*) FROM pg_locks WHERE locktype='advisory'` = 0) |
+| 19.5 | `python backend/scripts/apply_retention.py --dry-run` | работает как раньше: объём без удаления, счётчики не растут по строкам |

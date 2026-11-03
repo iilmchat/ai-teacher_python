@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.3.1 · **© 2026 RuChating (iilmchat)**
+**Версия:** v0.3.2 · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -38,7 +38,8 @@
   истории чата — ILIKE всегда, семантический (pgvector) за флагом
   `RAG_ENABLED`.
 - **Безопасность и эксплуатация** — CSP и security-заголовки nginx, gitleaks в
-  CI, Dependabot, аудит зависимостей, бэкап/восстановление БД скриптами.
+  CI, Dependabot, аудит зависимостей, бэкап/восстановление БД скриптами,
+  встроенный retention-планировщик (KI-025) и метрики удалённых строк.
 - **i18n** — русский и английский.
 
 ---
@@ -82,11 +83,11 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.3.1** (2026-11-01) |
-| Спринты | 1–30 (этап v0.3.0 завершён) |
-| Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
-| Миграции | Alembic head **010** (10 миграций; `chat_messages` HNSW-индекс) |
-| Тесты frontend | **80** unit + **12** e2e (Playwright; 12/12 green) |
+| Версия | **v0.3.2** (2026-11-03) |
+| Спринты | 1–30 + патчи v0.3.1/v0.3.2 |
+| Тесты backend | **520** (pytest, реальный PostgreSQL; +1 skip на Windows) |
+| Миграции | Alembic head **013** (13 миграций; `chat_messages` HNSW-индекс) |
+| Тесты frontend | **94** unit + **12** e2e (Playwright; 12/12 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | TypeScript | strict, 0 ошибок |
@@ -112,7 +113,8 @@ pnpm dev
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [UPGRADE.md](docs/UPGRADE.md) — обновление v0.2.0 → v0.3.0;
+- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.3.2 (v0.2.0 → v0.3.0 и
+  v0.3.1 → v0.3.2);
 - [TODO_V0.3.md](TODO_V0.3.md) — этап v0.3.0 (спринты 21–30, завершён);
   завершённые [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0 и [TODO.md](TODO.md) — v0.1.0
 
