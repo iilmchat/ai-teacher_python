@@ -55,6 +55,11 @@ export default defineConfig({
         VITE_PROXY_TARGET: `http://127.0.0.1:${BACKEND_PORT}`,
         // Редактор кода в e2e — textarea, чтобы не зависеть от CDN Monaco
         VITE_E2E: '1',
+        // esbuild из pnpm-стора на Windows-runner'е не может писать файлы;
+        // e2e-скрипт кладёт рабочую копию и передаёт путь сюда (см. e2e.ps1).
+        ...(process.env.ESBUILD_BINARY_PATH
+          ? { ESBUILD_BINARY_PATH: process.env.ESBUILD_BINARY_PATH }
+          : {}),
       },
     },
   ],
