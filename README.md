@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.3.2 · **© 2026 RuChating (iilmchat)**
+**Версия:** v0.3.3 · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -83,9 +83,9 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.3.2** (2026-11-03) |
-| Спринты | 1–30 + патчи v0.3.1/v0.3.2 |
-| Тесты backend | **520** (pytest, реальный PostgreSQL; +1 skip на Windows) |
+| Версия | **v0.3.3** (2026-11-05) |
+| Спринты | 1–32 (v0.3.0 → v0.3.3; KI-024, KI-025, KI-026) |
+| Тесты backend | **531** (pytest, реальный PostgreSQL; 22 skip на Windows) |
 | Миграции | Alembic head **013** (13 миграций; `chat_messages` HNSW-индекс) |
 | Тесты frontend | **94** unit + **12** e2e (Playwright; 12/12 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
@@ -113,13 +113,16 @@ pnpm dev
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.3.2 (v0.2.0 → v0.3.0 и
-  v0.3.1 → v0.3.2);
-- [TODO_V0.3.md](TODO_V0.3.md) — этап v0.3.0 (спринты 21–30, завершён);
-  завершённые [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0 и [TODO.md](TODO.md) — v0.1.0
+- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.3.3 (v0.2.0 → v0.3.0,
+  v0.3.1 → v0.3.2 и v0.3.2 → v0.3.3);
+- [TODO_V0.4.md](TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41, план);
+  завершённые [TODO_V0.3.md](TODO_V0.3.md) — v0.3.0, [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0
+  и [TODO.md](TODO.md) — v0.1.0
+- [SECURITY.md](SECURITY.md) — политика безопасности и контакт для уязвимостей;
+  [LICENSE](LICENSE) — MIT
 
 ---
 
 ## Лицензия
 
-MIT License · © 2026 RuChating (iilmchat)
+MIT License · © 2026 RuChating (iilmchat) — [LICENSE](LICENSE)

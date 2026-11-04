@@ -15,7 +15,6 @@ python-multipart==0.0.31
 
 # Async
 asyncpg==0.30.0
-aioredis==2.0.1
 
 # Database
 sqlalchemy[asyncio]==2.0.36
@@ -73,7 +72,6 @@ pytest==9.2.0
 pytest-asyncio==1.4.1
 pytest-cov==7.1.0
 pytest-env==1.8.3
-testcontainers==4.9.0
 
 # Types
 types-redis==4.6.0.20241004

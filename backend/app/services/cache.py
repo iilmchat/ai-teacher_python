@@ -15,7 +15,8 @@ namespace `cache:tasks:*` через SCAN: и категории, и списк�
   кэш «остывает» `CACHE_COOLDOWN_SECONDS`, чтобы каждый запрос не ждал
   таймаут соединения.
 - **метрики.** Hits/misses/sets/errors копятся в памяти процесса и отдаются
-  в `GET /admin/analytics` (секция `cache`). Каждое событие — structlog.
+  в `GET /admin/analytics` (секция `cache`); те же события уходят в
+  Prometheus (`cache_*_total`, KI-024). Каждое событие — structlog.
 - **флаг.** `CACHE_ENABLED=false` полностью выключает кэш (как
   `RATE_LIMIT_ENABLED` у лимитов). В тестах флаг выключен autouse-фикстурой.
 """
@@ -28,6 +29,7 @@ from typing import Any
 import structlog
 
 from app.config import settings
+from app.core.metrics import cache_observed
 
 logger = structlog.get_logger(__name__)
 
@@ -60,22 +62,27 @@ class CacheMetrics:
     def record_hit(self) -> None:
         with self._lock:
             self._hits += 1
+        cache_observed("hit")
 
     def record_miss(self) -> None:
         with self._lock:
             self._misses += 1
+        cache_observed("miss")
 
     def record_set(self) -> None:
         with self._lock:
             self._sets += 1
+        cache_observed("set")
 
     def record_invalidation(self) -> None:
         with self._lock:
             self._invalidations += 1
+        cache_observed("invalidation")
 
     def record_error(self) -> None:
         with self._lock:
             self._errors += 1
+        cache_observed("error")
 
     def reset(self) -> None:
         """Обнулить счётчики (тесты, рестарт)"""

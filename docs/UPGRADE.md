@@ -1,5 +1,7 @@
-# UPGRADE.md — обновление до v0.3.2
+# UPGRADE.md — обновление до v0.3.3
 
+> **v0.3.2 → v0.3.3** (2026-11-05): метрики-события KI-024 и auth-hardening
+> KI-026 — §0.1.
 > **v0.3.1 → v0.3.2** (2026-11-03): встроенный retention-планировщик и метрики
 > retention — §0.
 > **v0.2.0 → v0.3.0** (2026-11-01): релиз «Ops & Scale» — CI/релиз-процесс,
@@ -30,6 +32,27 @@
 
 Откат: вернуть код на `v0.3.1` и пересобрать backend — планировщик исчезнет,
 внешний cron (если настроен) продолжит работать.
+
+---
+
+## 0.1 Обновление v0.3.2 → v0.3.3
+
+Патч без миграций и изменений API; меняются имена метрик наблюдаемости и
+поведение аутентификации для заблокированных аккаунтов.
+
+1. **Метрики LLM/кэша переименованы** (KI-024): `llm_requests`/`llm_failures`/
+   `llm_latency_ms`/`llm_tokens`/`llm_fallbacks`/`cache_hits`/`cache_misses`/
+   `cache_errors` → `llm_requests_total{provider,model,status}`,
+   `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`,
+   `llm_fallbacks_total{primary}`, `cache_*_total`. Обновите дашборды и алерты
+   (список — `docs/DESIGN_ADMIN_AND_OPS.md` §10). Добавлен `app_build_info{version}`.
+2. **Несколько воркеров (опция):** если запускаете `uvicorn --workers N`,
+   задайте `PROMETHEUS_MULTIPROC_DIR` и пересоберите backend-образ: entrypoint
+   чистит каталог перед стартом. Без этого флага поведение прежнее (один процесс).
+3. **Аутентификация (KI-026):** `login`/`refresh` отклоняют неактивные аккаунты
+   (`is_active=false`) — после удаления аккаунта refresh больше не работает.
+   При старте с дефолтным или коротким `SECRET_KEY` пишется `insecure_secret_key`
+   (не блокирует запуск). Email в логах маскируется.
 
 ---
 

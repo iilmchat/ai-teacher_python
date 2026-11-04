@@ -1,19 +1,27 @@
-"""Prometheus-метрики (S25-002).
+"""Prometheus-метрики (S25-002) и общий экспортёр (KI-024).
 
-HTTP-метрики считаются middleware; метрики LLM/кэша/пула БД — «мостиком» из
-существующих in-memory счётчиков процесса (`llm_metrics`, `cache_metrics`,
-`engine.pool`) в момент scrape: сервисы не переписываем, но значения видны в
-Prometheus. Метрики песочницы обновляет `SandboxedExecutor` через
-`sandbox_observed`.
+HTTP-метрики считает middleware. Метрики LLM, кэша, песочницы и retention —
+счётчики/гистограммы, которые инкрементируются в момент события: сервисы
+вызывают `llm_call_observed`, `cache_observed`, `sandbox_observed`, а
+retention — `RETENTION_RUNS`/`RETENTION_ROWS`. Поэтому значения корректно
+складываются при нескольких воркерах — в multiprocess-режиме prometheus_client
+(`PROMETHEUS_MULTIPROC_DIR`) любая реплика отдаёт общий агрегат, а Prometheus
+складывает по `instance`/`pod`. Прежний вариант (gauge из in-memory счётчиков
+процесса) показан в KI-024 и убран.
+
+Песочница обновляет метрики через `SandboxedExecutor`; пул БД снимается с
+`engine.pool` в момент scrape (это состояние процесса, а не событие).
 
 Эндпоинт `/metrics` без авторизации — для внутренней сети; в nginx наружу не
-публикуется (`docs/DESIGN_ADMIN_AND_OPS.md` §monitoring).
+публикуется (`docs/DESIGN_ADMIN_AND_OPS.md` §10).
 """
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Awaitable, Callable
+from typing import Any
 
 import structlog
 from prometheus_client import (
@@ -30,80 +38,182 @@ from starlette.responses import Response
 
 logger = structlog.get_logger(__name__)
 
-#: Отдельный реестр: не тянет process/platform-коллекторы по умолчанию и не
-#: конфликтует при повторной регистрации в тестах.
-registry = CollectorRegistry()
+#: Каталог multiprocess-режима prometheus_client (KI-024). Не задан — обычный
+#: режим одного процесса (значения читаются из его реестра).
+MULTIPROCESS_ENV = "PROMETHEUS_MULTIPROC_DIR"
+
+
+def multiprocess_enabled() -> bool:
+    """Включён ли multiprocess-режим (API запущен с несколькими воркерами)"""
+    return bool(os.environ.get(MULTIPROCESS_ENV))
+
+
+def prepare_multiprocess_dir() -> None:
+    """Создать каталог multiprocess-режима (идемпотентно).
+
+    Чистить каталог должен entrypoint **до** старта воркеров: удаление файлов
+    внутри процесса стёрло бы значения уже работающих реплик.
+    """
+    directory = os.environ.get(MULTIPROCESS_ENV)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+
+
+def build_registries(
+    *, multiprocess: bool
+) -> tuple[CollectorRegistry, CollectorRegistry]:
+    """Создать пару реестров: (реестр для рендера, реестр для метрик).
+
+    В multiprocess-режиме метрики нельзя регистрировать в реестре рендера:
+    агрегат отдаёт `MultiProcessCollector` из файлов каталога, и собственные
+    значения процесса задвоили бы счётчики.
+    """
+    render = CollectorRegistry()
+    if not multiprocess:
+        return render, render
+
+    from prometheus_client.multiprocess import MultiProcessCollector
+
+    MultiProcessCollector(render)  # type: ignore[no-untyped-call]
+    return render, CollectorRegistry()
+
+
+#: Реестр, который рендерится в `/metrics`
+prepare_multiprocess_dir()
+registry, _metric_registry = build_registries(multiprocess=multiprocess_enabled())
 
 HTTP_REQUESTS = Counter(
     "http_requests_total",
     "HTTP-запросы по методу, шаблону пути и статусу",
     ["method", "path", "status"],
-    registry=registry,
+    registry=_metric_registry,
 )
 HTTP_DURATION = Histogram(
     "http_request_duration_seconds",
     "Длительность HTTP-запросов",
     ["method", "path"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
-    registry=registry,
+    registry=_metric_registry,
 )
 
 SANDBOX_RUNS = Counter(
     "sandbox_runs_total",
     "Запуски песочницы по режиму и результату",
     ["mode", "result"],
-    registry=registry,
+    registry=_metric_registry,
 )
 SANDBOX_DURATION = Histogram(
     "sandbox_duration_seconds",
     "Длительность исполнения в песочнице",
     ["mode"],
     buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0),
-    registry=registry,
+    registry=_metric_registry,
 )
 SANDBOX_TIMEOUTS = Counter(
     "sandbox_timeouts_total",
     "Таймауты песочницы",
     ["mode"],
-    registry=registry,
+    registry=_metric_registry,
 )
 
-# Метрики, которые нельзя накапливать в Prometheus напрямую (значения живут в
-# счётчиках процесса) — отдаём как gauge на момент scrape.
-LLM_REQUESTS = Gauge("llm_requests", "LLM-вызовы в процессе", ["provider"], registry=registry)
-LLM_FAILURES = Gauge("llm_failures", "Ошибки LLM в процессе", ["provider"], registry=registry)
-LLM_FALLBACKS = Gauge("llm_fallbacks", "Fallback-переключения LLM", registry=registry)
-LLM_LATENCY_MS = Gauge(
-    "llm_latency_ms", "Средняя латентность LLM, мс", ["provider"], registry=registry
+# LLM: события, а не снимок процесса (KI-024).
+LLM_REQUESTS = Counter(
+    "llm_requests_total",
+    "Вызовы LLM по провайдеру, модели и результату",
+    ["provider", "model", "status"],
+    registry=_metric_registry,
 )
-LLM_TOKENS = Gauge("llm_tokens", "Токены LLM в процессе", ["kind"], registry=registry)
-
-CACHE_HITS = Gauge("cache_hits", "Попадания в кэш (процесс)", registry=registry)
-CACHE_MISSES = Gauge("cache_misses", "Промахи кэша (процесс)", registry=registry)
-CACHE_ERRORS = Gauge("cache_errors", "Ошибки кэша (процесс)", registry=registry)
-
-DB_POOL = Gauge(
-    "db_pool_connections",
-    "Соединения пула БД",
-    ["state"],
-    registry=registry,
+LLM_LATENCY = Histogram(
+    "llm_latency_seconds",
+    "Полная латентность вызова LLM",
+    ["provider"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0),
+    registry=_metric_registry,
 )
-DB_POOL_SIZE = Gauge("db_pool_size", "Размер пула БД", registry=registry)
+LLM_FIRST_TOKEN = Histogram(
+    "llm_first_token_seconds",
+    "Время до первого токена в потоке",
+    ["provider"],
+    buckets=(0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0),
+    registry=_metric_registry,
+)
+LLM_TOKENS = Counter(
+    "llm_tokens_total",
+    "Токены LLM по провайдеру и виду (prompt/completion)",
+    ["provider", "kind"],
+    registry=_metric_registry,
+)
+LLM_FALLBACKS = Counter(
+    "llm_fallbacks_total",
+    "Переключения на резервного провайдера",
+    ["primary"],
+    registry=_metric_registry,
+)
+
+# Кэш: события кэша (KI-024).
+CACHE_HITS = Counter(
+    "cache_hits_total", "Попадания в кэш", registry=_metric_registry
+)
+CACHE_MISSES = Counter(
+    "cache_misses_total", "Промахи кэша", registry=_metric_registry
+)
+CACHE_SETS = Counter(
+    "cache_sets_total", "Записи в кэш", registry=_metric_registry
+)
+CACHE_INVALIDATIONS = Counter(
+    "cache_invalidations_total", "Инвалидации кэша", registry=_metric_registry
+)
+CACHE_ERRORS = Counter(
+    "cache_errors_total", "Ошибки кэша", registry=_metric_registry
+)
 
 # Retention (KI-025): число прогонов и удалённых строк по таблицам. Счётчики
-# (а не gauge) — значения накапливаются и суммируются Prometheus'ом.
+# (а не gauge) — значения накапливаются и суммируются Prometheus'ом. Пишут и
+# планировщик, и CLI (`apply_retention`).
 RETENTION_RUNS = Counter(
     "retention_runs_total",
     "Прогоны retention по таблице и результату",
     ["table", "result"],
-    registry=registry,
+    registry=_metric_registry,
 )
 RETENTION_ROWS = Counter(
     "retention_rows_deleted_total",
     "Удалённые retention-строки",
     ["table"],
-    registry=registry,
+    registry=_metric_registry,
 )
+
+# Пул БД — состояние процесса на момент scrape.
+DB_POOL = Gauge(
+    "db_pool_connections",
+    "Соединения пула БД",
+    ["state"],
+    multiprocess_mode="livesum",
+    registry=_metric_registry,
+)
+DB_POOL_SIZE = Gauge(
+    "db_pool_size",
+    "Размер пула БД",
+    multiprocess_mode="max",
+    registry=_metric_registry,
+)
+
+#: Информация о сборке: app_build_info{version="0.3.3"} 1
+BUILD_INFO = Gauge(
+    "app_build_info",
+    "Версия приложения",
+    ["version"],
+    multiprocess_mode="max",
+    registry=_metric_registry,
+)
+
+_CACHE_COUNTERS: dict[str, Counter] = {
+    "hit": CACHE_HITS,
+    "miss": CACHE_MISSES,
+    "set": CACHE_SETS,
+    "invalidation": CACHE_INVALIDATIONS,
+    "error": CACHE_ERRORS,
+}
 
 
 class HTTPMetricsMiddleware(BaseHTTPMiddleware):
@@ -151,35 +261,48 @@ def sandbox_observed(
         SANDBOX_TIMEOUTS.labels(mode).inc()
 
 
-def _refresh_process_gauges() -> None:
-    """Снять in-memory счётчики процесса в gauge'ы перед scrape"""
+def llm_call_observed(
+    *,
+    provider: str,
+    model: str,
+    status: str,
+    latency_ms: int,
+    first_token_ms: int | None = None,
+    prompt_tokens: int = 0,
+    completion_tokens: int = 0,
+) -> None:
+    """Зафиксировать вызов LLM (KI-024: событие, а не gauge процесса)"""
+    provider_label = provider or "unknown"
+    LLM_REQUESTS.labels(provider_label, model or "unknown", status).inc()
+    LLM_LATENCY.labels(provider_label).observe(max(latency_ms, 0) / 1000)
+    if first_token_ms is not None:
+        LLM_FIRST_TOKEN.labels(provider_label).observe(max(first_token_ms, 0) / 1000)
+    if prompt_tokens:
+        LLM_TOKENS.labels(provider_label, "prompt").inc(prompt_tokens)
+    if completion_tokens:
+        LLM_TOKENS.labels(provider_label, "completion").inc(completion_tokens)
+
+
+def llm_fallback_observed(*, primary: str) -> None:
+    """Зафиксировать переключение на резервного провайдера"""
+    LLM_FALLBACKS.labels(primary or "unknown").inc()
+
+
+def cache_observed(kind: str) -> None:
+    """Зафиксировать событие кэша: hit/miss/set/invalidation/error"""
+    counter = _CACHE_COUNTERS.get(kind)
+    if counter is not None:
+        counter.inc()
+
+
+def set_build_info(version: str) -> None:
+    """Отметить версию сборки (`app_build_info{version=...}`)"""
+    BUILD_INFO.labels(version).set(1)
+
+
+def _refresh_db_pool_gauges() -> None:
+    """Снять состояние пула БД в gauge'ы перед scrape"""
     from app.db.database import engine
-    from app.services.cache import cache_metrics
-    from app.services.llm.metrics import llm_metrics
-
-    try:
-        llm_snapshot = llm_metrics.snapshot()
-        provider = str(llm_snapshot.get("provider") or "unknown")
-        LLM_REQUESTS.labels(provider).set(float(llm_snapshot.get("total_calls") or 0))
-        LLM_FAILURES.labels(provider).set(float(llm_snapshot.get("errors") or 0))
-        LLM_LATENCY_MS.labels(provider).set(
-            float(llm_snapshot.get("avg_latency_ms") or 0)
-        )
-        LLM_FALLBACKS.set(float(llm_snapshot.get("fallbacks") or 0))
-        LLM_TOKENS.labels("prompt").set(float(llm_snapshot.get("prompt_tokens") or 0))
-        LLM_TOKENS.labels("completion").set(
-            float(llm_snapshot.get("completion_tokens") or 0)
-        )
-    except Exception as exc:  # noqa: BLE001 — метрики не должны ломать scrape
-        logger.warning("metrics_llm_bridge_failed", error=str(exc))
-
-    try:
-        cache_snapshot = cache_metrics.snapshot()
-        CACHE_HITS.set(float(cache_snapshot.get("hits") or 0))
-        CACHE_MISSES.set(float(cache_snapshot.get("misses") or 0))
-        CACHE_ERRORS.set(float(cache_snapshot.get("errors") or 0))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("metrics_cache_bridge_failed", error=str(exc))
 
     try:
         pool = engine.pool
@@ -191,19 +314,47 @@ def _refresh_process_gauges() -> None:
 
 def render_metrics() -> tuple[bytes, str]:
     """Сформировать ответ Prometheus: (тело, content-type)"""
-    _refresh_process_gauges()
+    _refresh_db_pool_gauges()
     return generate_latest(registry), CONTENT_TYPE_LATEST
 
 
+def _reset_metric(metric: Any) -> None:
+    """Обнулить метрику.
+
+    `clear()` в prometheus_client удаляет только наборы меток: для метрик без
+    меток он молча ничего не делает, поэтому значение обнуляем напрямую.
+    Нужно только тестам (между ними счётчики иначе «протекают»).
+    """
+    metric.clear()
+    if metric._labelnames:
+        return
+    setter = getattr(getattr(metric, "_value", None), "set", None)
+    if callable(setter):
+        setter(0)
+
+
 def reset_metrics() -> None:
-    """Сбросить HTTP/sandbox/retention-метрики (тесты)"""
+    """Сбросить счётчики/гистограммы (тесты)"""
     for metric in (
         HTTP_REQUESTS,
         HTTP_DURATION,
         SANDBOX_RUNS,
         SANDBOX_DURATION,
         SANDBOX_TIMEOUTS,
+        LLM_REQUESTS,
+        LLM_LATENCY,
+        LLM_FIRST_TOKEN,
+        LLM_TOKENS,
+        LLM_FALLBACKS,
+        CACHE_HITS,
+        CACHE_MISSES,
+        CACHE_SETS,
+        CACHE_INVALIDATIONS,
+        CACHE_ERRORS,
         RETENTION_RUNS,
         RETENTION_ROWS,
+        DB_POOL,
+        DB_POOL_SIZE,
+        BUILD_INFO,
     ):
-        metric.clear()
+        _reset_metric(metric)

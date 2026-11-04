@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from threading import Lock
 from typing import Any
 
+from app.core.metrics import llm_call_observed, llm_fallback_observed
 from app.services.llm.base import (
     LLMMessage,
     LLMProvider,
@@ -72,10 +73,23 @@ class LLMMetrics:
         with self._lock:
             self._records.append(call)
 
-    def record_fallback(self) -> None:
+        # KI-024: Prometheus получает событие, а не снимок памяти процесса,
+        # поэтому при нескольких воркерах счётчики складываются.
+        llm_call_observed(
+            provider=provider,
+            model=model,
+            status=status,
+            latency_ms=call.latency_ms,
+            first_token_ms=call.first_token_ms,
+            prompt_tokens=call.prompt_tokens,
+            completion_tokens=call.completion_tokens,
+        )
+
+    def record_fallback(self, primary: str = "unknown") -> None:
         """Отметить, что сработал fallback-провайдер"""
         with self._lock:
             self._fallbacks += 1
+        llm_fallback_observed(primary=primary)
 
     def reset(self) -> None:
         """Очистить метрики (тесты, перезапуск)"""

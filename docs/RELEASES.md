@@ -2,10 +2,10 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.3.2 (2026-11-03)  
+**Текущая версия:** v0.3.3 (2026-11-05)  
 **Текущий этап:** v0.3.0 «Ops & Scale» (спринты 21–30,
-[TODO_V0.3.md](../TODO_V0.3.md)) завершён; далее — патчи v0.3.1 и v0.3.2
-(закрытие API-only UI-пробела и ops-hardening: встроенный retention-планировщик)
+[TODO_V0.3.md](../TODO_V0.3.md)) завершён; далее — патчи v0.3.1–v0.3.3
+(UI-шаблоны, retention-планировщик, метрики-события и auth-hardening)
 
 ---
 
@@ -1639,6 +1639,44 @@ S21-002/S21-004 закрыты частично
   (advisory-lock); cli-скрипт продолжает работать
 - ✅ ruff/mypy/pytest зелёные; check_version — 0.3.2 везде
 - ✅ Документация описывает новое поведение и обновление
+
+---
+
+## Релиз v0.3.3
+
+**Дата:** 2026-11-05 · **Тег:** `v0.3.3` · **Предыдущий:** [v0.3.2](#релиз-v032)
+
+### Что вошло
+- **Метрики-события (KI-024):** LLM/кэш инкрементируют счётчики и гистограммы
+  в момент события — `llm_requests_total{provider,model,status}`,
+  `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total`,
+  `llm_fallbacks_total{primary}`, `cache_*_total`; добавлен multiprocess-режим
+  `PROMETHEUS_MULTIPROC_DIR` (каталог чистит `docker-entrypoint.sh`) и
+  `app_build_info{version}`
+- **Auth-hardening (KI-026):** `login`/`refresh` отклоняют неактивные аккаунты,
+  bcrypt вынесен в `run_in_threadpool`, при старте пишется `insecure_secret_key`,
+  email в логах маскируется
+- **LICENSE (MIT), SECURITY.md, TODO_V0.4.md** (план v0.4.0, спринты 33–41);
+  обновлены CHANGELOG, KNOWN_ISSUES, DESIGN_ADMIN_AND_OPS, README, UPGRADE
+- Удалены мёртвые зависимости `aioredis`, `testcontainers`
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 531 собрано (509 passed + 22 skipped; 3 sandbox-теста нестабильны на Windows) |
+| Frontend-тесты | 94 passed |
+| E2E | 17 passed, 1 skipped |
+| CI | 7/7 success (self-hosted) |
+| Миграции | нет |
+
+### Обновление
+Миграций нет. Пересобрать backend; обновить дашборды/алерты под новые имена
+метрик; при `uvicorn --workers N` включить `PROMETHEUS_MULTIPROC_DIR`.
+Подробно — [UPGRADE.md](UPGRADE.md) §0.1.
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-027 (нет отзыва JWT — план v0.4.0).
 
 ---
 

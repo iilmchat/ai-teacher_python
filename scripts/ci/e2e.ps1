@@ -43,7 +43,10 @@ $env:POSTGRES_PORT = $pgPort
 $env:REDIS_PORT = $redisPort
 $env:POSTGRES_USER = $pgUser
 $env:POSTGRES_DB = $pgDb
-docker compose up -d postgres redis
+# Отдельный compose-проект и имена контейнеров (docker-compose.ci.yml): иначе
+# на машине с запущенным dev-стеком CI пересоздаст его контейнеры.
+$env:COMPOSE_PROJECT_NAME = 'ai-teacher-ci'
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis
 Assert-Step 'docker compose up -d postgres redis'
 
 # CI=true: Playwright не переиспользует запущенные серверы, 1 retry, html-репорт.
@@ -62,6 +65,19 @@ Write-Host '==> frontend: pnpm install'
 Set-Location (Join-Path $env:GITHUB_WORKSPACE 'frontend')
 pnpm install --frozen-lockfile --allow-build=esbuild
 Assert-Step 'pnpm install'
+
+# Windows: esbuild из pnpm-стора (hardlink в .pnpm-store) не может создавать
+# файлы — Vite падает на оптимизации зависимостей с `Access is denied`.
+# Копия бинарника вне стора работает, поэтому подсовываем её через
+# ESBUILD_BINARY_PATH (его же пробрасывает webServer в playwright.config.ts).
+$esbuild = Get-ChildItem (Join-Path $env:GITHUB_WORKSPACE 'frontend\node_modules\.pnpm') `
+    -Recurse -Filter 'esbuild.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($esbuild) {
+    $esbuildCopy = Join-Path $env:TEMP 'ai-teacher-esbuild.exe'
+    Copy-Item -LiteralPath $esbuild.FullName -Destination $esbuildCopy -Force
+    $env:ESBUILD_BINARY_PATH = $esbuildCopy
+    Write-Host "==> ESBUILD_BINARY_PATH=$esbuildCopy (обход hardlink-бага pnpm/Windows)"
+}
 
 Write-Host '==> Playwright e2e'
 pnpm exec playwright test

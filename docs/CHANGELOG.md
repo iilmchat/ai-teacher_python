@@ -9,8 +9,41 @@
 
 ## [Unreleased]
 
-Изменения после v0.3.2 (план — v0.4.0: KI-024 — метрики при нескольких
-воркерах, планировщик напоминаний о дедлайнах).
+—
+
+## [0.3.3] — 2026-11-05
+
+Патч наблюдаемости и безопасности: метрики-события и multiprocess-экспортёр
+(KI-024), auth-hardening (KI-026), лицензия и политика безопасности. План
+v0.4.0 — в [TODO_V0.4.md](../TODO_V0.4.md).
+
+### Добавлено
+- Общий экспортёр метрик (KI-024): multiprocess-режим `prometheus_client`
+  (`PROMETHEUS_MULTIPROC_DIR`) — при `uvicorn --workers N` любая реплика отдаёт
+  общий агрегат; каталог чистит `docker-entrypoint.sh` перед стартом
+- `app_build_info{version}` в `/metrics`
+- `LICENSE` (MIT), `SECURITY.md` (политика безопасности), `TODO_V0.4.md`
+  (план v0.4.0, спринты 33–41)
+- Тесты: `tests/test_metrics_export.py`, `tests/test_auth.py` (+3)
+
+### Изменено
+- Версия 0.3.3
+- Метрики LLM/кэша стали событиями (KI-024): `llm_requests_total{provider,model,status}`,
+  `llm_latency_seconds`, `llm_first_token_seconds` (гистограммы),
+  `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}`,
+  `cache_*_total` вместо per-process gauge — значения складываются между воркерами
+- Удалены мёртвые зависимости `aioredis`, `testcontainers`
+- `.env.example`: добавлены `METRICS_*`, `CACHE_*` и `PROMETHEUS_MULTIPROC_DIR`
+
+### Исправлено
+- KI-026 (безопасность): неактивный аккаунт больше не входит и не обновляет
+  токены; `bcrypt` вынесен в поток (не блокирует event loop); при старте
+  предупреждение о дефолтном `SECRET_KEY`; email в логах маскируется
+- KI-024 переведён в `Resolved`
+
+### Безопасность
+- `POST /auth/login` и `/auth/refresh` проверяют `is_active` (KI-026)
+- `LoggingEmailSender` маскирует адрес получателя (PII, PRIVACY.md)
 
 ## [0.3.2] — 2026-11-03
 

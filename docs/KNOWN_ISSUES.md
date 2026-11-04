@@ -3,8 +3,8 @@
 > Этот документ содержит список всех известных проблем, ограничений и блокеров.
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
-**Последнее обновление:** 2026-11-01 (релиз v0.3.0)  
-**Всего проблем:** 25 (активных: 4, закрытых: 21)
+**Последнее обновление:** 2026-11-05 (v0.3.3: KI-024 и KI-026 закрыты)  
+**Всего проблем:** 27 (активных: 3, закрытых: 24)
 
 ---
 
@@ -82,18 +82,64 @@ Free/private нет ни branch protection, ни auto-merge — группа о�
 
 ---
 
-### KI-024 · Accepted · Low · core/metrics · метрики LLM/кэша считаются на процесс
+### KI-027 · Accepted · Low · api/auth, frontend · нет отзыва JWT: logout — no-op
 
-**Описание:** `llm_requests`, `cache_hits` и т.п. отдаются как gauge из in-memory
-счётчиков процесса; при нескольких воркерах значения не суммируются.
-**Workaround:** один процесс API в compose (текущая конфигурация) либо
-`sum by (instance)` в Prometheus.
-**План:** общий экспортёр при переходе на несколько воркеров (v0.4.0).
-**Создано:** 2026-11-01
+**Описание:** `POST /auth/logout` ничего не делает (клиент просто забывает
+токены), денлиста/`token_version` нет, JWT живут в `localStorage` (XSS-риск).
+Access-токен (30 мин) после удаления аккаунта или смены пароля валиден до
+истечения; refresh уже отклоняется для неактивных (KI-026).
+
+**Workaround:** короткий `ACCESS_TOKEN_EXPIRE_MINUTES`, `is_active` как ручной
+«рубильник» блокировки, удаление аккаунта анонимизирует данные.
+
+**План (v0.4.0):** `token_version` в `users` + проверка в `get_current_user`
+(инкремент при смене пароля/роли/удалении), отзыв refresh при logout,
+перенос хранения токенов в httpOnly-cookie/BFF.
+
+**Создано:** 2026-11-04 · **Обновлено:** 2026-11-04
 
 ---
 
 ## Закрытые проблемы
+
+### KI-024 · Resolved · Low · core/metrics · метрики LLM/кэша считались на процесс
+
+**Описание:** `llm_requests`, `cache_hits` и т.п. отдавались как gauge из in-memory
+счётчиков процесса; при нескольких воркерах значения не суммировались.
+
+**Решение (v0.3.3):** метрики стали событиями — `llm_requests_total{provider,model,status}`,
+`llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`,
+`llm_fallbacks_total{primary}`, `cache_*_total`; сервисы инкрементируют их в момент
+события (`llm_call_observed`, `cache_observed`), а не снимают gauge при scrape.
+Добавлен multiprocess-режим `prometheus_client` (`PROMETHEUS_MULTIPROC_DIR`): любая
+реплика отдаёт общий агрегат, каталог чистит `docker-entrypoint.sh` перед стартом.
+Пул БД остался gauge (`db_pool_connections{livesum}`, `db_pool_size{max}`) — это
+состояние процесса; версия сборки — `app_build_info{version}`.
+Тесты: `tests/test_metrics_export.py`.
+
+**Создано:** 2026-11-01 · **Закрыто:** 2026-11-05 (v0.3.3)
+
+---
+
+### KI-026 · Resolved · Med · api/auth, core/security · неактивный аккаунт мог получить токены
+
+**Описание (аудит v0.3.3):** `POST /auth/login` и `POST /auth/refresh` не
+проверяли `users.is_active`: после `DELETE /auth/me` (анонимизация + `is_active=false`)
+держатель refresh-токена получал новую пару токенов, а `logout` был no-op.
+Дополнительно: `bcrypt` вызывался синхронно из async-обработчиков и блокировал
+event loop на ~0.1–0.3 с; `SECRET_KEY` по умолчанию совпадал с `.env.example`;
+`LoggingEmailSender` писал адрес получателя в лог открытым текстом.
+
+**Решение:** login отклоняет неактивных (и не различает «нет такого» и
+«заблокирован»), refresh проверяет `is_active`; `hash_password`/`verify_password`
+выполняются в `run_in_threadpool`; при старте пишется `insecure_secret_key`,
+если ключ дефолтный или короче 32 символов; email в логах маскируется
+(`mask_email`). Тесты: `tests/test_auth.py` (неактивный login/refresh, refresh
+после удаления аккаунта). Отзыв токенов вынесен в **KI-027**.
+
+**Создано:** 2026-11-04 · **Закрыто:** 2026-11-05 (v0.3.3)
+
+---
 
 ### KI-025 · Resolved · Low · scripts/apply_retention · retention запускается вручную
 

@@ -23,6 +23,14 @@ from app.config import settings
 logger = structlog.get_logger(__name__)
 
 
+def mask_email(address: str) -> str:
+    """Скрыть локальную часть адреса для логов (PII, PRIVACY.md)"""
+    local, _, domain = address.partition("@")
+    if not domain:
+        return "***"
+    return f"{local[:1]}***@{domain}"
+
+
 class EmailSender(Protocol):
     """Минимальный интерфейс отправки письма (легко подменить в тестах)"""
 
@@ -33,7 +41,9 @@ class LoggingEmailSender:
     """Dev/CI: письма не уходят, а попадают в лог"""
 
     async def send(self, *, to: str, subject: str, body: str) -> None:
-        logger.info("email_logged", to=to, subject=subject, body_preview=body[:200])
+        logger.info(
+            "email_logged", to=mask_email(to), subject=subject, body_preview=body[:200]
+        )
 
 
 class SMTPEmailSender:

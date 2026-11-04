@@ -16,4 +16,13 @@ else
     echo "docker-entrypoint: SKIP_MIGRATIONS=true — migrations are not applied"
 fi
 
+# KI-024: в multiprocess-режиме Prometheus каталог должен быть пустым на старте —
+# файлы прошлого запуска исказили бы счётчики. Чистка только здесь: внутри
+# воркеров удаление стёрло бы значения уже работающих реплик.
+if [ -n "${PROMETHEUS_MULTIPROC_DIR:-}" ]; then
+    mkdir -p "$PROMETHEUS_MULTIPROC_DIR"
+    rm -f "$PROMETHEUS_MULTIPROC_DIR"/*.db
+    echo "docker-entrypoint: multiprocess metrics dir cleaned ($PROMETHEUS_MULTIPROC_DIR)"
+fi
+
 exec "$@"

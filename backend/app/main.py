@@ -23,9 +23,9 @@ from app.api.v1 import (
     teacher,
     users,
 )
-from app.config import settings
+from app.config import DEFAULT_SECRET_KEY, settings
 from app.core.logging import configure_logging
-from app.core.metrics import HTTPMetricsMiddleware, render_metrics
+from app.core.metrics import HTTPMetricsMiddleware, render_metrics, set_build_info
 from app.core.rate_limiter import RateLimitMiddleware
 from app.core.request_context import RequestContextMiddleware
 from app.core.runner_pool import close_current_pool as close_executor_pool
@@ -45,6 +45,14 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения"""
+    set_build_info(settings.version)
+    if settings.secret_key == DEFAULT_SECRET_KEY or len(settings.secret_key) < 32:
+        # Не валим старт (локальная разработка), но шумим заметно: дефолтный
+        # ключ позволяет подделать JWT любому, кто видел .env.example.
+        logger.error(
+            "insecure_secret_key",
+            hint="задайте случайный SECRET_KEY (>= 32 символов) в .env",
+        )
     redis_ok = await ping_redis()
     logger.info(
         "app_starting",
