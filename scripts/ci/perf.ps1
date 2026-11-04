@@ -55,7 +55,10 @@ $backend = Join-Path $RepoRoot 'backend'
 $baseUrl = "http://127.0.0.1:$Port"
 
 Write-Host "==> Postgres/Redis (docker compose): $env:POSTGRES_PORT/$env:REDIS_PORT"
-docker compose up -d postgres redis | Out-Null
+# Отдельный compose-проект и имена контейнеров (docker-compose.ci.yml): иначе
+# на машине с запущенным dev-стеком CI пересоздаст его контейнеры.
+$env:COMPOSE_PROJECT_NAME = 'ai-teacher-ci'
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docker compose up -d postgres redis failed' }
 
 Write-Host "==> Миграции"

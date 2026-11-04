@@ -1,0 +1,14 @@
+# Override для CI на self-hosted runner'е.
+#
+# У сервисов docker-compose.yml фиксированные `container_name`, а имя проекта
+# совпадает с dev-стеком на машине разработчика. Без этого override `docker
+# compose up` из job'а пересоздаёт dev-контейнеры (и меняет их порты). Здесь —
+# отдельные имена; запускать вместе с `COMPOSE_PROJECT_NAME=ai-teacher-ci`:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis
+#
+services:
+  postgres:
+    container_name: ai-teacher-ci-postgres
+  redis:
+    container_name: ai-teacher-ci-redis

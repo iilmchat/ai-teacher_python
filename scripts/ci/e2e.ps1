@@ -43,7 +43,10 @@ $env:POSTGRES_PORT = $pgPort
 $env:REDIS_PORT = $redisPort
 $env:POSTGRES_USER = $pgUser
 $env:POSTGRES_DB = $pgDb
-docker compose up -d postgres redis
+# Отдельный compose-проект и имена контейнеров (docker-compose.ci.yml): иначе
+# на машине с запущенным dev-стеком CI пересоздаст его контейнеры.
+$env:COMPOSE_PROJECT_NAME = 'ai-teacher-ci'
+docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d postgres redis
 Assert-Step 'docker compose up -d postgres redis'
 
 # CI=true: Playwright не переиспользует запущенные серверы, 1 retry, html-репорт.
