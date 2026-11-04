@@ -54,7 +54,7 @@ async def register(user_data: UserCreate, db: DbSession) -> User:
         email=user_data.email,
         username=user_data.username,
         # bcrypt синхронный и занимает ~0.1–0.3 с: в потоке, чтобы не
-        # блокировать event loop на время регистрации (аудит v0.3.2).
+        # блокировать event loop на время регистрации (аудит v0.3.3).
         hashed_password=await run_in_threadpool(hash_password, user_data.password),
         role=UserRole.STUDENT,
         level=UserLevel.BASIC,
@@ -133,7 +133,7 @@ async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
     user = await UserRepository(db).get(user_id)
 
     # Удалённый/заблокированный аккаунт не должен обновлять токены: иначе
-    # refresh пережил бы DELETE /auth/me (аудит v0.3.2).
+    # refresh пережил бы DELETE /auth/me (аудит v0.3.3).
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

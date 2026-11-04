@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** v0.3.2 (2026-11-03) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** v0.3.3 (2026-11-05) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -36,7 +36,7 @@
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
 - [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
 - [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
-  патчи v0.3.1/v0.3.2 — в [RELEASES.md](RELEASES.md)
+  патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
 - [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41, план)
 - [CI.md](CI.md) — CI-платформа: self-hosted runner, гейты, релиз, эксплуатация
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
@@ -65,7 +65,7 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.3.2** (2026-11-03); спринты 1–32 завершены |
+| Версия | **v0.3.3** (2026-11-05); спринты 1–32 завершены |
 | Тесты backend | **531** (pytest, реальный PostgreSQL; 22 skip на Windows) |
 | Тесты frontend | 94 unit + 12 e2e (Playwright; 12/12 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |

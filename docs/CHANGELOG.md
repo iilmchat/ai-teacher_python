@@ -9,8 +9,13 @@
 
 ## [Unreleased]
 
-Изменения после v0.3.2 (порт уникальной части ветки `sprint/32-v032-observability`;
-план v0.4.0 — планировщик напоминаний о дедлайнах, отзыв JWT — KI-027).
+—
+
+## [0.3.3] — 2026-11-05
+
+Патч наблюдаемости и безопасности: метрики-события и multiprocess-экспортёр
+(KI-024), auth-hardening (KI-026), лицензия и политика безопасности. План
+v0.4.0 — в [TODO_V0.4.md](../TODO_V0.4.md).
 
 ### Добавлено
 - Общий экспортёр метрик (KI-024): multiprocess-режим `prometheus_client`
@@ -22,6 +27,7 @@
 - Тесты: `tests/test_metrics_export.py`, `tests/test_auth.py` (+3)
 
 ### Изменено
+- Версия 0.3.3
 - Метрики LLM/кэша стали событиями (KI-024): `llm_requests_total{provider,model,status}`,
   `llm_latency_seconds`, `llm_first_token_seconds` (гистограммы),
   `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}`,

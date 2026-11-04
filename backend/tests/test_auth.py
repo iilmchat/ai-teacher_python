@@ -197,7 +197,7 @@ async def test_update_me(client: AsyncClient) -> None:
     assert response.json()["level"] == "intermediate"
 
 
-# --- v0.3.2 (KI-026): неактивный аккаунт не получает токены ------------------
+# --- v0.3.3 (KI-026): неактивный аккаунт не получает токены ------------------
 
 
 async def _deactivate(db_session: AsyncSession, username: str) -> None:

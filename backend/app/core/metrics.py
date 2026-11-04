@@ -198,7 +198,7 @@ DB_POOL_SIZE = Gauge(
     registry=_metric_registry,
 )
 
-#: Информация о сборке: app_build_info{version="0.3.2"} 1
+#: Информация о сборке: app_build_info{version="0.3.3"} 1
 BUILD_INFO = Gauge(
     "app_build_info",
     "Версия приложения",

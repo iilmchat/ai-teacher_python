@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "AI Teacher for Python"
-    version: str = "0.3.2"
+    version: str = "0.3.3"
     debug: bool = False
     #: Формат логов: `json` (production/CI) или `console` (dev) — S25-001
     log_level: str = "INFO"
