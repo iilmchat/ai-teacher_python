@@ -23,7 +23,7 @@ pgvector==0.3.6
 psycopg2-binary==2.9.13
 
 # Redis
-redis==5.2.0
+redis==8.1.0
 
 # Validation
 pydantic==2.10.1
