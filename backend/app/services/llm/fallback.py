@@ -59,7 +59,7 @@ class FallbackProvider(LLMProvider):
             fallback=self.fallback.name,
             error=str(error),
         )
-        llm_metrics.record_fallback()
+        llm_metrics.record_fallback(primary=self.primary.name)
 
     def _remember(self, provider: LLMProvider) -> None:
         self._active_name = provider.name

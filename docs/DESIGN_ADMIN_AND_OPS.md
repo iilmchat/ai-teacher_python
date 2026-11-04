@@ -264,17 +264,29 @@ code_executions=2), retention удалил тестовый бэкап стар�
 |--------|---------|
 | HTTP | `http_requests_total{method,path,status}`, `http_request_duration_seconds` (гистограмма) |
 | Песочница | `sandbox_runs_total{mode,result}`, `sandbox_duration_seconds`, `sandbox_timeouts_total` |
-| LLM | `llm_requests`, `llm_failures`, `llm_latency_ms`, `llm_tokens{kind}`, `llm_fallbacks` |
-| Кэш | `cache_hits`, `cache_misses`, `cache_errors` |
+| LLM | `llm_requests_total{provider,model,status}`, `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}` |
+| Кэш | `cache_hits_total`, `cache_misses_total`, `cache_sets_total`, `cache_invalidations_total`, `cache_errors_total` |
+| Retention | `retention_runs_total{table,result}`, `retention_rows_deleted_total{table}` |
 | БД | `db_pool_connections{state}`, `db_pool_size` |
+| Сборка | `app_build_info{version}` |
 
-LLM/кэш/БД отдаются как gauge из in-memory счётчиков процесса (на нескольких
-воркерах значения не суммируются — до перехода на общий экспортер в v0.3.x).
+LLM/кэш/retention — **события** (счётчики и гистограммы), поэтому корректно
+складываются между воркерами. Для нескольких воркеров включите общий экспортёр:
+
+```env
+PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-multiproc
+```
+
+и запускайте API с `--workers N` (каталог чистит `docker-entrypoint.sh` перед
+стартом; при запуске без entrypoint очистите его сами). В этом режиме любая
+реплика отдаёт общий агрегат — `sum by (instance)` в Prometheus не нужен.
+Пул БД — состояние процесса: `db_pool_connections` суммируется (`livesum`),
+`db_pool_size` берётся максимумом.
 
 **Алерты (рекомендуемые):** 5xx rate > 1% за 5 мин; p95 `http_request_duration`
 > 2 с; `sandbox_timeouts_total` растёт; `sandbox_runs_total{result="error"}`
-растёт; `llm_failures` растёт; `db_pool_connections{state="checked_out"}` близко
-к `db_pool_size`.
+растёт; `llm_requests_total{status="error"}` растёт; `retention_runs_total{result="error"}`
+> 0; `db_pool_connections{state="checked_out"}` близко к `db_pool_size`.
 
 **Логи.** JSON (`LOG_FORMAT=json`), каждая запись содержит `request_id`
 (из `X-Request-ID`), `http_request` пишется на каждый запрос с длительностью.

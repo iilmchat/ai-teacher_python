@@ -5,6 +5,9 @@ Tests for authentication endpoints (S3-005).
 что необходимо для asyncpg (соединение привязано к loop).
 """
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.repositories.user import UserRepository
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -192,3 +195,67 @@ async def test_update_me(client: AsyncClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["level"] == "intermediate"
+
+
+# --- v0.3.2 (KI-026): неактивный аккаунт не получает токены ------------------
+
+
+async def _deactivate(db_session: AsyncSession, username: str) -> None:
+    user = await UserRepository(db_session).get_by_username(username)
+    assert user is not None
+    await UserRepository(db_session).update(user.id, is_active=False)
+
+
+async def test_login_rejects_inactive_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Заблокированный аккаунт не входит даже с верным паролем"""
+    await _register(client, "inactive@example.com", "inactiveuser")
+    await _deactivate(db_session, "inactiveuser")
+
+    response = await client.post(
+        LOGIN_URL, data={"username": "inactiveuser", "password": "password123"}
+    )
+
+    assert response.status_code == 401
+
+
+async def test_refresh_rejected_for_inactive_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Refresh-токен неактивного пользователя не выдаёт новую пару"""
+    await _register(client, "inactive2@example.com", "inactive2")
+    login = await client.post(
+        LOGIN_URL, data={"username": "inactive2", "password": "password123"}
+    )
+    refresh_token = login.json()["refresh_token"]
+    await _deactivate(db_session, "inactive2")
+
+    response = await client.post(
+        "/api/v1/auth/refresh", params={"refresh_token": refresh_token}
+    )
+
+    assert response.status_code == 401
+
+
+async def test_refresh_rejected_after_account_deletion(client: AsyncClient) -> None:
+    """Refresh-токен не переживает DELETE /auth/me"""
+    await _register(client, "gone@example.com", "goneuser")
+    login = await client.post(
+        LOGIN_URL, data={"username": "goneuser", "password": "password123"}
+    )
+    tokens = login.json()
+
+    deleted = await client.request(
+        "DELETE",
+        "/api/v1/auth/me",
+        json={"password": "password123"},
+        headers={"Authorization": f"Bearer {tokens['access_token']}"},
+    )
+    assert deleted.status_code == 204, deleted.text
+
+    response = await client.post(
+        "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+    )
+
+    assert response.status_code == 401

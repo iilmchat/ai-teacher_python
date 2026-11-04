@@ -11,6 +11,9 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = PROJECT_ROOT / ".env"
 
+#: Значение `SECRET_KEY` из `.env.example`: не годится для production-запуска
+DEFAULT_SECRET_KEY = "change_me_secret_key_for_jwt_encoding"
+
 
 class Settings(BaseSettings):
     """Настройки приложения"""
@@ -88,7 +91,7 @@ class Settings(BaseSettings):
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     # Security
-    secret_key: str = "change_me_secret_key_for_jwt_encoding"
+    secret_key: str = DEFAULT_SECRET_KEY
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     algorithm: str = "HS256"
