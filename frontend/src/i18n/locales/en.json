@@ -81,6 +81,10 @@
         "semantic": "semantic",
         "ilike": "substring"
       }
+    },
+    "taskContext": {
+      "label": "Task context",
+      "clear": "Clear"
     }
   },
   "code": {
@@ -148,7 +152,8 @@
     "found": "Tasks found: {{count}}",
     "emptyFiltered": "Nothing matches your filters. Try changing the conditions or reset the filters.",
     "recommendedTitle": "Recommended next",
-    "recommendedEmpty": "Nothing to recommend yet — solve an introductory task and we will pick the next one by topic and difficulty."
+    "recommendedEmpty": "Nothing to recommend yet — solve an introductory task and we will pick the next one by topic and difficulty.",
+    "askAssistant": "Ask the assistant"
   },
   "progress": {
     "title": "Progress",

@@ -52,6 +52,41 @@ test.describe('Чат', () => {
     await expect(page.getByLabel('Сообщение')).toBeVisible();
   });
 
+  test('«Спросить ассистента» переносит контекст задачи в чат', async ({
+    page,
+  }) => {
+    await registerStudent(page);
+    await page.goto('/tasks');
+
+    const card = page.getByRole('listitem').filter({ hasText: 'Сумма двух чисел' });
+    await card.getByRole('link', { name: 'Открыть' }).click();
+
+    await page
+      .getByRole('link', { name: 'Спросить ассистента' })
+      .first()
+      .click();
+
+    // Deep-link: контекст задачи виден в адресе и в плашке чата
+    await expect(page).toHaveURL(/\/chat\?task=/);
+    await expect(page.getByText(/Контекст задачи/)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('Сумма двух чисел')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('С чего начать?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Контекст можно снять — плашка исчезает
+    await page.getByRole('button', { name: 'Убрать' }).click();
+    await expect(page.getByText(/Контекст задачи/)).not.toBeVisible();
+  });
+
   test('уровень выбирается при создании сессии', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/chat');

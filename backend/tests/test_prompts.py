@@ -95,6 +95,33 @@ def test_build_messages_truncates_long_history() -> None:
     assert messages[-1].content == "текущий"
 
 
+def test_build_messages_puts_task_context_after_level_prompt() -> None:
+    """Контекст задачи — второе системное сообщение (S42-006)"""
+    messages = build_messages(
+        UserLevel.BASIC,
+        [("user", "прошлый вопрос"), ("assistant", "прошлый ответ")],
+        "текущий вопрос",
+        task_context="Контекст задачи: сумма двух чисел",
+    )
+
+    assert [m.role for m in messages] == [
+        "system",
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert messages[1].content == "Контекст задачи: сумма двух чисел"
+    assert messages[-1].content == "текущий вопрос"
+
+
+def test_build_messages_without_task_context_is_unchanged() -> None:
+    """Без контекста задачи список сообщений прежний (S42-006)"""
+    messages = build_messages(UserLevel.BASIC, [], "привет")
+
+    assert [m.role for m in messages] == ["system", "user"]
+
+
 def test_build_messages_accepts_role_content_tuples() -> None:
     """История может быть передана парами (role, content)"""
     messages = build_messages(

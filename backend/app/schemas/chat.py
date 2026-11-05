@@ -93,9 +93,15 @@ class ChatSessionWithMessages(ChatSessionResponse):
 
 
 class ChatMessageRequest(BaseModel):
-    """Запрос на отправку сообщения в чат"""
+    """Запрос на отправку сообщения в чат.
+
+    `task_id` (S42-006) — задача, условие которой ассистент получает
+    отдельным системным сообщением. В `content` по-прежнему только текст
+    вопроса: идентификатор не подмешивается в историю ученика.
+    """
 
     content: str = Field(..., min_length=1, max_length=4000)
+    task_id: UUID | None = None
 
 
 class ChatTurnResponse(BaseModel):

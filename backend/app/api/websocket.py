@@ -4,8 +4,11 @@ WebSocket-эндпоинт чата со стримингом ответа LLM (
 Протокол (JSON-сообщения):
 
 Клиент → сервер:
-    {"type": "chat", "content": "текст вопроса"}
+    {"type": "chat", "content": "текст вопроса", "task_id": "<uuid>"}
     {"type": "ping"}
+
+`task_id` необязателен (S42-006): условие задачи уходит в LLM отдельным
+системным сообщением, а в историю — только как метаданные вопроса.
 
 Сервер → клиент:
     {"type": "start"}
@@ -33,7 +36,7 @@ from app.api.v1.chat import get_embedding_provider, get_llm_provider
 from app.core.security import decode_token
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
-from app.errors import AccessDeniedError, AppError, NotFoundError
+from app.errors import AccessDeniedError, AppError, NotFoundError, ValidationError
 from app.models.chat import ChatSession
 from app.models.user import User
 from app.services.chat_service import ChatService
@@ -85,11 +88,16 @@ async def serve_chat_socket(
             continue
 
         content = str(message.get("content", ""))
+        try:
+            task_id = _parse_task_id(message.get("task_id"))
+        except ValidationError as exc:
+            await _send(ws, {"type": "error", "detail": exc.detail})
+            continue
         await _send(ws, {"type": "start"})
 
         chunks: list[str] = []
         try:
-            async for delta in service.stream_reply(session, content):
+            async for delta in service.stream_reply(session, content, task_id):
                 chunks.append(delta)
                 await _send(ws, {"type": "token", "content": delta})
         except LLMUnavailableError as exc:
@@ -109,6 +117,18 @@ async def serve_chat_socket(
                 "warnings": list(service.last_warnings),
             },
         )
+
+
+def _parse_task_id(raw: object) -> UUID | None:
+    """Разобрать необязательный `task_id` из сообщения сокета (S42-006)."""
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise ValidationError("Некорректный идентификатор задачи")
+    try:
+        return UUID(raw)
+    except ValueError as exc:
+        raise ValidationError("Некорректный идентификатор задачи") from exc
 
 
 def _extract_user_id(token: str) -> UUID | None:

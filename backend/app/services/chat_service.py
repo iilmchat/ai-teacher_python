@@ -14,8 +14,10 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.chat import ChatMessageRepository, ChatSessionRepository
+from app.db.repositories.task import TaskRepository
 from app.errors import AccessDeniedError, NotFoundError, ValidationError
 from app.models.chat import ChatMessage, ChatSession, MessageRole
+from app.models.task import Task
 from app.models.user import User, UserLevel
 from app.services.levels import resolve_level
 from app.services.llm.base import LLMMessage, LLMProvider
@@ -25,6 +27,10 @@ from app.services.llm.policy import (
     extract_code_blocks,
 )
 from app.services.llm.prompt_builder import build_messages, prompt_version
+from app.services.llm.task_context import (
+    build_task_context_message,
+    task_context_metadata,
+)
 from app.services.rag import (
     SearchHit,
     SearchMode,
@@ -123,6 +129,23 @@ class ChatService:
 
     # --- Сообщения ------------------------------------------------------
 
+    async def _task_for_context(self, task_id: UUID | None) -> Task | None:
+        """Активная задача для контекста чата (S42-006).
+
+        Неизвестный или удалённый идентификатор — 404: контекст не должен
+        молча подменяться чужой или несуществующей задачей.
+        """
+        if task_id is None:
+            return None
+        task = await TaskRepository(self.db).get(task_id)
+        if task is None or not task.is_active:
+            raise NotFoundError("Задача не найдена")
+        logger.debug(
+            "chat_task_context_attached",
+            task_id=str(task.id),
+        )
+        return task
+
     def _history_for_llm(self, history: list[ChatMessage]) -> list[LLMMessage]:
         """Преобразовать историю БД в сообщения для LLM.
 
@@ -155,12 +178,20 @@ class ChatService:
         return metadata
 
     async def send_message(
-        self, session: ChatSession, content: str
+        self, session: ChatSession, content: str, task_id: UUID | None = None
     ) -> tuple[ChatMessage, ChatMessage]:
-        """Сохранить сообщение ученика и вернуть пару (вопрос, ответ)"""
+        """Сохранить сообщение ученика и вернуть пару (вопрос, ответ).
+
+        `task_id` (S42-006) добавляет условие задачи отдельным системным
+        сообщением; в `content` и в историю попадает только вопрос.
+        """
         text = content.strip()
         if not text:
             raise ValidationError("Сообщение не может быть пустым")
+
+        task = await self._task_for_context(task_id)
+        task_context = build_task_context_message(task) if task else None
+        metadata = task_context_metadata(task) if task else None
 
         # RAG-lite: вектор считается best-effort, ошибка не ломает отправку
         user_embedding = await try_embed(self.embedding_provider, text)
@@ -168,6 +199,7 @@ class ChatService:
             session_id=session.id,
             role=MessageRole.USER,
             content=text,
+            metadata=metadata,
             embedding=user_embedding,
         )
         # Последнее сообщение истории — только что сохранённый вопрос,
@@ -178,6 +210,7 @@ class ChatService:
             level,
             self._history_for_llm(history),
             text,
+            task_context=task_context,
         )
 
         answer = await self.provider.generate(llm_messages)
@@ -193,13 +226,21 @@ class ChatService:
         return user_message, assistant_message
 
     async def stream_reply(
-        self, session: ChatSession, content: str
+        self, session: ChatSession, content: str, task_id: UUID | None = None
     ) -> AsyncIterator[str]:
         """Потоковый ответ: сообщение ученика сохраняется сразу,
-        ответ ассистента — по завершении потока."""
+        ответ ассистента — по завершении потока.
+
+        `task_id` (S42-006) — контекст задачи для этого ответа; в историю
+        он попадает только как метаданные вопроса.
+        """
         text = content.strip()
         if not text:
             raise ValidationError("Сообщение не может быть пустым")
+
+        task = await self._task_for_context(task_id)
+        task_context = build_task_context_message(task) if task else None
+        metadata = task_context_metadata(task) if task else None
 
         self.last_warnings = []
         user_embedding = await try_embed(self.embedding_provider, text)
@@ -207,6 +248,7 @@ class ChatService:
             session_id=session.id,
             role=MessageRole.USER,
             content=text,
+            metadata=metadata,
             embedding=user_embedding,
         )
         history = await self.get_history(session.id)
@@ -215,6 +257,7 @@ class ChatService:
             level,
             self._history_for_llm(history),
             text,
+            task_context=task_context,
         )
 
         chunks: list[str] = []

@@ -194,7 +194,7 @@ async def send_message(
     """Отправить сообщение и получить ответ ассистента за один вызов"""
     session = await service.get_session(session_id, current_user)
     user_message, assistant_message = await service.send_message(
-        session, payload.content
+        session, payload.content, payload.task_id
     )
     return ChatTurnResponse(
         user_message=ChatMessageResponse.from_message(user_message),

@@ -2,9 +2,12 @@
  * Клиент WebSocket чата со стримингом ответа ассистента.
  *
  * Протокол backend:
- *   client → {"type":"chat","content":"..."} | {"type":"ping"}
+ *   client → {"type":"chat","content":"...","task_id"?:"<uuid>"} | {"type":"ping"}
  *   server → {"type":"start"|"token"|"done"|"error"|"pong", content?, detail?,
  *             warnings?}
+ *
+ * `task_id` (S42-006) — контекст задачи: backend кладёт условие в отдельное
+ * системное сообщение, а в историю — только метаданные вопроса.
  */
 
 import i18n from '@/i18n';
@@ -20,7 +23,7 @@ export interface ChatSocketHandlers {
 }
 
 export interface ChatSocket {
-  send: (content: string) => boolean;
+  send: (content: string, taskId?: string | null) => boolean;
   close: () => void;
   readonly ready: boolean;
 }
@@ -103,11 +106,14 @@ export function openChatSocket(
   };
 
   return {
-    send(content: string): boolean {
+    send(content: string, taskId?: string | null): boolean {
       if (!ready || socket.readyState !== WebSocket.OPEN) {
         return false;
       }
-      socket.send(JSON.stringify({ type: 'chat', content }));
+      const payload = taskId
+        ? { type: 'chat', content, task_id: taskId }
+        : { type: 'chat', content };
+      socket.send(JSON.stringify(payload));
       return true;
     },
     close() {

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel';
 import { LevelSelector } from '@/components/chat/LevelSelector';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { MessageList } from '@/components/chat/MessageList';
+import { TaskContextBanner } from '@/components/chat/TaskContextBanner';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -22,10 +24,16 @@ export function ChatPage() {
   const streaming = useChatStore((state) => state.streaming);
   const loading = useChatStore((state) => state.loading);
   const error = useChatStore((state) => state.error);
+  const taskContext = useChatStore((state) => state.taskContext);
   const loadSessions = useChatStore((state) => state.loadSessions);
   const createSession = useChatStore((state) => state.createSession);
   const openSession = useChatStore((state) => state.openSession);
   const deleteSession = useChatStore((state) => state.deleteSession);
+  const loadTaskContext = useChatStore((state) => state.loadTaskContext);
+  const clearTaskContext = useChatStore((state) => state.clearTaskContext);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskParam = searchParams.get('task');
 
   const [level, setLevel] = useState<UserLevel>(userLevel);
   const [creating, setCreating] = useState(false);
@@ -37,6 +45,23 @@ export function ChatPage() {
   useEffect(() => {
     void loadSessions();
   }, [loadSessions]);
+
+  // Deep-link `/chat?task=<id>`: условие задачи подтягивается из API,
+  // чтобы в плашке было название (S42-006).
+  useEffect(() => {
+    if (!taskParam) {
+      clearTaskContext();
+      return;
+    }
+    void loadTaskContext(taskParam);
+  }, [taskParam, loadTaskContext, clearTaskContext]);
+
+  function handleClearTaskContext() {
+    clearTaskContext();
+    const next = new URLSearchParams(searchParams);
+    next.delete('task');
+    setSearchParams(next, { replace: true });
+  }
 
   const sortedSessions = useMemo(
     () => [...sessions].sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -157,6 +182,15 @@ export function ChatPage() {
             </span>
           )}
         </header>
+
+        {taskContext && (
+          <div className="border-b border-slate-200 px-4 py-2">
+            <TaskContextBanner
+              task={taskContext}
+              onClear={handleClearTaskContext}
+            />
+          </div>
+        )}
 
         {error && (
           <div className="p-3">

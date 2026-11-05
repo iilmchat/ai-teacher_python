@@ -26,6 +26,8 @@ const SESSION_WITH_MESSAGES: ChatSessionWithMessages = {
   ],
 };
 
+const TASK_ID = '77777777-7777-7777-7777-777777777777';
+
 function resetStore(): void {
   useChatStore.setState({
     sessions: [],
@@ -34,6 +36,7 @@ function resetStore(): void {
     streaming: false,
     loading: false,
     error: null,
+    taskContext: null,
   });
 }
 
@@ -177,5 +180,57 @@ describe('chat store', () => {
 
     expect(useChatStore.getState().sessions).toHaveLength(0);
     expect(useChatStore.getState().active).toBeNull();
+  });
+
+  it('загружает контекст задачи для deep-link', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue({
+      id: TASK_ID,
+      title: 'Сумма двух чисел',
+      description: 'Считайте два числа.',
+      difficulty: 'easy',
+      category: 'input_output',
+      hints: [],
+      solution_template: null,
+      test_cases_count: 2,
+      status: 'not_started',
+      attempts: 0,
+    });
+
+    await useChatStore.getState().loadTaskContext(TASK_ID);
+
+    expect(useChatStore.getState().taskContext).toEqual({
+      id: TASK_ID,
+      title: 'Сумма двух чисел',
+    });
+  });
+
+  it('очищает контекст задачи', () => {
+    useChatStore.setState({ taskContext: { id: TASK_ID, title: 'Задача' } });
+
+    useChatStore.getState().clearTaskContext();
+
+    expect(useChatStore.getState().taskContext).toBeNull();
+  });
+
+  it('REST-фолбэк передаёт task_id, не подмешивая его в текст', async () => {
+    useChatStore.setState({ active: { ...SESSION_WITH_MESSAGES, messages: [] } });
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      user_message: SESSION_WITH_MESSAGES.messages[0],
+      assistant_message: {
+        id: 'a1',
+        session_id: SESSION.id,
+        role: 'assistant',
+        content: 'ответ',
+        code_blocks: [],
+        created_at: '2026-10-29T10:02:00',
+      },
+    });
+
+    await useChatStore.getState().sendViaRest('вопрос', TASK_ID);
+
+    expect(post).toHaveBeenCalledWith(`/chat/sessions/${SESSION.id}/messages`, {
+      content: 'вопрос',
+      task_id: TASK_ID,
+    });
   });
 });

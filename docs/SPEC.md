@@ -90,7 +90,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | GET | `/chat/sessions?skip&limit` | — | `ChatSession[]` |
 | GET | `/chat/sessions/{id}` | — | `ChatSessionWithMessages` |
 | DELETE | `/chat/sessions/{id}` | — | 204 |
-| POST | `/chat/sessions/{id}/messages` | `{content}` | 201 `{user_message, assistant_message}` |
+| POST | `/chat/sessions/{id}/messages` | `{content, task_id?}` | 201 `{user_message, assistant_message}` |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
 
 `GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
@@ -99,7 +99,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
 
 ```
-client → {"type":"chat","content":"..."} | {"type":"ping"}
+client → {"type":"chat","content":"...","task_id":"<uuid>"?} | {"type":"ping"}
 server → {"type":"start"} | {"type":"token","content":"…"} |
          {"type":"done","content":"полный текст","warnings":[...]} |
          {"type":"error","detail":"…"} | {"type":"pong"}
@@ -110,8 +110,26 @@ metadata, warnings}`.
 
 - `metadata.prompt_version` — версия промпта уровня (S12-006);
 - `metadata.provider` / `metadata.model` — фактический провайдер ответа;
+- `metadata.task_context` — `{task_id, title}` для вопроса, отправленного с
+  контекстом задачи (S42-006); самого условия и кода ученика в метаданных нет;
 - `warnings` — коды нарушений политики уровня (S12-005), например
   `basic_full_solution`; ответ при этом не блокируется.
+
+**Контекст задачи (S42-006).**
+
+`POST /chat/sessions/{id}/messages` (REST) и сообщение WebSocket
+`{"type":"chat", ...}` принимают необязательный `task_id` (UUID). Клиент
+передаёт **только идентификатор**: сервер сам загружает активную задачу и
+добавляет её условие отдельным `system`-сообщением сразу после промпта
+уровня. В контекст входят название, сложность, категория, описание и
+входные данные тест-кейсов; эталонное решение (`solution_template`),
+ожидаемые выводы (`expected_output`) и подсказки (`hints`) не передаются.
+Условие обрезается до 4000 символов, перечисляется не более 20 кейсов.
+
+В `content` сообщения остаётся только текст вопроса — условие задачи не
+дублируется в истории ученика. В `metadata` сообщения ученика сохраняется
+`task_context: {task_id, title}`. Неизвестный или неактивный `task_id` —
+404 (REST) или событие `error` без закрытия сокета (WebSocket).
 
 Права: своя сессия — 200; чужая — 403; несуществующая — 404.
 Недоступность LLM: 503 `{detail}` (S12-002).

@@ -14,8 +14,15 @@ import type {
   ChatSession,
   ChatSessionWithMessages,
   ChatTurn,
+  TaskDetail,
   UserLevel,
 } from '@/types/api';
+
+/** Задача, условие которой передаётся ассистенту (S42-006) */
+export interface ChatTaskContext {
+  id: string;
+  title: string;
+}
 
 interface ChatState {
   sessions: ChatSession[];
@@ -25,12 +32,16 @@ interface ChatState {
   streaming: boolean;
   loading: boolean;
   error: string | null;
+  /** Контекст задачи из deep-link `/chat?task=<id>` (S42-006) */
+  taskContext: ChatTaskContext | null;
 
   loadSessions: () => Promise<void>;
   createSession: (level?: UserLevel) => Promise<ChatSession>;
   openSession: (sessionId: string) => Promise<void>;
   closeSession: () => void;
   deleteSession: (sessionId: string) => Promise<void>;
+  loadTaskContext: (taskId: string) => Promise<void>;
+  clearTaskContext: () => void;
 
   /** Добавить вопрос ученика локально (оптимистично) */
   addUserMessage: (content: string) => void;
@@ -38,8 +49,8 @@ interface ChatState {
   appendToken: (delta: string) => void;
   finishStream: (full?: string, warnings?: string[]) => void;
   failStream: (message: string) => void;
-  /** Отправка без стриминга (fallback) */
-  sendViaRest: (content: string) => Promise<void>;
+  /** Отправка без стриминга (fallback); taskId — контекст задачи */
+  sendViaRest: (content: string, taskId?: string | null) => Promise<void>;
 }
 
 function nowIso(): string {
@@ -71,6 +82,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   streaming: false,
   loading: false,
   error: null,
+  taskContext: null,
 
   async loadSessions() {
     set({ loading: true, error: null });
@@ -113,6 +125,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
       sessions: state.sessions.filter((item) => item.id !== sessionId),
       active: state.active?.id === sessionId ? null : state.active,
     }));
+  },
+
+  async loadTaskContext(taskId) {
+    try {
+      const task = await api.get<TaskDetail>(`/tasks/${taskId}`);
+      set({ taskContext: { id: task.id, title: task.title } });
+    } catch {
+      // Задача удалена или недоступна — контекст не подставляем.
+      set({ taskContext: null });
+    }
+  },
+
+  clearTaskContext() {
+    set({ taskContext: null });
   },
 
   addUserMessage(content) {
@@ -160,7 +186,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ streaming: false, draft: '', error: message });
   },
 
-  async sendViaRest(content) {
+  async sendViaRest(content, taskId) {
     const active = get().active;
     if (!active) {
       return;
@@ -169,7 +195,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     try {
       const turn = await api.post<ChatTurn>(
         `/chat/sessions/${active.id}/messages`,
-        { content },
+        taskId ? { content, task_id: taskId } : { content },
       );
       const current = get().active;
       if (!current) {

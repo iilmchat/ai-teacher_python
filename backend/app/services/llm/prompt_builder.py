@@ -65,12 +65,17 @@ def build_messages(
     level: UserLevel | str,
     history: list[LLMMessage] | list[tuple[str, str]],
     user_message: str,
+    task_context: str | None = None,
 ) -> list[LLMMessage]:
     """Собрать список сообщений для LLM с учётом уровня и истории.
 
     history — предыдущие сообщения диалога (LLMMessage или пары role/content).
     В контекст попадают только последние MAX_CONTEXT_MESSAGES сообщений,
     каждое обрезается до MAX_MESSAGE_CHARS символов.
+
+    task_context — условие учебной задачи (S42-006). Передаётся отдельным
+    системным сообщением сразу после промпта уровня и не смешивается с
+    текстом вопроса ученика.
     """
     normalized: list[LLMMessage] = []
     for item in history:
@@ -83,6 +88,10 @@ def build_messages(
     tail = normalized[-MAX_CONTEXT_MESSAGES:]
 
     messages = [LLMMessage(role="system", content=load_system_prompt(level))]
+    if task_context:
+        messages.append(
+            LLMMessage(role="system", content=task_context[:MAX_MESSAGE_CHARS])
+        )
     for message in tail:
         messages.append(
             LLMMessage(role=message.role, content=message.content[:MAX_MESSAGE_CHARS])

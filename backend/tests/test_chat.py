@@ -6,10 +6,14 @@ LLM подменяется фейковым провайдером: тесты �
 
 from collections.abc import Iterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.task import Task, TaskDifficulty
+from app.services.llm.base import LLMMessage
 from app.services.llm.prompt_builder import load_system_prompt
 from tests.fake_llm import FakeProvider, install_fake_provider, uninstall_fake_provider
 
@@ -58,6 +62,30 @@ async def _create_session(
     assert response.status_code == 201, response.text
     data: dict[str, Any] = response.json()
     return data
+
+
+async def _make_task(db: AsyncSession) -> Task:
+    """Задача с маркерами, которых не должно быть в контексте (S42-006)."""
+    task = Task(
+        title="Сумма через цикл",
+        description="Посчитайте сумму чисел от 1 до N и выведите её.",
+        difficulty=TaskDifficulty.EASY,
+        category="loops",
+        tags=["loops"],
+        test_cases=[
+            {
+                "input": "3\n",
+                "expected_output": "EXPECTED_OUTPUT_SECRET",
+                "description": "Три шага",
+            }
+        ],
+        hints=["HINT_SECRET"],
+        solution_template="SOLUTION_SECRET = 1",
+    )
+    db.add(task)
+    await db.commit()
+    await db.refresh(task)
+    return task
 
 
 async def test_create_session_uses_user_level(
@@ -367,3 +395,98 @@ async def test_session_history_returns_metadata(
     assert assistant["role"] == "assistant"
     assert assistant["metadata"]["provider"] == "fake"
     assert "prompt_version" in assistant["metadata"]
+
+
+async def test_task_context_in_metadata_not_content(
+    client: AsyncClient, db_session: AsyncSession, fake_provider: FakeProvider
+) -> None:
+    """Контекст задачи — в метаданных, а не в тексте сообщения (S42-006)."""
+    task = await _make_task(db_session)
+    token = await _register_and_login(client, username="taskmeta")
+    session = await _create_session(client, token)
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Объясни условие", "task_id": str(task.id)},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    user_message = response.json()["user_message"]
+    assert user_message["content"] == "Объясни условие"
+    assert "Сумма через цикл" not in user_message["content"]
+    assert user_message["metadata"] == {
+        "task_context": {"task_id": str(task.id), "title": "Сумма через цикл"}
+    }
+
+
+async def test_task_context_sent_to_llm_without_solution(
+    client: AsyncClient, db_session: AsyncSession, fake_provider: FakeProvider
+) -> None:
+    """Условие уходит вторым системным сообщением, без решения и ответов."""
+    task = await _make_task(db_session)
+    token = await _register_and_login(client, username="taskprompt")
+    session = await _create_session(client, token)
+
+    await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "С чего начать?", "task_id": str(task.id)},
+        headers=_auth(token),
+    )
+
+    messages = fake_provider.calls[0]
+    assert messages[0].role == "system"
+    assert messages[1].role == "system"
+    context = messages[1].content
+    assert "Сумма через цикл" in context
+    assert "Посчитайте сумму чисел" in context
+    assert "Три шага" in context
+    # Эталонное решение, ожидаемые выводы и подсказки не передаются
+    assert "SOLUTION_SECRET" not in context
+    assert "EXPECTED_OUTPUT_SECRET" not in context
+    assert "HINT_SECRET" not in context
+    assert messages[-1] == LLMMessage(role="user", content="С чего начать?")
+
+
+async def test_task_context_not_leaked_into_history(
+    client: AsyncClient, db_session: AsyncSession, fake_provider: FakeProvider
+) -> None:
+    """В истории остаётся вопрос, а контекст — только в метаданных."""
+    task = await _make_task(db_session)
+    token = await _register_and_login(client, username="taskhistory")
+    session = await _create_session(client, token)
+
+    await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Подскажи идею", "task_id": str(task.id)},
+        headers=_auth(token),
+    )
+
+    response = await client.get(
+        f"/api/v1/chat/sessions/{session['id']}", headers=_auth(token)
+    )
+    user_message = response.json()["messages"][0]
+    assert user_message["content"] == "Подскажи идею"
+    assert "Посчитайте сумму чисел" not in user_message["content"]
+    assert user_message["metadata"]["task_context"]["task_id"] == str(task.id)
+
+
+async def test_unknown_task_context_returns_404(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Несуществующая задача не подменяется пустым контекстом."""
+    token = await _register_and_login(client, username="taskmissing")
+    session = await _create_session(client, token)
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Вопрос", "task_id": str(uuid4())},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
+    history = await client.get(
+        f"/api/v1/chat/sessions/{session['id']}", headers=_auth(token)
+    )
+    assert history.json()["messages"] == []
+    assert fake_provider.calls == []

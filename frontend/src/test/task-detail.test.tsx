@@ -106,6 +106,22 @@ describe('TaskDetailPage', () => {
     expect(screen.getByText(/не засчитывается в попытки/)).toBeTruthy();
   });
 
+  it('ведёт в чат с контекстом задачи', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
+      if (path.endsWith('/attempts')) {
+        return { items: [], total: 0 };
+      }
+      return DETAIL;
+    });
+
+    renderWithRouter(<TaskDetailPage />, { route: `/tasks/${TASK_ID}` });
+
+    const link = await screen.findByRole('link', {
+      name: 'Спросить ассистента',
+    });
+    expect(link).toHaveAttribute('href', `/chat?task=${TASK_ID}`);
+  });
+
   it('показывает историю попыток и возвращает код в редактор', async () => {
     const user = userEvent.setup();
     const attempt = {
@@ -171,5 +187,9 @@ describe('TaskDetailPage', () => {
     expect(screen.getByText(/Положительные/)).toBeTruthy();
     // Счётчик попыток на карточке задачи не изменился
     expect(screen.getByText(/Попыток: 0/)).toBeTruthy();
+    // Кнопка «Спросить ассистента» есть и на странице результатов
+    expect(
+      screen.getAllByRole('link', { name: 'Спросить ассистента' }),
+    ).toHaveLength(2);
   });
 });
