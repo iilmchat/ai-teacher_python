@@ -136,7 +136,17 @@
     "attemptScore": "{{passed}} из {{total}}",
     "draftSaving": "Сохраняю черновик…",
     "draftSavedAt": "Черновик сохранён в {{time}}",
-    "draftDiscard": "Удалить черновик"
+    "draftDiscard": "Удалить черновик",
+    "filtersTitle": "Поиск и фильтры",
+    "searchLabel": "Поиск по задачам",
+    "searchPlaceholder": "Название или описание…",
+    "categoryLabel": "Категория",
+    "tagLabel": "Тег",
+    "tagPlaceholder": "например, loops",
+    "statusLabel": "Статус",
+    "resetFilters": "Сбросить фильтры",
+    "found": "Найдено задач: {{count}}",
+    "emptyFiltered": "По вашему фильтру ничего не найдено. Попробуйте изменить условия или сбросить фильтры."
   },
   "progress": {
     "title": "Прогресс",

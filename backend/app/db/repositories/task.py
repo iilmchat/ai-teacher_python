@@ -4,14 +4,16 @@
 
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.db.repositories.base import BaseRepository
 from app.models.task import (
     Task,
     TaskAttempt,
     TaskDifficulty,
+    TaskStatus,
     TaskVersion,
     UserTaskProgress,
 )
@@ -33,8 +35,16 @@ class TaskRepository(BaseRepository[Task]):
         only_active: bool = True,
         skip: int = 0,
         limit: int = 100,
+        user_id: UUID | None = None,
+        status: TaskStatus | None = None,
     ) -> list[Task]:
-        """Список задач с фильтрами (теги — JSONB, поиск — ILIKE)"""
+        """Список задач с фильтрами (теги — JSONB, поиск — ILIKE)
+
+        Фильтр `status` отбирает задачи по прогрессу конкретного
+        ученика (`user_id` обязателен вместе с ним): у `not_started`
+        подходит задача и без записи прогресса, и с записью в этом
+        статусе.
+        """
         query = select(Task)
         if only_active:
             query = query.where(Task.is_active.is_(True))
@@ -52,6 +62,26 @@ class TaskRepository(BaseRepository[Task]):
                     func.lower(Task.description).like(pattern),
                 )
             )
+        if status is not None:
+            if user_id is None:
+                raise ValueError("Фильтр по статусу требует user_id")
+            progress = aliased(UserTaskProgress)
+            query = query.outerjoin(
+                progress,
+                and_(
+                    progress.task_id == Task.id,
+                    progress.user_id == user_id,
+                ),
+            )
+            if status == TaskStatus.NOT_STARTED:
+                query = query.where(
+                    or_(
+                        progress.id.is_(None),
+                        progress.status == TaskStatus.NOT_STARTED,
+                    )
+                )
+            else:
+                query = query.where(progress.status == status)
         query = query.order_by(Task.created_at.asc()).offset(skip).limit(limit)
         result = await self.session.execute(query)
         return list(result.scalars().all())

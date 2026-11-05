@@ -136,7 +136,17 @@
     "attemptScore": "{{passed}} of {{total}}",
     "draftSaving": "Saving draft…",
     "draftSavedAt": "Draft saved at {{time}}",
-    "draftDiscard": "Discard draft"
+    "draftDiscard": "Discard draft",
+    "filtersTitle": "Search and filters",
+    "searchLabel": "Search tasks",
+    "searchPlaceholder": "Title or description…",
+    "categoryLabel": "Category",
+    "tagLabel": "Tag",
+    "tagPlaceholder": "for example, loops",
+    "statusLabel": "Status",
+    "resetFilters": "Reset filters",
+    "found": "Tasks found: {{count}}",
+    "emptyFiltered": "Nothing matches your filters. Try changing the conditions or reset the filters."
   },
   "progress": {
     "title": "Progress",

@@ -26,7 +26,7 @@ from app.core.rate_limiter import CHECK_LIMIT, WINDOW_SECONDS, is_user_limited
 from app.core.security import get_current_active_user, require_role
 from app.db.database import get_db
 from app.errors import ValidationError
-from app.models.task import Task, TaskDifficulty
+from app.models.task import Task, TaskDifficulty, TaskStatus
 from app.models.user import User, UserRole
 from app.schemas.task import (
     AttemptDetail,
@@ -105,6 +105,7 @@ async def list_tasks(
     category: str | None = None,
     tag: str | None = None,
     q: str | None = None,
+    status: TaskStatus | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[TaskListItem]:
@@ -115,6 +116,7 @@ async def list_tasks(
         category=category,
         tag=tag,
         search=q,
+        status=status.value if status is not None else None,
         skip=skip,
         limit=limit,
     )
@@ -128,6 +130,7 @@ async def list_tasks(
         category=category,
         tag=tag,
         search=q,
+        status=status,
         skip=skip,
         limit=limit,
     )

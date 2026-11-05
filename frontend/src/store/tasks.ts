@@ -15,11 +15,16 @@ import type {
   TaskDetail,
   TaskDifficulty,
   TaskListItem,
+  TaskStatus,
 } from '@/types/api';
 
-interface TaskFilters {
+export interface TaskFilters {
   difficulty: TaskDifficulty | null;
   category: string | null;
+  tag: string | null;
+  status: TaskStatus | null;
+  /** Поиск по названию и описанию */
+  search: string;
 }
 
 interface TasksState {
@@ -38,6 +43,8 @@ interface TasksState {
   /** Идёт ли сохранение черновика (S42-003) */
   draftSaving: boolean;
   filters: TaskFilters;
+  /** Всего найдено задач (с учётом фильтров) */
+  found: number;
   loading: boolean;
   submitting: boolean;
   checking: boolean;
@@ -54,6 +61,8 @@ interface TasksState {
   loadAttempts: (taskId: string) => Promise<void>;
   /** Загрузить детальную попытку (S42-002) */
   loadAttempt: (taskId: string, attemptId: string) => Promise<void>;
+  /** Сбросить все фильтры каталога (S42-004) */
+  resetFilters: () => void;
   /** Сохранить черновик решения (S42-003) */
   saveDraft: (taskId: string, code: string) => Promise<void>;
   /** Очистить черновик решения (S42-003) */
@@ -61,7 +70,7 @@ interface TasksState {
   resetSubmission: () => void;
 }
 
-function buildQuery(filters: TaskFilters): string {
+export function buildQuery(filters: TaskFilters): string {
   const params = new URLSearchParams();
   if (filters.difficulty) {
     params.set('difficulty', filters.difficulty);
@@ -69,9 +78,22 @@ function buildQuery(filters: TaskFilters): string {
   if (filters.category) {
     params.set('category', filters.category);
   }
+  if (filters.tag) {
+    params.set('tag', filters.tag);
+  }
+  if (filters.status) {
+    params.set('status', filters.status);
+  }
+  const search = filters.search.trim();
+  if (search) {
+    params.set('q', search);
+  }
   const query = params.toString();
   return query ? `?${query}` : '';
 }
+
+/** Текущий запрос каталога: его отменяет следующий (S42-004). */
+let tasksRequest: AbortController | null = null;
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   tasks: [],
@@ -83,20 +105,34 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   attemptDetail: null,
   draftSavedAt: null,
   draftSaving: false,
-  filters: { difficulty: null, category: null },
+  filters: { difficulty: null, category: null, tag: null, status: null, search: '' },
+  found: 0,
   loading: false,
   submitting: false,
   checking: false,
   error: null,
 
   async loadTasks() {
+    // Новый запрос отменяет предыдущий: устаревший ответ не должен
+    // подменять результат свежего (S42-004).
+    tasksRequest?.abort();
+    const controller = new AbortController();
+    tasksRequest = controller;
+
     set({ loading: true, error: null });
     try {
       const tasks = await api.get<TaskListItem[]>(
         `/tasks${buildQuery(get().filters)}`,
+        { signal: controller.signal },
       );
-      set({ tasks, loading: false });
+      if (controller.signal.aborted) {
+        return;
+      }
+      set({ tasks, found: tasks.length, loading: false });
     } catch {
+      if (controller.signal.aborted) {
+        return;
+      }
       set({ loading: false, error: i18n.t('errors.tasksLoad') });
     }
   },
@@ -135,6 +171,18 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   setFilter(filters) {
     set((state) => ({ filters: { ...state.filters, ...filters } }));
+  },
+
+  resetFilters() {
+    set({
+      filters: {
+        difficulty: null,
+        category: null,
+        tag: null,
+        status: null,
+        search: '',
+      },
+    });
   },
 
   async submit(taskId, code) {

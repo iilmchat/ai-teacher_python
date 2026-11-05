@@ -93,7 +93,13 @@ function resetStore(): void {
     checkResult: null,
     attempts: null,
     attemptDetail: null,
-    filters: { difficulty: null, category: null },
+    filters: {
+      difficulty: null,
+      category: null,
+      tag: null,
+      status: null,
+      search: '',
+    },
     loading: false,
     submitting: false,
     checking: false,
@@ -120,7 +126,86 @@ describe('tasks store', () => {
 
     await useTasksStore.getState().loadTasks();
 
-    expect(get).toHaveBeenCalledWith('/tasks?difficulty=hard');
+    expect(get).toHaveBeenCalledWith(
+      '/tasks?difficulty=hard',
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+  });
+
+  it('передаёт поиск, категорию, тег и статус в запрос', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue([TASK]);
+    useTasksStore.getState().setFilter({
+      search: 'сумма',
+      category: 'input_output',
+      tag: 'basics',
+      status: 'in_progress',
+    });
+
+    await useTasksStore.getState().loadTasks();
+
+    expect(get).toHaveBeenCalledWith(
+      '/tasks?category=input_output&tag=basics&status=in_progress&q=%D1%81%D1%83%D0%BC%D0%BC%D0%B0',
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+  });
+
+  it('не добавляет пустой поиск в запрос', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue([TASK]);
+    useTasksStore.getState().setFilter({ search: '   ' });
+
+    await useTasksStore.getState().loadTasks();
+
+    expect(get).toHaveBeenCalledWith(
+      '/tasks',
+      expect.objectContaining({ signal: expect.anything() }),
+    );
+  });
+
+  it('сбрасывает все фильтры', () => {
+    useTasksStore.getState().setFilter({
+      difficulty: 'hard',
+      category: 'input_output',
+      tag: 'basics',
+      status: 'completed',
+      search: 'сумма',
+    });
+
+    useTasksStore.getState().resetFilters();
+
+    expect(useTasksStore.getState().filters).toEqual({
+      difficulty: null,
+      category: null,
+      tag: null,
+      status: null,
+      search: '',
+    });
+  });
+
+  it('считает число найденных задач', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue([TASK]);
+
+    await useTasksStore.getState().loadTasks();
+
+    expect(useTasksStore.getState().found).toBe(1);
+  });
+
+  it('отменяет предыдущий запрос каталога', async () => {
+    const signals: AbortSignal[] = [];
+    vi.spyOn(api, 'get').mockImplementation(
+      async (_path: string, options?: { signal?: AbortSignal }) => {
+        if (options?.signal) {
+          signals.push(options.signal);
+        }
+        return [];
+      },
+    );
+
+    await useTasksStore.getState().loadTasks();
+    await useTasksStore.getState().loadTasks();
+
+    expect(signals).toHaveLength(2);
+    expect(signals[0].aborted).toBe(true);
+    expect(signals[1].aborted).toBe(false);
   });
 
   it('загружает детали задачи и сбрасывает прошлый результат', async () => {

@@ -65,15 +65,22 @@ class TaskService:
         category: str | None = None,
         tag: str | None = None,
         search: str | None = None,
+        status: TaskStatus | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[TaskListItem]:
-        """Список активных задач со статусом прохождения"""
+        """Список активных задач со статусом прохождения.
+
+        `status` фильтрует по прогрессу самого ученика: без
+        записи прогресса задача считается «не начата».
+        """
         tasks = await self.tasks.list_tasks(
             difficulty=difficulty,
             category=category,
             tag=tag,
             search=search,
+            user_id=user.id,
+            status=status,
             skip=skip,
             limit=limit,
         )

@@ -41,6 +41,38 @@ test.describe('Задачи', () => {
     await expect(page.getByRole('button', { name: 'Показать подсказку' })).toBeVisible();
   });
 
+  test('поиск и фильтры каталога работают', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/tasks');
+
+    // Счётчик найденного
+    await expect(page.getByText(/Найдено задач:/)).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // Поиск по названию
+    await page.getByLabel('Поиск по задачам').fill('Сумма');
+    await expect(page.getByText('Сумма двух чисел')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // Пустое состояние с подсказкой
+    await page.getByLabel('Поиск по задачам').fill('несуществующая задача');
+    await expect(
+      page.getByText(/По вашему фильтру ничего не найдено/),
+    ).toBeVisible({ timeout: 20_000 });
+
+    // Сброс фильтров возвращает каталог
+    await page.getByRole('button', { name: 'Сбросить фильтры' }).click();
+    await expect(page.getByText('Сумма двух чисел')).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // Фильтры отражаются в URL — ссылкой можно поделиться
+    await page.getByLabel('Поиск по задачам').fill('Сумма');
+    await expect(page).toHaveURL(/q=/, { timeout: 20_000 });
+  });
+
   test('черновик сохраняется и восстанавливается', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/tasks');

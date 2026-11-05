@@ -110,6 +110,20 @@ async def _create_teacher_token(
     return token
 
 
+async def _create_task_with_tags(
+    client: AsyncClient, db: AsyncSession, teacher_name: str = "tagteacher"
+) -> dict[str, Any]:
+    """Задача с тегами — для проверки фильтра по тегу"""
+    token = await _create_teacher_token(client, db, teacher_name)
+    payload = {**TASK_PAYLOAD, "tags": ["python", "basics"]}
+    response = await client.post(
+        TASKS_URL, json=payload, headers=_auth(token)
+    )
+    assert response.status_code == 201, response.text
+    data: dict[str, Any] = response.json()
+    return data
+
+
 async def _create_task(
     client: AsyncClient, db: AsyncSession, teacher_name: str = "teacher1"
 ) -> dict[str, Any]:
@@ -352,6 +366,115 @@ async def test_submit_requires_auth(
     )
 
     assert response.status_code in (401, 403)
+
+
+# --- Фильтры каталога (S42-004) ------------------------------------------
+
+
+async def test_filter_by_status_not_started(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Фильтр по статусу «не начата» отдаёт и задачи без прогресса"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter1")
+
+    listed = await client.get(
+        f"{TASKS_URL}?status=not_started", headers=_auth(token)
+    )
+    assert listed.status_code == 200, listed.text
+    ids = [item["id"] for item in listed.json()]
+    assert task["id"] in ids
+
+
+async def test_filter_by_status_excludes_other_statuses(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Решённая задача не попадает в фильтр «в процессе»"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter2")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    in_progress = await client.get(
+        f"{TASKS_URL}?status=in_progress", headers=_auth(token)
+    )
+    ids = [item["id"] for item in in_progress.json()]
+    assert task["id"] not in ids
+
+    completed = await client.get(
+        f"{TASKS_URL}?status=completed", headers=_auth(token)
+    )
+    ids = [item["id"] for item in completed.json()]
+    assert task["id"] in ids
+
+
+async def test_filter_by_status_is_per_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Статус фильтруется по прогрессу запрашивающего ученика"""
+    task = await _create_task(client, db_session)
+    solver = await _register_and_login(client, "filter_solver")
+    other = await _register_and_login(client, "filter_other")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(solver),
+    )
+
+    listed = await client.get(
+        f"{TASKS_URL}?status=completed", headers=_auth(other)
+    )
+    ids = [item["id"] for item in listed.json()]
+    assert task["id"] not in ids
+
+
+async def test_filter_by_status_rejects_unknown_value(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Неизвестный статус отклоняется валидацией"""
+    token = await _register_and_login(client, "filter3")
+
+    response = await client.get(
+        f"{TASKS_URL}?status=nonsense", headers=_auth(token)
+    )
+
+    assert response.status_code == 422
+
+
+async def test_filter_by_search_and_tag(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Поиск по названию и фильтр по тегу работают"""
+    task = await _create_task_with_tags(client, db_session)
+    token = await _register_and_login(client, "filter4")
+
+    by_search = await client.get(
+        f"{TASKS_URL}?q=Сумма", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in by_search.json()]
+
+    by_tag = await client.get(
+        f"{TASKS_URL}?tag=basics", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in by_tag.json()]
+
+
+async def test_filter_by_category(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Фильтр по категории работает"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter5")
+
+    listed = await client.get(
+        f"{TASKS_URL}?category=input_output", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in listed.json()]
 
 
 # --- Автосохранение черновика (S42-003) ---------------------------------
