@@ -80,4 +80,36 @@ describe('chatSocket', () => {
     expect(socket?.send('Вопрос', TASK_ID)).toBe(false);
     expect(FakeWebSocket.instances[0].sent).toHaveLength(0);
   });
+
+  it('останавливает генерацию командой stop (S43-002)', () => {
+    const socket = openChatSocket('55555555-5555-5555-5555-555555555555', {});
+    const ws = FakeWebSocket.instances[0];
+    ws.open();
+
+    expect(socket?.stop()).toBe(true);
+
+    expect(JSON.parse(ws.sent[0])).toEqual({ type: 'stop' });
+  });
+
+  it('не отправляет stop до открытия сокета (S43-002)', () => {
+    const socket = openChatSocket('55555555-5555-5555-5555-555555555555', {});
+
+    expect(socket?.stop()).toBe(false);
+    expect(FakeWebSocket.instances[0].sent).toHaveLength(0);
+  });
+
+  it('сообщает остановленную генерацию с частичным ответом (S43-002)', () => {
+    const onStopped = vi.fn();
+    openChatSocket('55555555-5555-5555-5555-555555555555', { onStopped });
+    const ws = FakeWebSocket.instances[0];
+    ws.open();
+
+    ws.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'stopped', content: 'Первая часть' }),
+      }),
+    );
+
+    expect(onStopped).toHaveBeenCalledWith('Первая часть', []);
+  });
 });

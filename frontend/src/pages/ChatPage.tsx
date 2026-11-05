@@ -32,6 +32,7 @@ export function ChatPage() {
   const deleteSession = useChatStore((state) => state.deleteSession);
   const renameSession = useChatStore((state) => state.renameSession);
   const togglePin = useChatStore((state) => state.togglePin);
+  const regenerate = useChatStore((state) => state.regenerate);
   const loadTaskContext = useChatStore((state) => state.loadTaskContext);
   const clearTaskContext = useChatStore((state) => state.clearTaskContext);
 
@@ -43,7 +44,7 @@ export function ChatPage() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
 
   const sessionId = active?.id ?? null;
-  const { send, connected } = useChatSession(sessionId);
+  const { send, stop, connected } = useChatSession(sessionId);
 
   useEffect(() => {
     void loadSessions();
@@ -157,13 +158,18 @@ export function ChatPage() {
                 : t('chat.noSession')}
             </h2>
           </div>
-          {active && (
+          {active && !streaming && (
             <span
               className={`text-xs ${connected ? 'text-emerald-600' : 'text-amber-600'}`}
               title={connected ? t('chat.connected') : t('chat.disconnected')}
             >
               {connected ? '● live' : '○ rest'}
             </span>
+          )}
+          {streaming && (
+            <Button onClick={stop} className="px-2 py-1 text-xs">
+              {t('chat.stop')}
+            </Button>
           )}
         </header>
 
@@ -197,6 +203,7 @@ export function ChatPage() {
                 messages={active.messages}
                 draft={draft}
                 streaming={streaming}
+                onRegenerate={(messageId) => void regenerate(messageId)}
               />
             </div>
             <MessageInput onSend={send} disabled={streaming} />

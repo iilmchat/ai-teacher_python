@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { useChatStore } from '@/store/chat';
-import type { ChatSession, ChatSessionWithMessages } from '@/types/api';
+import type { ChatMessage, ChatSession, ChatSessionWithMessages } from '@/types/api';
 
 const SESSION: ChatSession = {
   id: '55555555-5555-5555-5555-555555555555',
@@ -245,6 +245,66 @@ describe('chat store', () => {
     await useChatStore.getState().renameSession(SESSION.id, 'Новое имя');
 
     expect(useChatStore.getState().error).toBe('Не удалось обновить чат');
+  });
+
+  it('фиксирует остановленный ответ с пометкой stopped (S43-002)', () => {
+    useChatStore.setState({ active: { ...SESSION_WITH_MESSAGES, messages: [] } });
+
+    useChatStore.getState().startAssistantDraft();
+    useChatStore.getState().appendToken('Часть ответа');
+    useChatStore.getState().finishStream(undefined, [], true);
+
+    const last = useChatStore.getState().active?.messages.at(-1);
+    expect(last?.content).toBe('Часть ответа');
+    expect(last?.metadata).toEqual({ stopped: true });
+    expect(useChatStore.getState().streaming).toBe(false);
+    expect(useChatStore.getState().draft).toBe('');
+  });
+
+  it('перегенерирует ответ и заменяет его на месте (S43-002)', async () => {
+    const regenerated: ChatMessage = {
+      id: 'a1',
+      session_id: SESSION.id,
+      role: 'assistant',
+      content: 'Новый ответ',
+      code_blocks: [],
+      created_at: '2026-10-29T10:05:00',
+    };
+    const post = vi.spyOn(api, 'post').mockResolvedValue(regenerated);
+    useChatStore.setState({
+      active: {
+        ...SESSION_WITH_MESSAGES,
+        messages: [
+          {
+            id: 'a1',
+            session_id: SESSION.id,
+            role: 'assistant',
+            content: 'Старый ответ',
+            code_blocks: [],
+            created_at: '2026-10-29T10:01:00',
+          },
+        ],
+      },
+    });
+
+    await useChatStore.getState().regenerate('a1');
+
+    expect(post).toHaveBeenCalledWith(
+      `/chat/sessions/${SESSION.id}/messages/a1/regenerate`,
+    );
+    const messages = useChatStore.getState().active?.messages ?? [];
+    expect(messages).toHaveLength(1);
+    expect(messages[0].content).toBe('Новый ответ');
+  });
+
+  it('показывает ошибку, если регенерация не удалась (S43-002)', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(new Error('boom'));
+    useChatStore.setState({ active: SESSION_WITH_MESSAGES });
+
+    await useChatStore.getState().regenerate('a1');
+
+    expect(useChatStore.getState().error).toBe('Не удалось получить новый ответ');
+    expect(useChatStore.getState().loading).toBe(false);
   });
 
   it('удаляет сессию из списка и сбрасывает активную', async () => {

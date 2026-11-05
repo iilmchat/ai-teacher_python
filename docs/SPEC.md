@@ -92,6 +92,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | PATCH | `/chat/sessions/{id}` | `{title?, pinned?}` | 200 `ChatSession` (S43-001) |
 | DELETE | `/chat/sessions/{id}` | — | 204 |
 | POST | `/chat/sessions/{id}/messages` | `{content, task_id?}` | 201 `{user_message, assistant_message}` |
+| POST | `/chat/sessions/{id}/messages/{message_id}/regenerate` | — | 201 `ChatMessage` (S43-002) |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
 
 `GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
@@ -100,9 +101,11 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
 
 ```
-client → {"type":"chat","content":"...","task_id":"<uuid>"?} | {"type":"ping"}
+client → {"type":"chat","content":"...","task_id":"<uuid>"?} |
+         {"type":"stop"} | {"type":"ping"}
 server → {"type":"start"} | {"type":"token","content":"…"} |
          {"type":"done","content":"полный текст","warnings":[...]} |
+         {"type":"stopped","content":"частичный текст","warnings":[...]} |
          {"type":"error","detail":"…"} | {"type":"pong"}
 ```
 
@@ -131,8 +134,28 @@ metadata, warnings}`.
 - `metadata.provider` / `metadata.model` — фактический провайдер ответа;
 - `metadata.task_context` — `{task_id, title}` для вопроса, отправленного с
   контекстом задачи (S42-006); самого условия и кода ученика в метаданных нет;
+- `metadata.stopped` — ответ прерван учеником (S43-002);
+- `metadata.replaced` / `metadata.replaced_by` — ответ заменён
+  перегенерацией (S43-002);
 - `warnings` — коды нарушений политики уровня (S12-005), например
   `basic_full_solution`; ответ при этом не блокируется.
+
+**Остановка и регенерация (S43-002).**
+
+- `{"type":"stop"}` — клиент просит прервать генерацию. Сервер останавливает
+  поток на ближайшей дельте, сохраняет полученный текст как ответ ассистента
+  с пометкой `metadata.stopped = true` и присылает
+  `{"type":"stopped","content":"<частичный текст>"}`. Соединение остаётся
+  живым: после остановки можно отправить новое сообщение.
+- Если клиент закрыл соединение во время генерации, сервер тоже сохраняет
+  частичный ответ — с тем же признаком `stopped`.
+- `POST /chat/sessions/{id}/messages/{message_id}/regenerate` — новый ответ
+  ассистента на тот же вопрос с тем же уровнем. Вопрос ученика не
+  дублируется, прежний ответ в LLM не попадает.
+- Прежний ответ остаётся в истории, но помечается в `message_metadata`:
+  `replaced = true` и `replaced_by = <id нового ответа>`.
+- Ошибки: чужая сессия — 403; сообщение не найдено — 404; попытка
+  перегенерировать вопрос ученика — 422.
 
 **Контекст задачи (S42-006).**
 

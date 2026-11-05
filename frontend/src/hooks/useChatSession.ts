@@ -31,6 +31,8 @@ export function useChatSession(sessionId: string | null) {
       onStart: () => startAssistantDraft(),
       onToken: (delta) => appendToken(delta),
       onDone: (full, warnings) => finishStream(full, warnings),
+      // Остановка генерации (S43-002): сервер прислал частичный ответ.
+      onStopped: (partial, warnings) => finishStream(partial, warnings, true),
       onError: (detail) => failStream(detail),
     });
 
@@ -64,5 +66,11 @@ export function useChatSession(sessionId: string | null) {
     [addUserMessage, sendViaRest, startAssistantDraft, taskId],
   );
 
-  return { send, connected };
+  const stop = useCallback(() => {
+    // Остановка генерации (S43-002): сервер прервёт поток и пришлёт
+    // частичный ответ событием `stopped`.
+    socketRef.current?.stop();
+  }, []);
+
+  return { send, stop, connected };
 }

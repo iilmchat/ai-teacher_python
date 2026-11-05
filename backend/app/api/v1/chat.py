@@ -93,6 +93,28 @@ async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
     return payload
 
 
+@router.post(
+    "/sessions/{session_id}/messages/{message_id}/regenerate",
+    response_model=ChatMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def regenerate_message(
+    session_id: UUID,
+    message_id: UUID,
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+) -> ChatMessageResponse:
+    """Перегенерировать ответ ассистента (S43-002).
+
+    Вопрос ученика не дублируется: ассистент отвечает заново на тот же
+    вопрос с тем же уровнем. Прежний ответ остаётся в истории, но
+    помечается в метаданных как заменённый.
+    """
+    session = await service.get_session(session_id, current_user)
+    message = await service.regenerate_reply(session, message_id)
+    return ChatMessageResponse.from_message(message)
+
+
 @router.get("/search", response_model=ChatSearchResponse)
 async def search_chat_history(
     current_user: CurrentUser,

@@ -413,11 +413,90 @@ async def test_other_user_session_forbidden(
         json={"title": "чужой заголовок"},
         headers=_auth(other_token),
     )
+    regenerate_response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages/{uuid4()}/regenerate",
+        headers=_auth(other_token),
+    )
 
     assert get_response.status_code == 403
     assert post_response.status_code == 403
     assert delete_response.status_code == 403
     assert patch_response.status_code == 403
+    assert regenerate_response.status_code == 403
+
+
+async def test_regenerate_creates_new_answer_and_marks_old_replaced(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Регенерация ответа не дублирует вопрос, старый ответ помечен (S43-002)"""
+    token = await _register_and_login(client, username="regen")
+    session = await _create_session(client, token)
+    sent = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Почему цикл не завершается?"},
+        headers=_auth(token),
+    )
+    assert sent.status_code == 201, sent.text
+    old_answer = sent.json()["assistant_message"]
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages/{old_answer['id']}/regenerate",
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 201, response.text
+    new_answer = response.json()
+    assert new_answer["id"] != old_answer["id"]
+    assert new_answer["role"] == "assistant"
+
+    detail = await client.get(
+        f"/api/v1/chat/sessions/{session['id']}", headers=_auth(token)
+    )
+    messages = detail.json()["messages"]
+    questions = [item for item in messages if item["role"] == "user"]
+    answers = [item for item in messages if item["role"] == "assistant"]
+    # Вопрос остался один — регенерация его не дублирует.
+    assert len(questions) == 1
+    assert len(answers) == 2
+    replaced = next(item for item in answers if item["id"] == old_answer["id"])
+    assert replaced["metadata"]["replaced"] is True
+    assert replaced["metadata"]["replaced_by"] == new_answer["id"]
+
+
+async def test_regenerate_rejects_user_message(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Регенерировать можно только ответ ассистента (422)"""
+    token = await _register_and_login(client, username="regenuser")
+    session = await _create_session(client, token)
+    sent = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Вопрос ученика"},
+        headers=_auth(token),
+    )
+    question = sent.json()["user_message"]
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages/{question['id']}/regenerate",
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+
+
+async def test_regenerate_unknown_message_returns_404(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Несуществующее сообщение — 404"""
+    token = await _register_and_login(client, username="regen404")
+    session = await _create_session(client, token)
+
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages/{uuid4()}/regenerate",
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
 
 
 async def test_missing_session_returns_404(

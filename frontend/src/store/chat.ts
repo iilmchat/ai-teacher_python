@@ -49,8 +49,10 @@ interface ChatState {
   addUserMessage: (content: string) => void;
   startAssistantDraft: () => void;
   appendToken: (delta: string) => void;
-  finishStream: (full?: string, warnings?: string[]) => void;
+  finishStream: (full?: string, warnings?: string[], stopped?: boolean) => void;
   failStream: (message: string) => void;
+  /** Перегенерировать ответ ассистента (S43-002) */
+  regenerate: (messageId: string) => Promise<void>;
   /** Отправка без стриминга (fallback); taskId — контекст задачи */
   sendViaRest: (content: string, taskId?: string | null) => Promise<void>;
 }
@@ -79,6 +81,7 @@ function localMessage(
   role: ChatMessage['role'],
   content: string,
   warnings: string[] = [],
+  metadata: Record<string, unknown> = {},
 ): ChatMessage {
   return {
     id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -87,7 +90,7 @@ function localMessage(
     content,
     code_blocks: [],
     created_at: nowIso(),
-    metadata: {},
+    metadata,
     warnings,
   };
 }
@@ -236,7 +239,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ draft: state.draft + delta }));
   },
 
-  finishStream(full, warnings = []) {
+  finishStream(full, warnings = [], stopped = false) {
     const { active, draft } = get();
     const content = (full ?? draft).trim();
     if (!active || !content) {
@@ -248,7 +251,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         ...active,
         messages: [
           ...active.messages,
-          localMessage(active.id, 'assistant', content, warnings),
+          localMessage(
+            active.id,
+            'assistant',
+            content,
+            warnings,
+            stopped ? { stopped: true } : {},
+          ),
         ],
       },
       draft: '',
@@ -258,6 +267,33 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   failStream(message) {
     set({ streaming: false, draft: '', error: message });
+  },
+
+  async regenerate(messageId) {
+    const active = get().active;
+    if (!active) {
+      return;
+    }
+    set({ loading: true, error: null });
+    try {
+      const updated = await api.post<ChatMessage>(
+        `/chat/sessions/${active.id}/messages/${messageId}/regenerate`,
+      );
+      set((state) => ({
+        active: state.active
+          ? {
+              ...state.active,
+              // Новый ответ занимает место старого — диалог не разрастается.
+              messages: state.active.messages.map((message) =>
+                message.id === messageId ? updated : message,
+              ),
+            }
+          : null,
+        loading: false,
+      }));
+    } catch {
+      set({ loading: false, error: i18n.t('errors.chatRegenerate') });
+    }
   },
 
   async sendViaRest(content, taskId) {

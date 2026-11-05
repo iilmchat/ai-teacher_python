@@ -65,7 +65,11 @@ class ChatSession(Base):
 
     # Relationships
     messages: Mapped[list["ChatMessage"]] = relationship(
-        back_populates="session", cascade="all, delete-orphan"
+        back_populates="session",
+        cascade="all, delete-orphan",
+        # Порядок диалога — по времени создания: без ORDER BY PostgreSQL
+        # отдаёт строки в физическом порядке, а он не гарантирован (S43-002).
+        order_by="ChatMessage.created_at",
     )
 
     def __repr__(self) -> str:

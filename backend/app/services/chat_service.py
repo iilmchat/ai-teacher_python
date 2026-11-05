@@ -1,12 +1,13 @@
 """
-Сервис чата (S4-002, S4-004, S5-003, S12-005, S12-006).
+Сервис чата (S4-002, S4-004, S5-003, S12-005, S12-006, S43-002).
 
 Отвечает за сессии, историю сообщений, сборку контекста с учётом уровня
 и вызов LLM. Провайдер передаётся снаружи — это делает слой тестируемым
 без сети.
 """
 
-from collections.abc import AsyncIterator
+import asyncio
+from collections.abc import AsyncGenerator
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -151,11 +152,9 @@ class ChatService:
         self, session: ChatSession, content: str
     ) -> None:
         """Обновить updated_at и, если нужно, авто-заголовок (S43-001)."""
-        session.updated_at = datetime.utcnow()
         if not session.title:
             session.title = build_session_title(content)
-        await self.db.commit()
-        await self.db.refresh(session)
+        await self._touch_session(session)
 
     async def get_history(self, session_id: UUID) -> list[ChatMessage]:
         """Сообщения сессии в хронологическом порядке"""
@@ -219,6 +218,53 @@ class ChatService:
             )
         return metadata
 
+    async def _save_assistant_answer(
+        self,
+        session: ChatSession,
+        answer: str,
+        level: UserLevel,
+        *,
+        stopped: bool = False,
+    ) -> ChatMessage:
+        """Сохранить ответ ассистента (полный или частичный).
+
+        `stopped=True` — ответ прерван учеником (S43-002): в метаданных
+        остаётся пометка `stopped`, чтобы интерфейс показал состояние.
+        """
+        metadata = self._assistant_metadata(level, answer)
+        if stopped:
+            metadata["stopped"] = True
+        embedding = await try_embed(self.embedding_provider, answer)
+        message = await self.messages.create_message(
+            session_id=session.id,
+            role=MessageRole.ASSISTANT,
+            content=answer,
+            code_blocks=extract_code_blocks(answer),
+            metadata=metadata,
+            embedding=embedding,
+        )
+        await self._touch_session(session)
+        return message
+
+    async def save_reply(
+        self, session: ChatSession, answer: str, *, stopped: bool = False
+    ) -> ChatMessage:
+        """Сохранить ответ ассистента, полученный потоком (S43-002).
+
+        Ответ сохраняет вызывающий, а не сам генератор: так частичный ответ
+        фиксируется даже при обрыве WebSocket-соединения.
+        """
+        level = resolve_level(parse_level(session.level))
+        return await self._save_assistant_answer(
+            session, answer, level, stopped=stopped
+        )
+
+    async def _touch_session(self, session: ChatSession) -> None:
+        """Обновить `updated_at` сессии (новое сообщение изменило диалог)"""
+        session.updated_at = datetime.utcnow()
+        await self.db.commit()
+        await self.db.refresh(session)
+
     async def send_message(
         self, session: ChatSession, content: str, task_id: UUID | None = None
     ) -> tuple[ChatMessage, ChatMessage]:
@@ -257,22 +303,74 @@ class ChatService:
         )
 
         answer = await self.provider.generate(llm_messages)
-        answer_embedding = await try_embed(self.embedding_provider, answer)
-        assistant_message = await self.messages.create_message(
-            session_id=session.id,
-            role=MessageRole.ASSISTANT,
-            content=answer,
-            code_blocks=extract_code_blocks(answer),
-            metadata=self._assistant_metadata(level, answer),
-            embedding=answer_embedding,
-        )
+        assistant_message = await self._save_assistant_answer(session, answer, level)
         return user_message, assistant_message
 
+    async def regenerate_reply(
+        self, session: ChatSession, message_id: UUID
+    ) -> ChatMessage:
+        """Перегенерировать ответ ассистента (S43-002).
+
+        Вопрос ученика не дублируется: LLM получает тот же контекст, что и
+        при первом ответе. Прежний ответ остаётся в истории, но помечается в
+        `message_metadata` как заменённый (`replaced`, `replaced_by`).
+        """
+        history = await self.get_history(session.id)
+        index = next(
+            (position for position, item in enumerate(history) if item.id == message_id),
+            None,
+        )
+        if index is None:
+            raise NotFoundError("Сообщение не найдено")
+        target = history[index]
+        if target.role != MessageRole.ASSISTANT:
+            raise ValidationError("Перегенерировать можно только ответ ассистента")
+
+        question = next(
+            (
+                item
+                for item in reversed(history[:index])
+                if item.role == MessageRole.USER
+            ),
+            None,
+        )
+        if question is None:
+            raise ValidationError("Нет вопроса, на который можно ответить заново")
+
+        level = resolve_level(parse_level(session.level))
+        # Старый ответ в контекст не попадает: перегенерация его не видит.
+        llm_messages = build_messages(
+            level,
+            self._history_for_llm(history[:index]),
+            question.content,
+        )
+        previous_metadata = dict(target.message_metadata or {})
+        answer = await self.provider.generate(llm_messages)
+        new_message = await self._save_assistant_answer(session, answer, level)
+
+        metadata = dict(previous_metadata)
+        metadata["replaced"] = True
+        metadata["replaced_by"] = str(new_message.id)
+        target.message_metadata = metadata
+        flag_modified(target, "message_metadata")
+        await self.db.commit()
+        await self.db.refresh(target)
+        return new_message
+
     async def stream_reply(
-        self, session: ChatSession, content: str, task_id: UUID | None = None
-    ) -> AsyncIterator[str]:
+        self,
+        session: ChatSession,
+        content: str,
+        task_id: UUID | None = None,
+        stop_event: asyncio.Event | None = None,
+    ) -> AsyncGenerator[str, None]:
         """Потоковый ответ: сообщение ученика сохраняется сразу,
-        ответ ассистента — по завершении потока.
+        дельты отдаются по мере поступления.
+
+        `stop_event` (S43-002) — сигнал остановки: генерация прерывается на
+        ближайшей дельте. Ответ ассистента сохраняет вызывающий
+        (`save_reply`), чтобы частичный ответ фиксировался и при обрыве
+        соединения.
 
         `task_id` (S42-006) — контекст задачи для этого ответа; в историю
         он попадает только как метаданные вопроса.
@@ -304,19 +402,8 @@ class ChatService:
             task_context=task_context,
         )
 
-        chunks: list[str] = []
         async for delta in self.provider.stream(llm_messages):
-            chunks.append(delta)
             yield delta
-
-        answer = "".join(chunks).strip()
-        if answer:
-            answer_embedding = await try_embed(self.embedding_provider, answer)
-            await self.messages.create_message(
-                session_id=session.id,
-                role=MessageRole.ASSISTANT,
-                content=answer,
-                code_blocks=extract_code_blocks(answer),
-                metadata=self._assistant_metadata(level, answer),
-                embedding=answer_embedding,
-            )
+            if stop_event is not None and stop_event.is_set():
+                logger.info("chat_stream_stopped", session_id=str(session.id))
+                break

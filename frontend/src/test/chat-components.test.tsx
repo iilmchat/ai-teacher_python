@@ -91,6 +91,46 @@ describe('MessageList', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(/готовое решение/);
   });
+
+  it('показывает состояние «ответ остановлен» (S43-002)', () => {
+    render(
+      <MessageList
+        messages={[
+          {
+            ...message('assistant', 'Часть ответа', 'm4'),
+            metadata: { stopped: true },
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveTextContent('Ответ остановлен');
+  });
+
+  it('предлагает перегенерировать ответ (S43-002)', async () => {
+    const onRegenerate = vi.fn();
+    render(
+      <MessageList
+        messages={[message('assistant', 'ответ', 'm5')]}
+        onRegenerate={onRegenerate}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+
+    expect(onRegenerate).toHaveBeenCalledWith('m5');
+  });
+
+  it('не предлагает перегенерировать вопрос ученика (S43-002)', () => {
+    render(
+      <MessageList
+        messages={[message('user', 'вопрос', 'm6')]}
+        onRegenerate={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Повторить' })).not.toBeInTheDocument();
+  });
 });
 
 describe('MessageInput', () => {
