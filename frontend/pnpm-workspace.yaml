@@ -2,6 +2,12 @@
 packages:
   - '.'
 
+# Принудительная версия DOMPurify: monaco-editor тянет 3.4.15, а в ней
+# advisory GHSA-mrv2-3pqr-j5jr (high) и GHSA-cg2g-xh64-v4q7 (critical).
+# Исправленные версии — 3.4.17+.
+overrides:
+  dompurify: ^3.4.17
+
 # Разрешаем postinstall только нужным пакетам (supply-chain safety)
 allowBuilds:
   esbuild: true

@@ -73,9 +73,14 @@ class Settings(BaseSettings):
 
     @property
     def database_url_sync(self) -> str:
-        """Sync URL для Alembic"""
+        """Sync URL для Alembic.
+
+        Драйвер указан явно: SQLAlchemy 2.1 для схемы `postgresql://` по
+        умолчанию выбирает psycopg 3, которого в проекте нет — в зависимостях
+        psycopg2-binary.
+        """
         return (
-            f"postgresql://{self.postgres_user}:{self.postgres_password}"
+            f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 

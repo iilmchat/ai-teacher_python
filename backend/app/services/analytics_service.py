@@ -49,7 +49,9 @@ class AnalyticsService:
         result = await self.db.execute(
             select(Task.difficulty, func.count()).group_by(Task.difficulty)
         )
-        by_difficulty = {difficulty: int(count) for difficulty, count in result.all()}
+        by_difficulty = {
+            difficulty.value: int(count) for difficulty, count in result.all()
+        }
         active = await self._count(
             select(func.count()).select_from(Task).where(Task.is_active.is_(True))
         )
