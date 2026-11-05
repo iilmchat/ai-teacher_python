@@ -11,12 +11,14 @@ from app.core.executor import SandboxedExecutor
 from app.core.test_runner import CaseRunOutcome, run_test_cases
 from app.db.repositories.task import (
     ProgressRepository,
+    TaskAttemptRepository,
     TaskRepository,
     TaskVersionRepository,
 )
 from app.errors import NotFoundError, ValidationError
 from app.models.task import (
     Task,
+    TaskAttempt,
     TaskDifficulty,
     TaskStatus,
     TaskVersion,
@@ -24,8 +26,14 @@ from app.models.task import (
 )
 from app.models.user import User
 from app.schemas.task import (
+    AttemptDetail,
+    AttemptItem,
+    AttemptList,
+    DraftStatus,
     ProgressItem,
     ProgressSummary,
+    RecommendedTask,
+    RecommendedTaskList,
     SubmitResponse,
     TaskCreate,
     TaskDetail,
@@ -37,6 +45,20 @@ from app.schemas.task import (
 )
 from app.services.cache import invalidate_tasks_cache
 
+#: Порядок сложности: easy -> medium -> hard.
+_DIFFICULTY_ORDER: dict[TaskDifficulty, int] = {
+    TaskDifficulty.EASY: 0,
+    TaskDifficulty.MEDIUM: 1,
+    TaskDifficulty.HARD: 2,
+}
+
+
+def _difficulty_rank(task: Task | None) -> int:
+    """Ранг сложности задачи (0 — самая простая)."""
+    if task is None:
+        return -1
+    return _DIFFICULTY_ORDER.get(task.difficulty, 0)
+
 
 class TaskService:
     """Бизнес-логика задач"""
@@ -46,6 +68,7 @@ class TaskService:
         self.executor = executor
         self.tasks = TaskRepository(db)
         self.progress = ProgressRepository(db)
+        self.attempts = TaskAttemptRepository(db)
         self.versions = TaskVersionRepository(db)
 
     # --- Чтение ---------------------------------------------------------
@@ -58,15 +81,22 @@ class TaskService:
         category: str | None = None,
         tag: str | None = None,
         search: str | None = None,
+        status: TaskStatus | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[TaskListItem]:
-        """Список активных задач со статусом прохождения"""
+        """Список активных задач со статусом прохождения.
+
+        `status` фильтрует по прогрессу самого ученика: без
+        записи прогресса задача считается «не начата».
+        """
         tasks = await self.tasks.list_tasks(
             difficulty=difficulty,
             category=category,
             tag=tag,
             search=search,
+            user_id=user.id,
+            status=status,
             skip=skip,
             limit=limit,
         )
@@ -92,6 +122,105 @@ class TaskService:
         """Категории активных задач"""
         return await self.tasks.list_categories()
 
+    async def recommended_tasks(
+        self, user: User, limit: int = 5
+    ) -> RecommendedTaskList:
+        """Рекомендации следующих задач (S42-005).
+
+        Правила (детерминированные, без случайности):
+
+        1. Решенные задачи не рекомендуются.
+        2. Сложность не выше, чем у последней решённой + одна ступень.
+        3. Приоритет: начатые задачи, затем совпадение тегов с недавно
+           решёнными, затем близость по сложности.
+        4. Порядок одинаковых кандидатов — по дате создания, затем по id.
+
+        Каждая рекомендация объясняет, почему она предложена.
+        """
+        progress_map = await self.progress.get_user_progress_map(user.id)
+        candidates = await self.tasks.list_tasks(limit=1000)
+
+        solved: list[tuple[Task, datetime]] = []
+        for task in candidates:
+            record = progress_map.get(task.id)
+            if record is None:
+                continue
+            if record.status == TaskStatus.COMPLETED:
+                solved.append((task, record.completed_at or record.updated_at))
+
+        # Последняя решённая задача задаёт верхнюю границу сложности.
+        solved.sort(key=lambda pair: (pair[1], pair[0].id))
+        last_solved = solved[-1][0] if solved else None
+        max_rank = _difficulty_rank(last_solved) + 1 if last_solved else 2
+
+        # Теги недавно решённых задач — подсказка темы.
+        recent_tags: set[str] = set()
+        for task, _ in solved[-3:]:
+            recent_tags.update(tag.lower() for tag in (task.tags or []))
+
+        scored: list[tuple[tuple[int, int, float, str, UUID], RecommendedTask]] = []
+        for task in candidates:
+            record = progress_map.get(task.id)
+            if record is not None and record.status == TaskStatus.COMPLETED:
+                continue
+            rank = _difficulty_rank(task)
+            if rank > max_rank:
+                continue
+
+            overlap = recent_tags.intersection(
+                tag.lower() for tag in (task.tags or [])
+            )
+            in_progress = record is not None
+
+            if in_progress:
+                reason = "continue"
+                reason_text = "Вы уже начали эту задачу — продолжите с того места"
+                priority = 0
+            elif overlap:
+                reason = "same_topic"
+                reason_text = (
+                    "Та же тема, что и в недавно решённых задачах"
+                )
+                priority = 1
+            elif not solved:
+                reason = "starter"
+                reason_text = "С чего начать: простая задача по теме"
+                priority = 2
+            elif rank <= _difficulty_rank(last_solved):
+                reason = "easier"
+                reason_text = "Проще, чем последняя решённая задача"
+                priority = 3
+            else:
+                reason = "next_step"
+                reason_text = "Следующий шаг по сложности"
+                priority = 4
+
+            # Чем меньше значение, тем раньше рекомендация.
+            sort_key = (
+                priority,
+                -len(overlap),
+                float(rank),
+                task.created_at.isoformat(),
+                task.id,
+            )
+            scored.append(
+                (
+                    sort_key,
+                    RecommendedTask(
+                        id=task.id,
+                        title=task.title,
+                        difficulty=task.difficulty,
+                        category=task.category,
+                        tags=list(task.tags or []),
+                        reason=reason,
+                        reason_text=reason_text,
+                    ),
+                )
+            )
+
+        scored.sort(key=lambda pair: pair[0])
+        items = [item for _, item in scored[:limit]]
+        return RecommendedTaskList(items=items)
     async def _get_task_or_404(self, task_id: UUID) -> Task:
         task = await self.tasks.get(task_id)
         if task is None:
@@ -115,6 +244,8 @@ class TaskService:
             status=record.status if record else TaskStatus.NOT_STARTED,
             attempts=record.attempts if record else 0,
             tags=list(task.tags or []),
+            draft_code=record.draft_code if record else None,
+            draft_updated_at=record.draft_updated_at if record else None,
         )
 
     async def get_hint(self, task_id: UUID, index: int) -> tuple[str, int]:
@@ -148,10 +279,7 @@ class TaskService:
     ) -> SubmitResponse:
         """Проверить решение, обновить попытки и статус"""
         task = await self._get_task_or_404(task_id)
-        if not task.test_cases:
-            raise ValidationError("У задачи нет тест-кейсов для проверки")
-
-        outcome = await run_test_cases(self.executor, code, list(task.test_cases))
+        outcome = await self._run_cases(task, code)
 
         record = await self.progress.get_by_user_and_task(user.id, task.id)
         if record is None:
@@ -165,6 +293,9 @@ class TaskService:
 
         record.attempts += 1
         record.updated_at = datetime.utcnow()
+        # Отправка засчитана — черновик больше не нужен (S42-003).
+        record.draft_code = None
+        record.draft_updated_at = None
 
         if outcome.passed:
             record.status = TaskStatus.COMPLETED
@@ -173,6 +304,20 @@ class TaskService:
                 record.best_solution = code
         elif record.status == TaskStatus.NOT_STARTED:
             record.status = TaskStatus.IN_PROGRESS
+
+        # История попыток (S42-002): каждая засчитанная отправка попадает
+        # в журнал с кодом и разбором по кейсам.
+        self.db.add(
+            TaskAttempt(
+                user_id=user.id,
+                task_id=task.id,
+                code=code,
+                passed=outcome.passed,
+                passed_count=outcome.passed_count,
+                total_count=outcome.total_count,
+                results=[item.model_dump() for item in self._to_results(outcome)],
+            )
+        )
 
         await self.db.commit()
         await self.db.refresh(record)
@@ -190,6 +335,146 @@ class TaskService:
                     "achievement_evaluation_failed", user_id=str(user.id)
                 )
 
+        return SubmitResponse(
+            passed=outcome.passed,
+            passed_count=outcome.passed_count,
+            total_count=outcome.total_count,
+            attempts=record.attempts,
+            status=record.status,
+            results=self._to_results(outcome),
+            message=self._build_message(outcome),
+            practice=False,
+        )
+
+    async def check_solution(
+        self, task_id: UUID, user: User, code: str
+    ) -> SubmitResponse:
+        """Пробная проверка (S42-001): попытка не засчитывается.
+
+        Отличается от `submit_solution` только учётом прогресса: счётчик
+        попыток и статус задачи не меняются, достижения не начисляются.
+        Результат тот же — ученик видит тот же разбор по тест-кейсам.
+        """
+        task = await self._get_task_or_404(task_id)
+        outcome = await self._run_cases(task, code)
+
+        record = await self.progress.get_by_user_and_task(user.id, task.id)
+        attempts = record.attempts if record else 0
+        status = record.status if record else TaskStatus.NOT_STARTED
+
+        return SubmitResponse(
+            passed=outcome.passed,
+            passed_count=outcome.passed_count,
+            total_count=outcome.total_count,
+            attempts=attempts,
+            status=status,
+            results=self._to_results(outcome),
+            message=self._build_message(outcome, practice=True),
+            practice=True,
+        )
+
+    async def list_attempts(
+        self, task_id: UUID, user: User, skip: int = 0, limit: int = 20
+    ) -> AttemptList:
+        """История попыток ученика по задаче (S42-002), новые сверху"""
+        await self._get_task_or_404(task_id)
+        items = await self.attempts.list_for_user_and_task(
+            user.id, task_id, skip=skip, limit=limit
+        )
+        total = await self.attempts.count_for_user_and_task(user.id, task_id)
+        return AttemptList(
+            items=[AttemptItem.model_validate(item) for item in items],
+            total=total,
+        )
+
+    async def get_attempt(
+        self, task_id: UUID, attempt_id: UUID, user: User
+    ) -> AttemptDetail:
+        """Детальная попытка с кодом и разбором по кейсам.
+
+        Попытка принадлежит ученику: чужая недоступна (404), чтобы по
+        идентификатору нельзя было проверить существование чужой записи.
+        """
+        await self._get_task_or_404(task_id)
+        attempt = await self.attempts.get(attempt_id)
+        if (
+            attempt is None
+            or attempt.task_id != task_id
+            or attempt.user_id != user.id
+        ):
+            raise NotFoundError("Попытка не найдена")
+
+        results = [TestCaseResult(**item) for item in (attempt.results or [])]
+        return AttemptDetail(
+            id=attempt.id,
+            task_id=attempt.task_id,
+            passed=attempt.passed,
+            passed_count=attempt.passed_count,
+            total_count=attempt.total_count,
+            created_at=attempt.created_at,
+            code=attempt.code,
+            results=results,
+        )
+
+    async def save_draft(
+        self, task_id: UUID, user: User, code: str
+    ) -> DraftStatus:
+        """Сохранить черновик решения (S42-003).
+
+        Черновик не является решением: счётчик попыток и статус задачи
+        не меняются, в историю попыток запись не попадает. Пустой код
+        удаляет черновик.
+        """
+        task = await self._get_task_or_404(task_id)
+
+        record = await self.progress.get_by_user_and_task(user.id, task.id)
+        if record is None:
+            record = UserTaskProgress(
+                user_id=user.id,
+                task_id=task.id,
+                status=TaskStatus.NOT_STARTED,
+                attempts=0,
+            )
+            self.db.add(record)
+
+        if not code.strip():
+            record.draft_code = None
+            record.draft_updated_at = None
+        else:
+            record.draft_code = code
+            record.draft_updated_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(record)
+
+        return DraftStatus(
+            has_draft=record.draft_code is not None,
+            updated_at=record.draft_updated_at,
+        )
+
+    async def clear_draft(self, task_id: UUID, user: User) -> DraftStatus:
+        """Очистить черновик решения (S42-003)."""
+        await self._get_task_or_404(task_id)
+
+        record = await self.progress.get_by_user_and_task(user.id, task_id)
+        if record is None:
+            return DraftStatus(has_draft=False, updated_at=None)
+
+        record.draft_code = None
+        record.draft_updated_at = None
+        await self.db.commit()
+
+        return DraftStatus(has_draft=False, updated_at=None)
+
+    async def _run_cases(self, task: Task, code: str) -> CaseRunOutcome:
+        """Прогнать код по тест-кейсам задачи"""
+        if not task.test_cases:
+            raise ValidationError("У задачи нет тест-кейсов для проверки")
+        return await run_test_cases(self.executor, code, list(task.test_cases))
+
+    @staticmethod
+    def _build_message(outcome: CaseRunOutcome, *, practice: bool = False) -> str:
+        """Человекочитаемый итог проверки"""
         if outcome.passed:
             message = (
                 "Задача решена! Все тесты пройдены "
@@ -202,16 +487,9 @@ class TaskService:
                 f"Пройдено {outcome.passed_count} из {outcome.total_count} тестов. "
                 "Посмотрите, на каком вводе расходится вывод."
             )
-
-        return SubmitResponse(
-            passed=outcome.passed,
-            passed_count=outcome.passed_count,
-            total_count=outcome.total_count,
-            attempts=record.attempts,
-            status=record.status,
-            results=self._to_results(outcome),
-            message=message,
-        )
+        if practice:
+            return f"{message} Пробная проверка — попытка не засчитывается."
+        return message
 
     # --- Прогресс -------------------------------------------------------
 

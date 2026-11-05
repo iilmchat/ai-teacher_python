@@ -26,6 +26,7 @@ from app.models.audit import AuditLog
 from app.models.chat import ChatMessage
 from app.models.code import CodeExecution
 from app.models.engagement import Notification
+from app.models.task import TaskAttempt
 
 logger = structlog.get_logger(__name__)
 
@@ -64,6 +65,12 @@ TABLES: tuple[RetentionTable, ...] = (
     ),
     RetentionTable(
         "audit_log", AuditLog, AuditLog.created_at, "retention_audit_log_days"
+    ),
+    RetentionTable(
+        "task_attempts",
+        TaskAttempt,
+        TaskAttempt.created_at,
+        "retention_task_attempts_days",
     ),
 )
 

@@ -7,6 +7,7 @@
 
 from collections.abc import Iterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -107,6 +108,44 @@ async def _create_teacher_token(
     token = await _register_and_login(client, username)
     await _make_teacher(db, username)
     return token
+
+
+async def _create_task_with_tags(
+    client: AsyncClient, db: AsyncSession, teacher_name: str = "tagteacher"
+) -> dict[str, Any]:
+    """Задача с тегами — для проверки фильтра по тегу"""
+    token = await _create_teacher_token(client, db, teacher_name)
+    payload = {**TASK_PAYLOAD, "tags": ["python", "basics"]}
+    response = await client.post(
+        TASKS_URL, json=payload, headers=_auth(token)
+    )
+    assert response.status_code == 201, response.text
+    data: dict[str, Any] = response.json()
+    return data
+
+
+async def _create_task_custom(
+    client: AsyncClient,
+    db: AsyncSession,
+    difficulty: str,
+    title: str,
+    tags: list[str],
+    teacher_name: str,
+) -> dict[str, Any]:
+    """Задача с заданными сложностью, названием и тегами."""
+    token = await _create_teacher_token(client, db, teacher_name)
+    payload = {
+        **TASK_PAYLOAD,
+        "title": title,
+        "difficulty": difficulty,
+        "tags": tags,
+    }
+    response = await client.post(
+        TASKS_URL, json=payload, headers=_auth(token)
+    )
+    assert response.status_code == 201, response.text
+    data: dict[str, Any] = response.json()
+    return data
 
 
 async def _create_task(
@@ -351,6 +390,858 @@ async def test_submit_requires_auth(
     )
 
     assert response.status_code in (401, 403)
+
+
+# --- Рекомендации следующих задач (S42-005) ------------------------------
+
+
+async def test_recommended_empty_without_tasks(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без задач рекомендаций нет"""
+    token = await _register_and_login(client, "rec1")
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+
+
+async def test_recommended_excludes_solved_tasks(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Решённые задачи не рекомендуются"""
+    solved = await _create_task_custom(
+        client, db_session, "easy", "Решённая задача", ["python"], "rec_teacher1"
+    )
+    await _create_task_custom(
+        client, db_session, "easy", "Нерешённая задача", ["python"], "rec_teacher1"
+    )
+    token = await _register_and_login(client, "rec2")
+
+    await client.post(
+        f"{TASKS_URL}/{solved['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    ids = [item["id"] for item in response.json()["items"]]
+    assert solved["id"] not in ids
+    assert len(ids) == 1
+
+
+async def test_recommended_respects_difficulty_ceiling(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """После простой задачи не предлагается самая сложная"""
+    easy_task = await _create_task_custom(
+        client, db_session, "easy", "Лёгкая задача", ["basics"], "rec_teacher2"
+    )
+    hard_task = await _create_task_custom(
+        client, db_session, "hard", "Сложная задача", ["advanced"], "rec_teacher2"
+    )
+    token = await _register_and_login(client, "rec3")
+
+    await client.post(
+        f"{TASKS_URL}/{easy_task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    ids = [item["id"] for item in response.json()["items"]]
+    assert hard_task["id"] not in ids
+    assert easy_task["id"] not in ids
+
+
+async def test_recommended_prefers_same_topic(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Задача с той же темой, что у решённой, идёт раньше"""
+    solved = await _create_task_custom(
+        client, db_session, "easy", "Задача про циклы", ["loops"], "rec_teacher3"
+    )
+    same_topic = await _create_task_custom(
+        client, db_session, "easy", "Ещё про циклы", ["loops"], "rec_teacher3"
+    )
+    other_topic = await _create_task_custom(
+        client, db_session, "easy", "Про строки", ["strings"], "rec_teacher3"
+    )
+    token = await _register_and_login(client, "rec4")
+
+    await client.post(
+        f"{TASKS_URL}/{solved['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    items = response.json()["items"]
+    ids = [item["id"] for item in items]
+    assert same_topic["id"] in ids
+    assert ids.index(same_topic["id"]) < ids.index(other_topic["id"])
+
+
+async def test_recommended_is_deterministic(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Два одинаковых запроса дают одинаковый порядок"""
+    await _create_task_custom(
+        client, db_session, "easy", "Первая", ["a"], "rec_teacher4"
+    )
+    await _create_task_custom(
+        client, db_session, "easy", "Вторая", ["b"], "rec_teacher4"
+    )
+    token = await _register_and_login(client, "rec5")
+
+    first = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    second = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+
+    assert first.json()["items"] == second.json()["items"]
+
+
+async def test_recommended_includes_reason(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """У каждой рекомендации есть причина"""
+    await _create_task_custom(
+        client, db_session, "easy", "Задача для рекомендации", ["python"], "rec_teacher5"
+    )
+    token = await _register_and_login(client, "rec6")
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    items = response.json()["items"]
+    assert items
+    for item in items:
+        assert item["reason"] in {
+            "continue",
+            "same_topic",
+            "easier",
+            "next_step",
+            "starter",
+        }
+        assert item["reason_text"]
+
+
+async def test_recommended_limit_and_validation(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Лимит ограничен, неверное значение отклоняется"""
+    token = await _register_and_login(client, "rec7")
+
+    too_many = await client.get(
+        f"{TASKS_URL}/recommended?limit=100", headers=_auth(token)
+    )
+    assert too_many.status_code == 422
+
+    ok_response = await client.get(
+        f"{TASKS_URL}/recommended?limit=3", headers=_auth(token)
+    )
+    assert ok_response.status_code == 200
+
+
+async def test_recommended_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена рекомендации недоступны"""
+    response = await client.get(f"{TASKS_URL}/recommended")
+
+    assert response.status_code in (401, 403)
+
+
+# --- Фильтры каталога (S42-004) ------------------------------------------
+
+
+async def test_filter_by_status_not_started(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Фильтр по статусу «не начата» отдаёт и задачи без прогресса"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter1")
+
+    listed = await client.get(
+        f"{TASKS_URL}?status=not_started", headers=_auth(token)
+    )
+    assert listed.status_code == 200, listed.text
+    ids = [item["id"] for item in listed.json()]
+    assert task["id"] in ids
+
+
+async def test_filter_by_status_excludes_other_statuses(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Решённая задача не попадает в фильтр «в процессе»"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter2")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    in_progress = await client.get(
+        f"{TASKS_URL}?status=in_progress", headers=_auth(token)
+    )
+    ids = [item["id"] for item in in_progress.json()]
+    assert task["id"] not in ids
+
+    completed = await client.get(
+        f"{TASKS_URL}?status=completed", headers=_auth(token)
+    )
+    ids = [item["id"] for item in completed.json()]
+    assert task["id"] in ids
+
+
+async def test_filter_by_status_is_per_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Статус фильтруется по прогрессу запрашивающего ученика"""
+    task = await _create_task(client, db_session)
+    solver = await _register_and_login(client, "filter_solver")
+    other = await _register_and_login(client, "filter_other")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(solver),
+    )
+
+    listed = await client.get(
+        f"{TASKS_URL}?status=completed", headers=_auth(other)
+    )
+    ids = [item["id"] for item in listed.json()]
+    assert task["id"] not in ids
+
+
+async def test_filter_by_status_rejects_unknown_value(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Неизвестный статус отклоняется валидацией"""
+    token = await _register_and_login(client, "filter3")
+
+    response = await client.get(
+        f"{TASKS_URL}?status=nonsense", headers=_auth(token)
+    )
+
+    assert response.status_code == 422
+
+
+async def test_filter_by_search_and_tag(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Поиск по названию и фильтр по тегу работают"""
+    task = await _create_task_with_tags(client, db_session)
+    token = await _register_and_login(client, "filter4")
+
+    by_search = await client.get(
+        f"{TASKS_URL}?q=Сумма", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in by_search.json()]
+
+    by_tag = await client.get(
+        f"{TASKS_URL}?tag=basics", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in by_tag.json()]
+
+
+async def test_filter_by_category(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Фильтр по категории работает"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "filter5")
+
+    listed = await client.get(
+        f"{TASKS_URL}?category=input_output", headers=_auth(token)
+    )
+    assert task["id"] in [item["id"] for item in listed.json()]
+
+
+# --- Автосохранение черновика (S42-003) ---------------------------------
+
+
+async def test_draft_is_saved_and_returned(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик сохраняется и возвращается в карточке задачи"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft1")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "a = int(input())"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["has_draft"] is True
+    assert data["updated_at"] is not None
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] == "a = int(input())"
+    assert detail.json()["draft_updated_at"] is not None
+
+
+async def test_draft_does_not_count_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик не тратит попытку и не меняет статус задачи"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft2")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["attempts"] == 0
+    assert detail.json()["status"] == "not_started"
+
+    progress = await client.get(f"{TASKS_URL}/progress", headers=_auth(token))
+    item = next(
+        entry
+        for entry in progress.json()["items"]
+        if entry["task_id"] == task["id"]
+    )
+    assert item["attempts"] == 0
+    assert item["status"] == "not_started"
+
+
+async def test_draft_is_not_an_attempt_in_history(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик не попадает в историю попыток"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft3")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.json()["total"] == 0
+
+
+async def test_submit_clears_draft(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """После отправки черновик очищается: решение уже в истории"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft4")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+    assert detail.json()["draft_updated_at"] is None
+
+
+async def test_draft_can_be_cleared(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик можно удалить явным действием"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft5")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    response = await client.delete(
+        f"{TASKS_URL}/{task['id']}/draft", headers=_auth(token)
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["has_draft"] is False
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_empty_draft_clears_stored_draft(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пустой код удаляет черновик"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft6")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "   "},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_draft_is_private_to_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик ученика не виден другому ученику"""
+    task = await _create_task(client, db_session)
+    owner_token = await _register_and_login(client, "draft_owner")
+    other_token = await _register_and_login(client, "draft_other")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print('mine')"},
+        headers=_auth(owner_token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(other_token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_draft_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена черновик недоступен"""
+    task = await _create_task(client, db_session)
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft", json={"code": "print(1)"}
+    )
+
+    assert response.status_code in (401, 403)
+
+
+async def test_draft_of_unknown_task_returns_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик несуществующей задачи — 404"""
+    token = await _register_and_login(client, "draft7")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{uuid4()}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_draft_rejects_too_long_code(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Слишком длинный черновик отклоняется валидацией"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft8")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "x" * 20_001},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+
+
+async def test_task_with_only_draft_is_soft_deleted(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Задача с черновиком удаляется мягко: работа ученика сохраняется"""
+    task = await _create_task(client, db_session)
+    teacher_token = await _create_teacher_token(client, db_session, "draftteacher")
+    token = await _register_and_login(client, "draft9")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print('черновик')"},
+        headers=_auth(token),
+    )
+
+    deleted = await client.delete(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(teacher_token)
+    )
+    assert deleted.status_code == 204
+
+    # Задача скрыта из каталога, но остаётся в базе вместе с черновиком
+    catalog = await client.get(f"{TASKS_URL}", headers=_auth(token))
+    assert all(item["id"] != task["id"] for item in catalog.json())
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] == "print('черновик')"
+
+
+# --- История попыток (S42-002) -------------------------------------------
+
+
+async def test_submit_creates_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Каждая засчитанная отправка попадает в историю попыток"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history1")
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.status_code == 200, attempts.text
+    data = attempts.json()
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["passed"] is True
+    assert data["items"][0]["passed_count"] == 2
+    assert data["items"][0]["total_count"] == 2
+
+
+async def test_attempt_history_is_ordered_newest_first(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Новые попытки идут первыми"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history2")
+
+    for _ in range(3):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    data = attempts.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 3
+    created = [item["created_at"] for item in data["items"]]
+    assert created == sorted(created, reverse=True)
+
+
+async def test_check_does_not_create_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не попадает в историю (попытка не засчитана)"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history3")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.json()["total"] == 0
+    assert attempts.json()["items"] == []
+
+
+async def test_attempt_detail_contains_code_and_results(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Детальная попытка хранит код и разбор по кейсам"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history4")
+    code = "a = int(input())\nb = int(input())\nprint(a + b)"
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": code},
+        headers=_auth(token),
+    )
+
+    listing = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    attempt_id = listing.json()["items"][0]["id"]
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts/{attempt_id}", headers=_auth(token)
+    )
+    assert detail.status_code == 200, detail.text
+    data = detail.json()
+    assert data["code"] == code
+    assert data["passed"] is True
+    assert len(data["results"]) == 2
+    assert data["results"][0]["passed"] is True
+
+
+async def test_attempts_are_private_to_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Чужая попытка недоступна: и в списке, и по прямой ссылке"""
+    task = await _create_task(client, db_session)
+    owner_token = await _register_and_login(client, "history_owner")
+    other_token = await _register_and_login(client, "history_other")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "print(1)"},
+        headers=_auth(owner_token),
+    )
+
+    owner_list = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(owner_token)
+    )
+    attempt_id = owner_list.json()["items"][0]["id"]
+
+    other_list = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(other_token)
+    )
+    assert other_list.json()["total"] == 0
+    assert other_list.json()["items"] == []
+
+    other_detail = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts/{attempt_id}",
+        headers=_auth(other_token),
+    )
+    assert other_detail.status_code == 404
+
+
+async def test_attempts_require_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена история попыток недоступна"""
+    task = await _create_task(client, db_session)
+
+    response = await client.get(f"{TASKS_URL}/{task['id']}/attempts")
+
+    assert response.status_code in (401, 403)
+
+
+async def test_attempts_of_unknown_task_return_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """История несуществующей задачи — 404"""
+    token = await _register_and_login(client, "history5")
+
+    response = await client.get(
+        f"{TASKS_URL}/{uuid4()}/attempts", headers=_auth(token)
+    )
+
+    assert response.status_code == 404
+
+
+async def test_attempts_pagination(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Список попыток постраничный"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history6")
+
+    for _ in range(3):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    page = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts?skip=1&limit=1", headers=_auth(token)
+    )
+    data = page.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 1
+
+
+# --- Пробная проверка без траты попытки (S42-001) -------------------------
+
+
+async def test_check_does_not_count_attempt(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Пробная проверка не увеличивает счётчик попыток и не меняет статус"""
+    from app.api.v1.tasks import get_executor
+
+    fake = CaseAwareExecutor({"2\n3\n": "5\n", "-5\n5\n": "0\n"}, correct=False)
+    app.dependency_overrides[get_executor] = lambda: fake
+    try:
+        task = await _create_task(client, db_session)
+        token = await _register_and_login(client, "checker1")
+
+        response = await client.post(
+            f"{TASKS_URL}/{task['id']}/check",
+            json={"code": "print('неверно')"},
+            headers=_auth(token),
+        )
+    finally:
+        app.dependency_overrides.pop(get_executor, None)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["practice"] is True
+    assert data["passed"] is False
+    assert data["attempts"] == 0
+    assert data["status"] == "not_started"
+
+    progress = await client.get(f"{TASKS_URL}/progress", headers=_auth(token))
+    item = next(
+        entry
+        for entry in progress.json()["items"]
+        if entry["task_id"] == task["id"]
+    )
+    assert item["attempts"] == 0
+    assert item["status"] == "not_started"
+
+
+async def test_check_does_not_create_progress_record(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не создаёт запись прогресса (иначе задача «начата»)"""
+    from app.db.repositories.task import ProgressRepository
+    from app.db.repositories.user import UserRepository
+
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker2")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    user = await UserRepository(db_session).get_by_username("checker2")
+    assert user is not None
+    record = await ProgressRepository(db_session).get_by_user_and_task(
+        user.id, task["id"]
+    )
+    assert record is None
+
+
+async def test_check_keeps_existing_attempts(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не меняет уже набранные попытки"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker3")
+
+    for _ in range(2):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["attempts"] == 2
+
+
+async def test_check_result_matches_submit(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Результат пробы совпадает с результатом отправки того же кода"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker4")
+    code = "a = int(input())\nb = int(input())\nprint(a + b)"
+
+    checked = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": code}, headers=_auth(token)
+    )
+    submitted = await client.post(
+        f"{TASKS_URL}/{task['id']}/submit", json={"code": code}, headers=_auth(token)
+    )
+
+    assert checked.status_code == 200
+    assert submitted.status_code == 200
+    checked_data = checked.json()
+    submitted_data = submitted.json()
+
+    assert checked_data["passed"] == submitted_data["passed"]
+    assert checked_data["passed_count"] == submitted_data["passed_count"]
+    assert checked_data["total_count"] == submitted_data["total_count"]
+    assert checked_data["results"] == submitted_data["results"]
+    assert checked_data["practice"] is True
+    assert submitted_data["practice"] is False
+
+
+async def test_check_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена пробная проверка недоступна"""
+    task = await _create_task(client, db_session)
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": "print(1)"}
+    )
+
+    assert response.status_code in (401, 403)
+
+
+async def test_check_unknown_task_returns_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка несуществующей задачи — 404"""
+    token = await _register_and_login(client, "checker5")
+
+    response = await client.post(
+        f"{TASKS_URL}/{uuid4()}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_check_rejects_empty_code(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пустой код отклоняется валидацией"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker6")
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": ""}, headers=_auth(token)
+    )
+
+    assert response.status_code == 422
 
 
 async def test_teacher_updates_and_deletes_task(

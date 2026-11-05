@@ -194,11 +194,13 @@ async def test_tasks_list_cache_key_contains_filters_and_user(
         category="input_output",
         tag="python",
         search="сумма",
+        status="in_progress",
         skip=0,
         limit=100,
     )
     assert key.startswith(f"{PREFIX}:tasks:list:")
     assert "easy" in key and "python" in key and "сумма" in key
+    assert "in_progress" in key
 
     listed = await client.get(
         TASKS_URL, params={"difficulty": "easy"}, headers=auth(teacher)

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { Alert } from '@/components/ui/Alert';
+import { RecommendedTasks } from '@/components/tasks/RecommendedTasks';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
@@ -197,6 +198,8 @@ export function DashboardPage() {
           )}
         </Card>
       </div>
+
+      <RecommendedTasks />
 
       <Card title={t('dashboard.recentTasks')}>
         {progress && progress.items.length > 0 ? (

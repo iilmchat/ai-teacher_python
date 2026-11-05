@@ -108,6 +108,9 @@ class TaskDetail(BaseModel):
     status: TaskStatus
     attempts: int
     tags: list[str] = Field(default_factory=list)
+    #: Сохранённый черновик решения (S42-003); `None`, если черновика нет
+    draft_code: str | None = None
+    draft_updated_at: datetime | None = None
 
 
 class TaskAdminDetail(TaskDetail):
@@ -117,10 +120,33 @@ class TaskAdminDetail(TaskDetail):
     is_active: bool
 
 
-class SubmitRequest(BaseModel):
-    """Отправка решения на проверку"""
+class DraftRequest(BaseModel):
+    """Сохранение черновика решения (S42-003)"""
+
+    code: str = Field(..., max_length=20_000)
+
+
+class DraftStatus(BaseModel):
+    """Состояние черновика (S42-003)"""
+
+    #: Есть ли сохранённый черновик
+    has_draft: bool = False
+    #: Когда черновик сохранён
+    updated_at: datetime | None = None
+
+
+class SolutionCode(BaseModel):
+    """Код решения (общая часть для отправки и пробной проверки)"""
 
     code: str = Field(..., min_length=1, max_length=20_000)
+
+
+class SubmitRequest(SolutionCode):
+    """Отправка решения на проверку (попытка засчитывается)"""
+
+
+class CheckRequest(SolutionCode):
+    """Пробная проверка решения (S42-001): попытка не засчитывается"""
 
 
 class TestCaseResult(BaseModel):
@@ -145,6 +171,56 @@ class SubmitResponse(BaseModel):
     status: TaskStatus
     results: list[TestCaseResult]
     message: str
+    #: `True` для пробной проверки (S42-001): попытка не засчитывается
+    practice: bool = False
+
+
+class AttemptItem(BaseModel):
+    """Попытка ученика по задаче (S42-002)"""
+
+    id: UUID
+    task_id: UUID
+    passed: bool
+    passed_count: int
+    total_count: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AttemptDetail(AttemptItem):
+    """Попытка с кодом и разбором по кейсам"""
+
+    code: str
+    results: list[TestCaseResult]
+
+
+class AttemptList(BaseModel):
+    """История попыток постранично"""
+
+    items: list[AttemptItem] = Field(default_factory=list)
+    total: int = 0
+
+
+class RecommendedTask(BaseModel):
+    """Рекомендуемая задача с объяснением выбора (S42-005)"""
+
+    id: UUID
+    title: str
+    difficulty: TaskDifficulty
+    category: str
+    tags: list[str] = Field(default_factory=list)
+    #: Машиночитаемая причина: `continue` | `same_topic` | `easier` |
+    #: `next_step` | `starter`
+    reason: str
+    #: Пояснение для ученика (текст на русском)
+    reason_text: str
+
+
+class RecommendedTaskList(BaseModel):
+    """Список рекомендаций"""
+
+    items: list[RecommendedTask] = Field(default_factory=list)
 
 
 class ProgressItem(BaseModel):

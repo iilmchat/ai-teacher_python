@@ -141,6 +141,8 @@ class Settings(BaseSettings):
     retention_code_executions_days: int = 90
     retention_notifications_days: int = 180
     retention_audit_log_days: int = 365
+    #: Сколько дней хранить историю попыток по задачам (S42-002)
+    retention_task_attempts_days: int = 90
     #: Встроенный планировщик retention (KI-025): раз в сутки сам применяет
     #: `RETENTION_*_DAYS`, cron становится опциональным. По умолчанию выключен:
     #: включается в production (`docker-compose.prod.yml`) или через ENV.

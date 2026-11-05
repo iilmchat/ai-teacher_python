@@ -8,20 +8,36 @@ Task API: список задач, проверка решений, прогре
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.executor import SandboxedExecutor
+from app.core.rate_limiter import CHECK_LIMIT, WINDOW_SECONDS, is_user_limited
 from app.core.security import get_current_active_user, require_role
 from app.db.database import get_db
 from app.errors import ValidationError
-from app.models.task import Task, TaskDifficulty
+from app.models.task import Task, TaskDifficulty, TaskStatus
 from app.models.user import User, UserRole
 from app.schemas.task import (
+    AttemptDetail,
+    AttemptList,
     CategoriesResponse,
+    CheckRequest,
+    DraftRequest,
+    DraftStatus,
     HintResponse,
     ProgressSummary,
+    RecommendedTaskList,
     SubmitRequest,
     SubmitResponse,
     TaskAdminDetail,
@@ -90,6 +106,7 @@ async def list_tasks(
     category: str | None = None,
     tag: str | None = None,
     q: str | None = None,
+    status: TaskStatus | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> list[TaskListItem]:
@@ -100,6 +117,7 @@ async def list_tasks(
         category=category,
         tag=tag,
         search=q,
+        status=status.value if status is not None else None,
         skip=skip,
         limit=limit,
     )
@@ -113,6 +131,7 @@ async def list_tasks(
         category=category,
         tag=tag,
         search=q,
+        status=status,
         skip=skip,
         limit=limit,
     )
@@ -239,6 +258,21 @@ async def get_stats(
     return await service.get_stats(current_user)
 
 
+@router.get("/recommended", response_model=RecommendedTaskList)
+async def recommended_tasks(
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+    limit: int = Query(default=5, ge=1, le=20),
+) -> RecommendedTaskList:
+    """Рекомендации следующих задач (S42-005).
+
+    Порядок детерминированный: начатые задачи, затем совпадение тегов
+    с недавно решёнными, затем близость по сложности. Каждая рекомендация
+    объясняет, почему она предложена.
+    """
+    return await service.recommended_tasks(current_user, limit=limit)
+
+
 @router.get("/{task_id}", response_model=TaskDetail)
 async def get_task(
     task_id: UUID, current_user: CurrentUser, service: TaskServiceDep
@@ -291,6 +325,86 @@ async def submit_solution(
 ) -> SubmitResponse:
     """Проверить решение по тест-кейсам"""
     return await service.submit_solution(task_id, current_user, payload.code)
+
+
+@router.post("/{task_id}/check", response_model=SubmitResponse)
+async def check_solution(
+    task_id: UUID,
+    payload: CheckRequest,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> SubmitResponse:
+    """Пробная проверка решения (S42-001).
+
+    Отличается от `submit` тем, что попытка не засчитывается: счётчик
+    попыток и статус задачи не меняются, достижения не начисляются.
+    Песочница запускается столько же раз, поэтому проверка ограничена
+    по частоте (429 при превышении).
+    """
+    if await is_user_limited("task_check", str(current_user.id), CHECK_LIMIT):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много пробных проверок. Попробуйте через минуту.",
+            headers={"Retry-After": str(WINDOW_SECONDS)},
+        )
+    return await service.check_solution(task_id, current_user, payload.code)
+
+
+@router.get("/{task_id}/attempts", response_model=AttemptList)
+async def list_attempts(
+    task_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> AttemptList:
+    """История попыток ученика по задаче (S42-002), новые сверху.
+
+    В историю попадают только засчитанные отправки: пробная проверка
+    (S42-001) попытку не засчитывает и сюда не пишется.
+    """
+    return await service.list_attempts(
+        task_id, current_user, skip=skip, limit=limit
+    )
+
+
+@router.get("/{task_id}/attempts/{attempt_id}", response_model=AttemptDetail)
+async def get_attempt(
+    task_id: UUID,
+    attempt_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> AttemptDetail:
+    """Детальная попытка: код и разбор по тест-кейсам.
+
+    Попытка принадлежит ученику: чужая недоступна (404).
+    """
+    return await service.get_attempt(task_id, attempt_id, current_user)
+
+@router.patch("/{task_id}/draft", response_model=DraftStatus)
+async def save_draft(
+    task_id: UUID,
+    payload: DraftRequest,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> DraftStatus:
+    """Сохранить черновик решения (S42-003).
+
+    Черновик не является решением: счётчик попыток и статус задачи
+    не меняются, в историю попыток запись не попадает. Пустой код
+    удаляет черновик.
+    """
+    return await service.save_draft(task_id, current_user, payload.code)
+
+
+@router.delete("/{task_id}/draft", response_model=DraftStatus)
+async def clear_draft(
+    task_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> DraftStatus:
+    """Очистить черновик решения (S42-003)."""
+    return await service.clear_draft(task_id, current_user)
 
 
 # --- Управление задачами (преподаватель/админ) --------------------------

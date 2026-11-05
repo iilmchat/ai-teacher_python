@@ -107,6 +107,10 @@ export interface TaskDetail {
   status: TaskStatus;
   attempts: number;
   tags?: string[];
+  /** Сохранённый черновик решения (S42-003) */
+  draft_code?: string | null;
+  /** Когда черновик сохранён (S42-003) */
+  draft_updated_at?: string | null;
 }
 
 export interface TestCaseResult {
@@ -127,6 +131,48 @@ export interface SubmitResponse {
   status: TaskStatus;
   results: TestCaseResult[];
   message: string;
+  /** `true` для пробной проверки: попытка не засчитывается (S42-001) */
+  practice?: boolean;
+}
+
+export interface DraftStatus {
+  has_draft: boolean;
+  updated_at: string | null;
+}
+
+export interface RecommendedTask {
+  id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  category: string;
+  tags: string[];
+  /** Машиночитаемая причина: continue | same_topic | easier | next_step | starter */
+  reason: string;
+  /** Пояснение для ученика */
+  reason_text: string;
+}
+
+export interface RecommendedTaskList {
+  items: RecommendedTask[];
+}
+
+export interface AttemptItem {
+  id: string;
+  task_id: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  created_at: string;
+}
+
+export interface AttemptDetail extends AttemptItem {
+  code: string;
+  results: TestCaseResult[];
+}
+
+export interface AttemptList {
+  items: AttemptItem[];
+  total: number;
 }
 
 export interface ProgressItem {

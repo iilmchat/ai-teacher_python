@@ -235,6 +235,7 @@ def tasks_list_cache_key(
     category: str | None,
     tag: str | None,
     search: str | None,
+    status: str | None,
     skip: int,
     limit: int,
 ) -> str:
@@ -246,5 +247,6 @@ def tasks_list_cache_key(
         f"{category or '-'}:"
         f"{(tag or '').strip().lower() or '-'}:"
         f"{normalized_search or '-'}:"
+        f"{status or '-'}:"
         f"{skip}:{limit}"
     )

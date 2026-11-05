@@ -27,6 +27,8 @@ interface RequestOptions {
   form?: Record<string, string>;
   /** Файл для multipart-загрузки */
   file?: File;
+  /** Отмена запроса (AbortController) */
+  signal?: AbortSignal;
   /** Не добавлять Authorization (для login/register) */
   anonymous?: boolean;
 }
@@ -124,6 +126,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     method: options.method ?? 'GET',
     headers,
     body,
+    signal: options.signal,
   });
 }
 
@@ -163,7 +166,8 @@ async function downloadRequest(path: string): Promise<Blob> {
 }
 
 export const api = {
-  get: <T>(path: string) => apiRequest<T>(path),
+  get: <T>(path: string, options?: { signal?: AbortSignal }) =>
+    apiRequest<T>(path, { signal: options?.signal }),
   post: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'POST', body }),
   postForm: <T>(path: string, form: Record<string, string>) =>

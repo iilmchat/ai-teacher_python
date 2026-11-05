@@ -183,10 +183,23 @@ def test_retention_cutoff_days(monkeypatch: pytest.MonkeyPatch) -> None:
     assert timedelta(days=29) < delta < timedelta(days=31)
 
 
+def test_task_attempts_retention_setting() -> None:
+    """История попыток попадает под retention (S42-002)"""
+    table = next(item for item in TABLES if item.name == "task_attempts")
+
+    assert table.setting == "retention_task_attempts_days"
+
+
 def test_retention_tables_cover_all_datasets() -> None:
     names = {table.name for table in TABLES}
 
-    assert names == {"chat_messages", "code_executions", "notifications", "audit_log"}
+    assert names == {
+        "chat_messages",
+        "code_executions",
+        "notifications",
+        "audit_log",
+        "task_attempts",  # S42-002: история попыток
+    }
 
 
 
