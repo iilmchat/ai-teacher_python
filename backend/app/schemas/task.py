@@ -157,6 +157,33 @@ class SubmitResponse(BaseModel):
     practice: bool = False
 
 
+class AttemptItem(BaseModel):
+    """Попытка ученика по задаче (S42-002)"""
+
+    id: UUID
+    task_id: UUID
+    passed: bool
+    passed_count: int
+    total_count: int
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AttemptDetail(AttemptItem):
+    """Попытка с кодом и разбором по кейсам"""
+
+    code: str
+    results: list[TestCaseResult]
+
+
+class AttemptList(BaseModel):
+    """История попыток постранично"""
+
+    items: list[AttemptItem] = Field(default_factory=list)
+    total: int = 0
+
+
 class ProgressItem(BaseModel):
     """Прогресс по одной задаче"""
 

@@ -11,12 +11,14 @@ from app.core.executor import SandboxedExecutor
 from app.core.test_runner import CaseRunOutcome, run_test_cases
 from app.db.repositories.task import (
     ProgressRepository,
+    TaskAttemptRepository,
     TaskRepository,
     TaskVersionRepository,
 )
 from app.errors import NotFoundError, ValidationError
 from app.models.task import (
     Task,
+    TaskAttempt,
     TaskDifficulty,
     TaskStatus,
     TaskVersion,
@@ -24,6 +26,9 @@ from app.models.task import (
 )
 from app.models.user import User
 from app.schemas.task import (
+    AttemptDetail,
+    AttemptItem,
+    AttemptList,
     ProgressItem,
     ProgressSummary,
     SubmitResponse,
@@ -46,6 +51,7 @@ class TaskService:
         self.executor = executor
         self.tasks = TaskRepository(db)
         self.progress = ProgressRepository(db)
+        self.attempts = TaskAttemptRepository(db)
         self.versions = TaskVersionRepository(db)
 
     # --- Чтение ---------------------------------------------------------
@@ -171,6 +177,20 @@ class TaskService:
         elif record.status == TaskStatus.NOT_STARTED:
             record.status = TaskStatus.IN_PROGRESS
 
+        # История попыток (S42-002): каждая засчитанная отправка попадает
+        # в журнал с кодом и разбором по кейсам.
+        self.db.add(
+            TaskAttempt(
+                user_id=user.id,
+                task_id=task.id,
+                code=code,
+                passed=outcome.passed,
+                passed_count=outcome.passed_count,
+                total_count=outcome.total_count,
+                results=[item.model_dump() for item in self._to_results(outcome)],
+            )
+        )
+
         await self.db.commit()
         await self.db.refresh(record)
 
@@ -223,6 +243,49 @@ class TaskService:
             results=self._to_results(outcome),
             message=self._build_message(outcome, practice=True),
             practice=True,
+        )
+
+    async def list_attempts(
+        self, task_id: UUID, user: User, skip: int = 0, limit: int = 20
+    ) -> AttemptList:
+        """История попыток ученика по задаче (S42-002), новые сверху"""
+        await self._get_task_or_404(task_id)
+        items = await self.attempts.list_for_user_and_task(
+            user.id, task_id, skip=skip, limit=limit
+        )
+        total = await self.attempts.count_for_user_and_task(user.id, task_id)
+        return AttemptList(
+            items=[AttemptItem.model_validate(item) for item in items],
+            total=total,
+        )
+
+    async def get_attempt(
+        self, task_id: UUID, attempt_id: UUID, user: User
+    ) -> AttemptDetail:
+        """Детальная попытка с кодом и разбором по кейсам.
+
+        Попытка принадлежит ученику: чужая недоступна (404), чтобы по
+        идентификатору нельзя было проверить существование чужой записи.
+        """
+        await self._get_task_or_404(task_id)
+        attempt = await self.attempts.get(attempt_id)
+        if (
+            attempt is None
+            or attempt.task_id != task_id
+            or attempt.user_id != user.id
+        ):
+            raise NotFoundError("Попытка не найдена")
+
+        results = [TestCaseResult(**item) for item in (attempt.results or [])]
+        return AttemptDetail(
+            id=attempt.id,
+            task_id=attempt.task_id,
+            passed=attempt.passed,
+            passed_count=attempt.passed_count,
+            total_count=attempt.total_count,
+            created_at=attempt.created_at,
+            code=attempt.code,
+            results=results,
         )
 
     async def _run_cases(self, task: Task, code: str) -> CaseRunOutcome:

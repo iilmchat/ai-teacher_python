@@ -131,6 +131,25 @@ export interface SubmitResponse {
   practice?: boolean;
 }
 
+export interface AttemptItem {
+  id: string;
+  task_id: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  created_at: string;
+}
+
+export interface AttemptDetail extends AttemptItem {
+  code: string;
+  results: TestCaseResult[];
+}
+
+export interface AttemptList {
+  items: AttemptItem[];
+  total: number;
+}
+
 export interface ProgressItem {
   task_id: string;
   title: string;

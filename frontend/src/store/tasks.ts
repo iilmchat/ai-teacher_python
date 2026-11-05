@@ -7,6 +7,8 @@ import { create } from 'zustand';
 
 import { api } from '@/lib/api';
 import type {
+  AttemptDetail,
+  AttemptList,
   ProgressSummary,
   SubmitResponse,
   TaskDetail,
@@ -26,6 +28,10 @@ interface TasksState {
   submission: SubmitResponse | null;
   /** Результат пробной проверки (S42-001): попытка не засчитывается */
   checkResult: SubmitResponse | null;
+  /** История попыток по задаче (S42-002) */
+  attempts: AttemptList | null;
+  /** Детальная попытка (S42-002) */
+  attemptDetail: AttemptDetail | null;
   filters: TaskFilters;
   loading: boolean;
   submitting: boolean;
@@ -39,6 +45,10 @@ interface TasksState {
   submit: (taskId: string, code: string) => Promise<void>;
   /** Пробная проверка: результат показывается, но попытка не засчитывается */
   check: (taskId: string, code: string) => Promise<void>;
+  /** Загрузить историю попыток по задаче (S42-002) */
+  loadAttempts: (taskId: string) => Promise<void>;
+  /** Загрузить детальную попытку (S42-002) */
+  loadAttempt: (taskId: string, attemptId: string) => Promise<void>;
   resetSubmission: () => void;
 }
 
@@ -60,6 +70,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   progress: null,
   submission: null,
   checkResult: null,
+  attempts: null,
+  attemptDetail: null,
   filters: { difficulty: null, category: null },
   loading: false,
   submitting: false,
@@ -85,6 +97,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       detail: null,
       submission: null,
       checkResult: null,
+      attempts: null,
+      attemptDetail: null,
     });
     try {
       const detail = await api.get<TaskDetail>(`/tasks/${taskId}`);
@@ -140,6 +154,28 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       set({ checking: false, checkResult });
     } catch {
       set({ checking: false, error: i18n.t('errors.check') });
+    }
+  },
+
+  async loadAttempts(taskId) {
+    set({ attempts: null, attemptDetail: null, error: null });
+    try {
+      const attempts = await api.get<AttemptList>(`/tasks/${taskId}/attempts`);
+      set({ attempts });
+    } catch {
+      set({ error: i18n.t('errors.attemptsLoad') });
+    }
+  },
+
+  async loadAttempt(taskId, attemptId) {
+    set({ attemptDetail: null, error: null });
+    try {
+      const attemptDetail = await api.get<AttemptDetail>(
+        `/tasks/${taskId}/attempts/${attemptId}`,
+      );
+      set({ attemptDetail });
+    } catch {
+      set({ error: i18n.t('errors.attemptLoad') });
     }
   },
 

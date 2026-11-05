@@ -127,7 +127,13 @@
     "caseFailed": "failed",
     "check": "Trial run",
     "checkHint": "A trial run shows the test breakdown but does not count as an attempt.",
-    "checkResults": "Trial run results"
+    "checkResults": "Trial run results",
+    "attemptsHistory": "Attempt history",
+    "attemptPassed": "Solved:",
+    "attemptFailed": "Not solved:",
+    "attemptDetails": "Details",
+    "attemptRestore": "Restore code in the editor",
+    "attemptScore": "{{passed}} of {{total}}"
   },
   "progress": {
     "title": "Progress",
@@ -385,7 +391,9 @@
     "taskNotFound": "Task not found",
     "progressLoad": "Could not load progress",
     "submit": "Could not check the solution",
-    "check": "Could not run the trial check"
+    "check": "Could not run the trial check",
+    "attemptsLoad": "Could not load the attempt history",
+    "attemptLoad": "Could not load the attempt"
   },
   "common": {
     "loading": "Loading…",

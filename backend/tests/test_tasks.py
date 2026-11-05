@@ -354,6 +354,188 @@ async def test_submit_requires_auth(
     assert response.status_code in (401, 403)
 
 
+# --- История попыток (S42-002) -------------------------------------------
+
+
+async def test_submit_creates_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Каждая засчитанная отправка попадает в историю попыток"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history1")
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.status_code == 200, attempts.text
+    data = attempts.json()
+    assert data["total"] == 1
+    assert len(data["items"]) == 1
+    assert data["items"][0]["passed"] is True
+    assert data["items"][0]["passed_count"] == 2
+    assert data["items"][0]["total_count"] == 2
+
+
+async def test_attempt_history_is_ordered_newest_first(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Новые попытки идут первыми"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history2")
+
+    for _ in range(3):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    data = attempts.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 3
+    created = [item["created_at"] for item in data["items"]]
+    assert created == sorted(created, reverse=True)
+
+
+async def test_check_does_not_create_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не попадает в историю (попытка не засчитана)"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history3")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.json()["total"] == 0
+    assert attempts.json()["items"] == []
+
+
+async def test_attempt_detail_contains_code_and_results(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Детальная попытка хранит код и разбор по кейсам"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history4")
+    code = "a = int(input())\nb = int(input())\nprint(a + b)"
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": code},
+        headers=_auth(token),
+    )
+
+    listing = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    attempt_id = listing.json()["items"][0]["id"]
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts/{attempt_id}", headers=_auth(token)
+    )
+    assert detail.status_code == 200, detail.text
+    data = detail.json()
+    assert data["code"] == code
+    assert data["passed"] is True
+    assert len(data["results"]) == 2
+    assert data["results"][0]["passed"] is True
+
+
+async def test_attempts_are_private_to_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Чужая попытка недоступна: и в списке, и по прямой ссылке"""
+    task = await _create_task(client, db_session)
+    owner_token = await _register_and_login(client, "history_owner")
+    other_token = await _register_and_login(client, "history_other")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "print(1)"},
+        headers=_auth(owner_token),
+    )
+
+    owner_list = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(owner_token)
+    )
+    attempt_id = owner_list.json()["items"][0]["id"]
+
+    other_list = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(other_token)
+    )
+    assert other_list.json()["total"] == 0
+    assert other_list.json()["items"] == []
+
+    other_detail = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts/{attempt_id}",
+        headers=_auth(other_token),
+    )
+    assert other_detail.status_code == 404
+
+
+async def test_attempts_require_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена история попыток недоступна"""
+    task = await _create_task(client, db_session)
+
+    response = await client.get(f"{TASKS_URL}/{task['id']}/attempts")
+
+    assert response.status_code in (401, 403)
+
+
+async def test_attempts_of_unknown_task_return_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """История несуществующей задачи — 404"""
+    token = await _register_and_login(client, "history5")
+
+    response = await client.get(
+        f"{TASKS_URL}/{uuid4()}/attempts", headers=_auth(token)
+    )
+
+    assert response.status_code == 404
+
+
+async def test_attempts_pagination(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Список попыток постраничный"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "history6")
+
+    for _ in range(3):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    page = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts?skip=1&limit=1", headers=_auth(token)
+    )
+    data = page.json()
+    assert data["total"] == 3
+    assert len(data["items"]) == 1
+
+
 # --- Пробная проверка без траты попытки (S42-001) -------------------------
 
 

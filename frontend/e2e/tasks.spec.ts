@@ -41,6 +41,29 @@ test.describe('Задачи', () => {
     await expect(page.getByRole('button', { name: 'Показать подсказку' })).toBeVisible();
   });
 
+  test('история попыток сохраняется и показывает разбор', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/tasks');
+
+    const card = page.getByRole('listitem').filter({ hasText: 'Сумма двух чисел' });
+    await card.getByRole('link', { name: 'Открыть' }).click();
+
+    await page
+      .getByTestId('code-input')
+      .fill('a = int(input())\nb = int(input())\nprint(a + b)');
+    await page.getByRole('button', { name: 'Отправить решение' }).click();
+
+    await expect(page.getByText(/Все тесты пройдены/)).toBeVisible({ timeout: 60_000 });
+
+    // История попыток: запись о засчитанной отправке
+    await expect(page.getByText('История попыток')).toBeVisible();
+    await expect(page.getByText(/Решено:/)).toBeVisible();
+
+    // Детали попытки: код и разбор по кейсам
+    await page.getByRole('button', { name: 'Подробнее' }).click();
+    await expect(page.getByText('print(a + b)')).toBeVisible();
+  });
+
   test('пробная проверка не тратит попытку', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/tasks');

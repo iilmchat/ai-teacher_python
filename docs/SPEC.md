@@ -180,6 +180,8 @@ violations, memory_limit_enforced, output_truncated}`.
 | GET | `/tasks/{id}/hints/{index}` | — | `{index, hint, total}` |
 | POST | `/tasks/{id}/submit` | `{code}` | `SubmitResponse` |
 | POST | `/tasks/{id}/check` | `{code}` | `SubmitResponse` (S42-001, `practice: true`) |
+| GET | `/tasks/{id}/attempts?skip&limit` | — | `AttemptList` (S42-002) |
+| GET | `/tasks/{id}/attempts/{attempt_id}` | — | `AttemptDetail` (S42-002) |
 | POST | `/tasks` | `TaskCreate` | 201 `TaskAdminDetail` (teacher/admin) |
 | PATCH | `/tasks/{id}` | `TaskUpdate` | `TaskAdminDetail` (teacher/admin) |
 | DELETE | `/tasks/{id}` | — | 204 (teacher/admin) |
@@ -194,6 +196,9 @@ violations, memory_limit_enforced, output_truncated}`.
 | POST | `/tasks/{id}/versions/{v}/restore` | — | `TaskAdminDetail` (teacher/admin) |
 
 `SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message, practice}`.
+`AttemptItem`: `{id, task_id, passed, passed_count, total_count, created_at}`;
+`AttemptDetail` — дополнительно `code` и `results[]` (разбор по кейсам);
+`AttemptList`: `{items[], total}`.
 `practice` — `false` для `submit`, `true` для `check`.
 
 `POST /tasks/{id}/check` (S42-001) — пробная проверка: тест-кейсы
@@ -217,6 +222,20 @@ TTL 60 с; инвалидация — при создании/правке/уд�
 эндпоинт был анонимным, теперь без заголовка — 401 (HTTPBearer, как и
 остальные защищённые роуты), с невалидным токеном — тоже 401; поведение для
 неактивной/несуществующей задачи не изменилось.
+
+История попыток (S42-002): таблица `task_attempts` хранит каждую
+**засчитанную** отправку — код, результат по каждому тест-кейсу и время.
+`user_task_progress` остаётся сводкой (статус и счётчик попыток).
+Пробная проверка (`POST /tasks/{id}/check`, S42-001) попытку не
+засчитывает и в историю не пишется.
+
+`GET /tasks/{id}/attempts` — постраничный список попыток **текущего
+ученика** (новые сверху), `skip` (default `0`), `limit` (default `20`,
+max `100`). `GET /tasks/{id}/attempts/{attempt_id}` — детальная попытка:
+код и разбор по кейсам. Попытка принадлежит ученику: чужая недоступна
+(404) — по идентификатору нельзя проверить существование чужой записи.
+Таблица попадает под retention: `RETENTION_TASK_ATTEMPTS_DAYS` (default
+90, `0` — не удалять).
 
 ### 3.6 Админка
 
@@ -373,6 +392,10 @@ user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
                    best_solution, completed_at, updated_at)
    status ∈ {not_started, in_progress, completed} · UNIQUE(user_id, task_id)
 
+task_attempts(id, user_id→users, task_id→tasks, code, passed,
+               passed_count, total_count, results JSONB, created_at)
+   история засчитанных отправок (S42-002) · results — разбор по кейсам
+
 classrooms(id, name, owner_id→users, join_code*, created_at)
 classroom_members(id, classroom_id→classrooms, user_id→users, role, joined_at)
    role ∈ {owner, student} · UNIQUE(classroom_id, user_id)
@@ -386,13 +409,15 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
    type ∈ {assignment, deadline, achievement}
 ```
 
-Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс.
+Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс,
+история попыток; удаление задачи → её история попыток.
 Удаление задачи с прогрессом → мягкое (`is_active=false`).
 
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
-`user_task_progress(user_id)`, `classrooms(owner_id)`,
+`user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,
+`task_attempts(task_id, created_at)`, `classrooms(owner_id)`,
 `classroom_members(user_id)`, `assignments(classroom_id)`,
 `user_achievements(user_id)`, `notifications(user_id, read_at)`.
 

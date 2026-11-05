@@ -12,6 +12,7 @@ from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -28,6 +29,8 @@ from app.errors import ValidationError
 from app.models.task import Task, TaskDifficulty
 from app.models.user import User, UserRole
 from app.schemas.task import (
+    AttemptDetail,
+    AttemptList,
     CategoriesResponse,
     CheckRequest,
     HintResponse,
@@ -324,6 +327,38 @@ async def check_solution(
             headers={"Retry-After": str(WINDOW_SECONDS)},
         )
     return await service.check_solution(task_id, current_user, payload.code)
+
+
+@router.get("/{task_id}/attempts", response_model=AttemptList)
+async def list_attempts(
+    task_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> AttemptList:
+    """История попыток ученика по задаче (S42-002), новые сверху.
+
+    В историю попадают только засчитанные отправки: пробная проверка
+    (S42-001) попытку не засчитывает и сюда не пишется.
+    """
+    return await service.list_attempts(
+        task_id, current_user, skip=skip, limit=limit
+    )
+
+
+@router.get("/{task_id}/attempts/{attempt_id}", response_model=AttemptDetail)
+async def get_attempt(
+    task_id: UUID,
+    attempt_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> AttemptDetail:
+    """Детальная попытка: код и разбор по тест-кейсам.
+
+    Попытка принадлежит ученику: чужая недоступна (404).
+    """
+    return await service.get_attempt(task_id, attempt_id, current_user)
 
 
 # --- Управление задачами (преподаватель/админ) --------------------------

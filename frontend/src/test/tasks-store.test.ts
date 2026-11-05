@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '@/lib/api';
 import { useTasksStore } from '@/store/tasks';
-import type { ProgressSummary, SubmitResponse, TaskDetail, TaskListItem } from '@/types/api';
+import type {
+  AttemptDetail,
+  AttemptList,
+  ProgressSummary,
+  SubmitResponse,
+  TaskDetail,
+  TaskListItem,
+} from '@/types/api';
 
 const TASK: TaskListItem = {
   id: '77777777-7777-7777-7777-777777777777',
@@ -46,6 +53,26 @@ const SUBMIT: SubmitResponse = {
   message: 'Задача решена!',
 };
 
+const ATTEMPT_LIST: AttemptList = {
+  items: [
+    {
+      id: 'att-1',
+      task_id: TASK.id,
+      passed: false,
+      passed_count: 1,
+      total_count: 2,
+      created_at: '2026-11-05T10:00:00',
+    },
+  ],
+  total: 1,
+};
+
+const ATTEMPT_DETAIL: AttemptDetail = {
+  ...ATTEMPT_LIST.items[0],
+  code: 'print(42)',
+  results: [],
+};
+
 const CHECK: SubmitResponse = {
   passed: false,
   passed_count: 0,
@@ -64,6 +91,8 @@ function resetStore(): void {
     progress: null,
     submission: null,
     checkResult: null,
+    attempts: null,
+    attemptDetail: null,
     filters: { difficulty: null, category: null },
     loading: false,
     submitting: false,
@@ -177,6 +206,33 @@ describe('tasks store', () => {
     expect(useTasksStore.getState().error).toBeTruthy();
     expect(useTasksStore.getState().checkResult).toBeNull();
     expect(useTasksStore.getState().checking).toBe(false);
+  });
+
+  it('загружает историю попыток', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(ATTEMPT_LIST);
+
+    await useTasksStore.getState().loadAttempts(TASK.id);
+
+    const state = useTasksStore.getState();
+    expect(state.attempts?.total).toBe(1);
+    expect(state.attempts?.items[0].id).toBe('att-1');
+  });
+
+  it('загружает детальную попытку', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue(ATTEMPT_DETAIL);
+
+    await useTasksStore.getState().loadAttempt(TASK.id, 'att-1');
+
+    expect(useTasksStore.getState().attemptDetail?.code).toBe('print(42)');
+  });
+
+  it('фиксирует ошибку загрузки истории попыток', async () => {
+    vi.spyOn(api, 'get').mockRejectedValue(new Error('500'));
+
+    await useTasksStore.getState().loadAttempts(TASK.id);
+
+    expect(useTasksStore.getState().error).toBeTruthy();
+    expect(useTasksStore.getState().attempts).toBeNull();
   });
 
   it('очищает результат пробной проверки при загрузке задачи', async () => {

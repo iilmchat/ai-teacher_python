@@ -92,7 +92,7 @@ v0.3.1–v0.3.3 — ниже.
 
 | Спринт | Тема | Зависит от | Оценка | Статус |
 |--------|------|------------|--------|--------|
-| 42 | Student Learning Loop | v0.4.0 (38) | 4,5 дня | `[~]` S42-001 готов |
+| 42 | Student Learning Loop | v0.4.0 (38) | 4,5 дня | `[~]` S42-001, S42-002 готовы |
 | 43 | Chat Productivity | 42 | 4 дня | `[ ]` |
 | 44 | Code Workbench | 43 | 2,5 дня | `[ ]` |
 | 45 | Account Self-Service | v0.4.0 (38) | 3 дня | `[ ]` |
@@ -1958,6 +1958,67 @@ GitHub Release через release-workflow
 - `docs/SPEC.md` §3.5 — эндпоинт `check`, поле `practice`, лимит 20/мин.
 - `docs/USER_GUIDE.md` §5 — пробная проверка и новое имя кнопки.
 - `TODO_V0.5.md` — S42-001 `[x]`, спринт 42 `[~]`, журнал плана.
+- `docs/CHANGELOG.md` — запись в `[Unreleased]`.
+
+---
+## Шаг 02 / спринт 42: история попыток (S42-002)
+
+**Дата:** 2026-11-05  
+**Спринт:** 42 (v0.5.0 «Learning Experience & Teaching Workflow»)  
+**Задача:** S42-002 — история попыток ученика  
+**Статус:** реализовано
+
+### Что сделано
+
+1. **Таблица `task_attempts`** (миграция `014`, additive): код,
+   результат по каждому тест-кейсу, счётчики пройденных тестов и время.
+   `user_task_progress` остаётся сводкой (статус и счётчик попыток).
+2. **Запись истории при отправке.** Каждая засчитанная отправка
+   (`POST /tasks/{id}/submit`) создаёт запись в истории. Пробная
+   проверка (S42-001) попытку не засчитывает и в историю не пишется.
+3. **API:** `GET /tasks/{id}/attempts` — постраничный список попыток
+   текущего ученика (новые сверху, `skip`/`limit`);
+   `GET /tasks/{id}/attempts/{attempt_id}` — детальная попытка с кодом и
+   разбором по кейсам. Чужая попытка недоступна (404).
+4. **Retention:** таблица попадает под политику S26 —
+   `RETENTION_TASK_ATTEMPTS_DAYS` (default 90), строка в
+   `docs/PRIVACY.md`.
+5. **UI:** блок «История попыток» на странице задачи — дата, результат,
+   кнопка «Подробнее» с кодом и разбором по кейсам и «Вернуть код в
+   редактор». После отправки список перечитывается.
+
+### Проверки
+
+| Проверка | Результат |
+|----------|-----------|
+| Ruff (`ruff check app tests scripts`) | **0** |
+| MyPy strict (`mypy app --config-file ../pyproject.toml`) | **0**, 92 файла |
+| Alembic | `upgrade head` → `downgrade 013` → `upgrade head` → `check`: **чисто** |
+| Backend-тесты задач (`pytest -q tests/test_tasks.py`) | **29 passed** (было 21) |
+| Retention-тесты (`pytest -q tests/test_export_retention.py`) | **12 passed** (было 11) |
+| Миграции (`pytest -q tests/test_migrations.py -m migrations`) | **4 passed** |
+| Backend в образе (полный набор, Python 3.12) | **532 passed, 22 skipped** (было 523+22) |
+| Frontend `typecheck` / `lint` | **0 / 0** |
+| Frontend unit (vitest) | **103 passed** (было 99) |
+| Frontend `build` | **OK**, entry **69.52 kB** gzip |
+| i18n-аудит | **OK**, 350 ключей в ru/en |
+| E2E (полный набор) | **19 passed**, 1 skipped (было 18) |
+
+### Известные ограничения
+
+- Локальный venv отстаёт от `requirements.txt` (fastapi 0.115.5 против
+  0.162.0) — контрактные тесты OpenAPI падают на нём и без этих правок;
+  проверка выполнена в образе с зафиксированными зависимостями
+  (`KI-017`).
+
+### Документация
+
+- `docs/SPEC.md` §3.5 — эндпоинты истории попыток, схемы `AttemptItem` /
+  `AttemptDetail` / `AttemptList`, retention.
+- `docs/PRIVACY.md` §1 — строка о новых персональных данных.
+- `docs/USER_GUIDE.md` §5 — работа с историей попыток.
+- `docs/RULES.md` §11.30 — правила ведения истории попыток.
+- `TODO_V0.5.md` — S42-002 `[x]`, журнал плана.
 - `docs/CHANGELOG.md` — запись в `[Unreleased]`.
 
 ---

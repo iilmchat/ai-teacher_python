@@ -18,6 +18,7 @@ from app.models.code import CodeExecution
 from app.models.engagement import Achievement, Notification, UserAchievement
 from app.models.task import (
     Task,
+    TaskAttempt,
     TaskDifficulty,
     TaskStatus,
     TaskVersion,
@@ -39,6 +40,7 @@ __all__ = [
     "MessageRole",
     "Notification",
     "Task",
+    "TaskAttempt",
     "TaskDifficulty",
     "TaskStatus",
     "TaskVersion",

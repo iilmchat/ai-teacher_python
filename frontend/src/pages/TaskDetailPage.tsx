@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useTasksStore } from '@/store/tasks';
-import type { SubmitResponse } from '@/types/api';
+import type {
+  AttemptDetail,
+  AttemptItem,
+  AttemptList,
+  SubmitResponse,
+} from '@/types/api';
 
 function ResultsCard({ result }: { result: SubmitResponse }) {
   const { t } = useTranslation();
@@ -53,12 +58,110 @@ function ResultsCard({ result }: { result: SubmitResponse }) {
   );
 }
 
+function AttemptsHistory({
+  attempts,
+  attemptDetail,
+  onOpen,
+  onRestore,
+}: {
+  attempts: AttemptList | null;
+  attemptDetail: AttemptDetail | null;
+  onOpen: (attemptId: string) => void;
+  onRestore: (code: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  if (!attempts || attempts.items.length === 0) {
+    return null;
+  }
+
+  return (
+    <Card title={t('tasks.attemptsHistory')}>
+      <ul className="flex flex-col gap-2">
+        {attempts.items.map((item: AttemptItem) => (
+          <li
+            key={item.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          >
+            <span className="text-slate-600">
+              {new Date(item.created_at).toLocaleString('ru-RU')}
+            </span>
+            <span
+              className={item.passed ? 'font-medium text-emerald-700' : 'font-medium text-rose-700'}
+            >
+              {item.passed
+                ? t('tasks.attemptPassed')
+                : t('tasks.attemptFailed')}{' '}
+              {t('tasks.attemptScore', {
+                passed: item.passed_count,
+                total: item.total_count,
+              })}
+            </span>
+            <button
+              type="button"
+              className="text-sm text-indigo-700 hover:underline"
+              onClick={() => onOpen(item.id)}
+            >
+              {t('tasks.attemptDetails')}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      {attemptDetail && (
+        <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-medium text-slate-800">
+              {t('tasks.attemptDetails')}
+            </p>
+            <button
+              type="button"
+              className="text-sm text-indigo-700 hover:underline"
+              onClick={() => onRestore(attemptDetail.code)}
+            >
+              {t('tasks.attemptRestore')}
+            </button>
+          </div>
+          <pre className="mt-2 overflow-x-auto rounded bg-white p-2 font-mono text-xs">
+            {attemptDetail.code}
+          </pre>
+          <ul className="mt-2 flex flex-col gap-1">
+            {attemptDetail.results.map((result) => (
+              <li
+                key={result.index}
+                className={`rounded border px-2 py-1 text-xs ${
+                  result.passed
+                    ? 'border-emerald-200 bg-emerald-50'
+                    : 'border-rose-200 bg-rose-50'
+                }`}
+              >
+                {t('tasks.case')} {result.index}:{' '}
+                {result.passed ? t('tasks.casePassed') : t('tasks.caseFailed')}
+                {!result.passed && (
+                  <span className="ml-1 font-mono">
+                    in: {JSON.stringify(result.input)} · expected:{' '}
+                    {JSON.stringify(result.expected_output)} · actual:{' '}
+                    {JSON.stringify(result.actual_output)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+
 export function TaskDetailPage() {
   const { t } = useTranslation();
   const { taskId = '' } = useParams<{ taskId: string }>();
   const detail = useTasksStore((state) => state.detail);
   const submission = useTasksStore((state) => state.submission);
   const checkResult = useTasksStore((state) => state.checkResult);
+  const attempts = useTasksStore((state) => state.attempts);
+  const attemptDetail = useTasksStore((state) => state.attemptDetail);
   const loading = useTasksStore((state) => state.loading);
   const submitting = useTasksStore((state) => state.submitting);
   const checking = useTasksStore((state) => state.checking);
@@ -66,13 +169,22 @@ export function TaskDetailPage() {
   const loadDetail = useTasksStore((state) => state.loadDetail);
   const submit = useTasksStore((state) => state.submit);
   const check = useTasksStore((state) => state.check);
+  const loadAttempts = useTasksStore((state) => state.loadAttempts);
+  const loadAttempt = useTasksStore((state) => state.loadAttempt);
 
   const [code, setCode] = useState('');
   const [hintsShown, setHintsShown] = useState(0);
 
+  async function handleSubmit() {
+    await submit(detail?.id ?? taskId, code);
+    // Новая попытка появилась в истории — перечитываем список.
+    void loadAttempts(taskId);
+  }
+
   useEffect(() => {
     void loadDetail(taskId);
-  }, [loadDetail, taskId]);
+    void loadAttempts(taskId);
+  }, [loadDetail, loadAttempts, taskId]);
 
   useEffect(() => {
     if (detail) {
@@ -140,7 +252,7 @@ export function TaskDetailPage() {
         <CodeEditor value={code} onChange={setCode} height="280px" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
-            onClick={() => void submit(detail.id, code)}
+            onClick={() => void handleSubmit()}
             loading={submitting}
             disabled={!code.trim()}
           >
@@ -162,6 +274,13 @@ export function TaskDetailPage() {
       </Card>
 
       {error && <Alert tone="error">{error}</Alert>}
+
+      <AttemptsHistory
+        attempts={attempts}
+        attemptDetail={attemptDetail}
+        onOpen={(attemptId) => void loadAttempt(detail.id, attemptId)}
+        onRestore={(restored) => setCode(restored)}
+      />
 
       {checkResult && <ResultsCard result={checkResult} />}
       {submission && <ResultsCard result={submission} />}

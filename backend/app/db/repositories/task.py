@@ -8,7 +8,13 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.base import BaseRepository
-from app.models.task import Task, TaskDifficulty, TaskVersion, UserTaskProgress
+from app.models.task import (
+    Task,
+    TaskAttempt,
+    TaskDifficulty,
+    TaskVersion,
+    UserTaskProgress,
+)
 
 
 class TaskRepository(BaseRepository[Task]):
@@ -134,6 +140,43 @@ class ProgressRepository(BaseRepository[UserTaskProgress]):
             select(UserTaskProgress.id).where(UserTaskProgress.task_id == task_id).limit(1)
         )
         return result.scalar_one_or_none() is not None
+
+
+class TaskAttemptRepository(BaseRepository[TaskAttempt]):
+    """История попыток ученика по задаче (S42-002)"""
+
+    def __init__(self, session: AsyncSession):
+        super().__init__(TaskAttempt, session)
+
+    async def list_for_user_and_task(
+        self, user_id: UUID, task_id: UUID, skip: int = 0, limit: int = 20
+    ) -> list[TaskAttempt]:
+        """Попытки ученика по задаче (новые сверху)"""
+        result = await self.session.execute(
+            select(TaskAttempt)
+            .where(
+                TaskAttempt.user_id == user_id,
+                TaskAttempt.task_id == task_id,
+            )
+            .order_by(TaskAttempt.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(result.scalars().all())
+
+    async def count_for_user_and_task(
+        self, user_id: UUID, task_id: UUID
+    ) -> int:
+        """Всего попыток ученика по задаче"""
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(TaskAttempt)
+            .where(
+                TaskAttempt.user_id == user_id,
+                TaskAttempt.task_id == task_id,
+            )
+        )
+        return int(result.scalar_one())
 
 
 class TaskVersionRepository(BaseRepository[TaskVersion]):

@@ -9,6 +9,7 @@
 |--------|-----|-------|------|
 | Email, username, хэш пароля (bcrypt), роль, уровень | `users` | вход, роли, уровень помощи | пока аккаунт активен |
 | Прогресс по задачам (статус, попытки, дата завершения) | `user_task_progress` | обучение, отчёты учителя | пока аккаунт активен |
+| История попыток: код решения, результат по тест-кейсам, время (S42-002) | `task_attempts` | обучение, разбор ошибок учеником | `RETENTION_TASK_ATTEMPTS_DAYS` (90) |
 | Сессии и сообщения чата | `chat_sessions`, `chat_messages` | история помощи ученику | `RETENTION_CHAT_MESSAGES_DAYS` (90) |
 | Запуски кода (код, вывод, ошибка) | `code_executions` | история песочницы | `RETENTION_CODE_EXECUTIONS_DAYS` (90) |
 | Уведомления и достижения | `notifications`, `user_achievements` | мотивация | `RETENTION_NOTIFICATIONS_DAYS` (180) |

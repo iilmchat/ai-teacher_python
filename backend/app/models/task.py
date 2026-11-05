@@ -124,6 +124,47 @@ class TaskVersion(Base):
         return f"<TaskVersion task={self.task_id} v{self.version}>"
 
 
+class TaskAttempt(Base):
+    """Попытка ученика по задаче (S42-002)
+
+    `UserTaskProgress` хранит сводку (статус, счётчик попыток), а эта таблица —
+    историю: код, который ученик отправил, результат по каждому тест-кейсу и
+    время. Создаётся только при засчитанной отправке (`POST /tasks/{id}/submit`);
+    пробная проверка (S42-001) попытку не засчитывает и в историю не пишется.
+    """
+
+    __tablename__ = "task_attempts"
+    __table_args__ = (
+        Index("idx_task_attempts_user_task", "user_id", "task_id", "created_at"),
+        Index("idx_task_attempts_task", "task_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    task_id: Mapped[UUID] = mapped_column(
+        ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Код, который ученик отправил
+    code: Mapped[str] = mapped_column(Text, nullable=False)
+    #: Пройдены ли все тест-кейсы
+    passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    passed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    #: Разбор по кейсам: список словарей с input/expected/actual/error
+    results: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<TaskAttempt user={self.user_id} task={self.task_id} "
+            f"passed={self.passed}>"
+        )
+
+
 class UserTaskProgress(Base):
     """Прогресс ученика по конкретной задаче"""
 
