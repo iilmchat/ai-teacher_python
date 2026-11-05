@@ -5,6 +5,7 @@ import { useTasksStore } from '@/store/tasks';
 import type {
   AttemptDetail,
   AttemptList,
+  RecommendedTaskList,
   ProgressSummary,
   SubmitResponse,
   TaskDetail,
@@ -53,6 +54,20 @@ const SUBMIT: SubmitResponse = {
   message: 'Задача решена!',
 };
 
+const RECOMMENDED: RecommendedTaskList = {
+  items: [
+    {
+      id: 'rec-1',
+      title: 'Рекомендованная задача',
+      difficulty: 'easy',
+      category: 'input_output',
+      tags: ['python'],
+      reason: 'starter',
+      reason_text: 'С чего начать: простая задача по теме',
+    },
+  ],
+};
+
 const ATTEMPT_LIST: AttemptList = {
   items: [
     {
@@ -93,6 +108,7 @@ function resetStore(): void {
     checkResult: null,
     attempts: null,
     attemptDetail: null,
+    recommended: null,
     filters: {
       difficulty: null,
       category: null,
@@ -206,6 +222,24 @@ describe('tasks store', () => {
     expect(signals).toHaveLength(2);
     expect(signals[0].aborted).toBe(true);
     expect(signals[1].aborted).toBe(false);
+  });
+
+  it('загружает рекомендации следующих задач', async () => {
+    const get = vi.spyOn(api, 'get').mockResolvedValue(RECOMMENDED);
+
+    await useTasksStore.getState().loadRecommended();
+
+    expect(get).toHaveBeenCalledWith('/tasks/recommended');
+    expect(useTasksStore.getState().recommended?.items).toHaveLength(1);
+  });
+
+  it('не показывает ошибку, если рекомендации не загрузились', async () => {
+    vi.spyOn(api, 'get').mockRejectedValue(new Error('500'));
+
+    await useTasksStore.getState().loadRecommended();
+
+    expect(useTasksStore.getState().recommended).toBeNull();
+    expect(useTasksStore.getState().error).toBeNull();
   });
 
   it('загружает детали задачи и сбрасывает прошлый результат', async () => {

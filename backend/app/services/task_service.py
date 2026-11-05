@@ -32,6 +32,8 @@ from app.schemas.task import (
     DraftStatus,
     ProgressItem,
     ProgressSummary,
+    RecommendedTask,
+    RecommendedTaskList,
     SubmitResponse,
     TaskCreate,
     TaskDetail,
@@ -42,6 +44,20 @@ from app.schemas.task import (
     TestCaseResult,
 )
 from app.services.cache import invalidate_tasks_cache
+
+#: Порядок сложности: easy -> medium -> hard.
+_DIFFICULTY_ORDER: dict[TaskDifficulty, int] = {
+    TaskDifficulty.EASY: 0,
+    TaskDifficulty.MEDIUM: 1,
+    TaskDifficulty.HARD: 2,
+}
+
+
+def _difficulty_rank(task: Task | None) -> int:
+    """Ранг сложности задачи (0 — самая простая)."""
+    if task is None:
+        return -1
+    return _DIFFICULTY_ORDER.get(task.difficulty, 0)
 
 
 class TaskService:
@@ -106,6 +122,105 @@ class TaskService:
         """Категории активных задач"""
         return await self.tasks.list_categories()
 
+    async def recommended_tasks(
+        self, user: User, limit: int = 5
+    ) -> RecommendedTaskList:
+        """Рекомендации следующих задач (S42-005).
+
+        Правила (детерминированные, без случайности):
+
+        1. Решенные задачи не рекомендуются.
+        2. Сложность не выше, чем у последней решённой + одна ступень.
+        3. Приоритет: начатые задачи, затем совпадение тегов с недавно
+           решёнными, затем близость по сложности.
+        4. Порядок одинаковых кандидатов — по дате создания, затем по id.
+
+        Каждая рекомендация объясняет, почему она предложена.
+        """
+        progress_map = await self.progress.get_user_progress_map(user.id)
+        candidates = await self.tasks.list_tasks(limit=1000)
+
+        solved: list[tuple[Task, datetime]] = []
+        for task in candidates:
+            record = progress_map.get(task.id)
+            if record is None:
+                continue
+            if record.status == TaskStatus.COMPLETED:
+                solved.append((task, record.completed_at or record.updated_at))
+
+        # Последняя решённая задача задаёт верхнюю границу сложности.
+        solved.sort(key=lambda pair: (pair[1], pair[0].id))
+        last_solved = solved[-1][0] if solved else None
+        max_rank = _difficulty_rank(last_solved) + 1 if last_solved else 2
+
+        # Теги недавно решённых задач — подсказка темы.
+        recent_tags: set[str] = set()
+        for task, _ in solved[-3:]:
+            recent_tags.update(tag.lower() for tag in (task.tags or []))
+
+        scored: list[tuple[tuple[int, int, float, str, UUID], RecommendedTask]] = []
+        for task in candidates:
+            record = progress_map.get(task.id)
+            if record is not None and record.status == TaskStatus.COMPLETED:
+                continue
+            rank = _difficulty_rank(task)
+            if rank > max_rank:
+                continue
+
+            overlap = recent_tags.intersection(
+                tag.lower() for tag in (task.tags or [])
+            )
+            in_progress = record is not None
+
+            if in_progress:
+                reason = "continue"
+                reason_text = "Вы уже начали эту задачу — продолжите с того места"
+                priority = 0
+            elif overlap:
+                reason = "same_topic"
+                reason_text = (
+                    "Та же тема, что и в недавно решённых задачах"
+                )
+                priority = 1
+            elif not solved:
+                reason = "starter"
+                reason_text = "С чего начать: простая задача по теме"
+                priority = 2
+            elif rank <= _difficulty_rank(last_solved):
+                reason = "easier"
+                reason_text = "Проще, чем последняя решённая задача"
+                priority = 3
+            else:
+                reason = "next_step"
+                reason_text = "Следующий шаг по сложности"
+                priority = 4
+
+            # Чем меньше значение, тем раньше рекомендация.
+            sort_key = (
+                priority,
+                -len(overlap),
+                float(rank),
+                task.created_at.isoformat(),
+                task.id,
+            )
+            scored.append(
+                (
+                    sort_key,
+                    RecommendedTask(
+                        id=task.id,
+                        title=task.title,
+                        difficulty=task.difficulty,
+                        category=task.category,
+                        tags=list(task.tags or []),
+                        reason=reason,
+                        reason_text=reason_text,
+                    ),
+                )
+            )
+
+        scored.sort(key=lambda pair: pair[0])
+        items = [item for _, item in scored[:limit]]
+        return RecommendedTaskList(items=items)
     async def _get_task_or_404(self, task_id: UUID) -> Task:
         task = await self.tasks.get(task_id)
         if task is None:

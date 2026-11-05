@@ -10,6 +10,7 @@ import type {
   AttemptDetail,
   AttemptList,
   DraftStatus,
+  RecommendedTaskList,
   ProgressSummary,
   SubmitResponse,
   TaskDetail,
@@ -38,6 +39,8 @@ interface TasksState {
   attempts: AttemptList | null;
   /** Детальная попытка (S42-002) */
   attemptDetail: AttemptDetail | null;
+  /** Рекомендации следующих задач (S42-005) */
+  recommended: RecommendedTaskList | null;
   /** Когда черновик сохранён в последний раз (S42-003) */
   draftSavedAt: string | null;
   /** Идёт ли сохранение черновика (S42-003) */
@@ -58,6 +61,8 @@ interface TasksState {
   /** Пробная проверка: результат показывается, но попытка не засчитывается */
   check: (taskId: string, code: string) => Promise<void>;
   /** Загрузить историю попыток по задаче (S42-002) */
+  /** Загрузить рекомендации следующих задач (S42-005) */
+  loadRecommended: () => Promise<void>;
   loadAttempts: (taskId: string) => Promise<void>;
   /** Загрузить детальную попытку (S42-002) */
   loadAttempt: (taskId: string, attemptId: string) => Promise<void>;
@@ -103,6 +108,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   checkResult: null,
   attempts: null,
   attemptDetail: null,
+  recommended: null,
   draftSavedAt: null,
   draftSaving: false,
   filters: { difficulty: null, category: null, tag: null, status: null, search: '' },
@@ -146,6 +152,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       checkResult: null,
       attempts: null,
       attemptDetail: null,
+      recommended: null,
       draftSavedAt: null,
     });
     try {
@@ -224,6 +231,18 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       set({ checking: false, error: i18n.t('errors.check') });
     }
   },
+
+  async loadRecommended() {
+    try {
+      const recommended = await api.get<RecommendedTaskList>('/tasks/recommended');
+      set({ recommended });
+    } catch {
+      // Рекомендации вспомогательны: их отсутствие не должно
+      // показывать ошибку на странице.
+      set({ recommended: null });
+    }
+  },
+
 
   async loadAttempts(taskId) {
     set({ attempts: null, attemptDetail: null, error: null });

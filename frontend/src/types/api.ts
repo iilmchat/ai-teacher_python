@@ -140,6 +140,22 @@ export interface DraftStatus {
   updated_at: string | null;
 }
 
+export interface RecommendedTask {
+  id: string;
+  title: string;
+  difficulty: TaskDifficulty;
+  category: string;
+  tags: string[];
+  /** Машиночитаемая причина: continue | same_topic | easier | next_step | starter */
+  reason: string;
+  /** Пояснение для ученика */
+  reason_text: string;
+}
+
+export interface RecommendedTaskList {
+  items: RecommendedTask[];
+}
+
 export interface AttemptItem {
   id: string;
   task_id: string;

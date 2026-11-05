@@ -41,6 +41,19 @@ test.describe('Задачи', () => {
     await expect(page.getByRole('button', { name: 'Показать подсказку' })).toBeVisible();
   });
 
+  test('рекомендуется следующая задача с пояснением', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/dashboard');
+
+    await expect(page.getByText('Рекомендуем дальше')).toBeVisible({
+      timeout: 20_000,
+    });
+    // У нового ученика есть рекомендация с пояснением
+    await expect(page.getByText(/С чего начать/).first()).toBeVisible({
+      timeout: 20_000,
+    });
+  });
+
   test('поиск и фильтры каталога работают', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/tasks');

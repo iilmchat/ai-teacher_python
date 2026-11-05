@@ -124,6 +124,30 @@ async def _create_task_with_tags(
     return data
 
 
+async def _create_task_custom(
+    client: AsyncClient,
+    db: AsyncSession,
+    difficulty: str,
+    title: str,
+    tags: list[str],
+    teacher_name: str,
+) -> dict[str, Any]:
+    """Задача с заданными сложностью, названием и тегами."""
+    token = await _create_teacher_token(client, db, teacher_name)
+    payload = {
+        **TASK_PAYLOAD,
+        "title": title,
+        "difficulty": difficulty,
+        "tags": tags,
+    }
+    response = await client.post(
+        TASKS_URL, json=payload, headers=_auth(token)
+    )
+    assert response.status_code == 201, response.text
+    data: dict[str, Any] = response.json()
+    return data
+
+
 async def _create_task(
     client: AsyncClient, db: AsyncSession, teacher_name: str = "teacher1"
 ) -> dict[str, Any]:
@@ -364,6 +388,164 @@ async def test_submit_requires_auth(
     response = await client.post(
         f"{TASKS_URL}/{task['id']}/submit", json={"code": "print(1)"}
     )
+
+    assert response.status_code in (401, 403)
+
+
+# --- Рекомендации следующих задач (S42-005) ------------------------------
+
+
+async def test_recommended_empty_without_tasks(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без задач рекомендаций нет"""
+    token = await _register_and_login(client, "rec1")
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+
+
+async def test_recommended_excludes_solved_tasks(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Решённые задачи не рекомендуются"""
+    solved = await _create_task_custom(
+        client, db_session, "easy", "Решённая задача", ["python"], "rec_teacher1"
+    )
+    await _create_task_custom(
+        client, db_session, "easy", "Нерешённая задача", ["python"], "rec_teacher1"
+    )
+    token = await _register_and_login(client, "rec2")
+
+    await client.post(
+        f"{TASKS_URL}/{solved['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    ids = [item["id"] for item in response.json()["items"]]
+    assert solved["id"] not in ids
+    assert len(ids) == 1
+
+
+async def test_recommended_respects_difficulty_ceiling(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """После простой задачи не предлагается самая сложная"""
+    easy_task = await _create_task_custom(
+        client, db_session, "easy", "Лёгкая задача", ["basics"], "rec_teacher2"
+    )
+    hard_task = await _create_task_custom(
+        client, db_session, "hard", "Сложная задача", ["advanced"], "rec_teacher2"
+    )
+    token = await _register_and_login(client, "rec3")
+
+    await client.post(
+        f"{TASKS_URL}/{easy_task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    ids = [item["id"] for item in response.json()["items"]]
+    assert hard_task["id"] not in ids
+    assert easy_task["id"] not in ids
+
+
+async def test_recommended_prefers_same_topic(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Задача с той же темой, что у решённой, идёт раньше"""
+    solved = await _create_task_custom(
+        client, db_session, "easy", "Задача про циклы", ["loops"], "rec_teacher3"
+    )
+    same_topic = await _create_task_custom(
+        client, db_session, "easy", "Ещё про циклы", ["loops"], "rec_teacher3"
+    )
+    other_topic = await _create_task_custom(
+        client, db_session, "easy", "Про строки", ["strings"], "rec_teacher3"
+    )
+    token = await _register_and_login(client, "rec4")
+
+    await client.post(
+        f"{TASKS_URL}/{solved['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    items = response.json()["items"]
+    ids = [item["id"] for item in items]
+    assert same_topic["id"] in ids
+    assert ids.index(same_topic["id"]) < ids.index(other_topic["id"])
+
+
+async def test_recommended_is_deterministic(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Два одинаковых запроса дают одинаковый порядок"""
+    await _create_task_custom(
+        client, db_session, "easy", "Первая", ["a"], "rec_teacher4"
+    )
+    await _create_task_custom(
+        client, db_session, "easy", "Вторая", ["b"], "rec_teacher4"
+    )
+    token = await _register_and_login(client, "rec5")
+
+    first = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    second = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+
+    assert first.json()["items"] == second.json()["items"]
+
+
+async def test_recommended_includes_reason(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """У каждой рекомендации есть причина"""
+    await _create_task_custom(
+        client, db_session, "easy", "Задача для рекомендации", ["python"], "rec_teacher5"
+    )
+    token = await _register_and_login(client, "rec6")
+
+    response = await client.get(f"{TASKS_URL}/recommended", headers=_auth(token))
+    items = response.json()["items"]
+    assert items
+    for item in items:
+        assert item["reason"] in {
+            "continue",
+            "same_topic",
+            "easier",
+            "next_step",
+            "starter",
+        }
+        assert item["reason_text"]
+
+
+async def test_recommended_limit_and_validation(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Лимит ограничен, неверное значение отклоняется"""
+    token = await _register_and_login(client, "rec7")
+
+    too_many = await client.get(
+        f"{TASKS_URL}/recommended?limit=100", headers=_auth(token)
+    )
+    assert too_many.status_code == 422
+
+    ok_response = await client.get(
+        f"{TASKS_URL}/recommended?limit=3", headers=_auth(token)
+    )
+    assert ok_response.status_code == 200
+
+
+async def test_recommended_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена рекомендации недоступны"""
+    response = await client.get(f"{TASKS_URL}/recommended")
 
     assert response.status_code in (401, 403)
 

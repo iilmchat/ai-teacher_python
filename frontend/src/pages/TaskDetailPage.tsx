@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
 import { CodeEditor } from '@/components/code-editor/CodeEditor';
+import { RecommendedTasks } from '@/components/tasks/RecommendedTasks';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -369,6 +370,8 @@ export function TaskDetailPage() {
       </Card>
 
       {error && <Alert tone="error">{error}</Alert>}
+
+      <RecommendedTasks />
 
       <AttemptsHistory
         attempts={attempts}

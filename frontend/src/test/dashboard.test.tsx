@@ -45,6 +45,21 @@ function mockDashboard() {
         ],
       };
     }
+    if (path === '/tasks/recommended') {
+      return {
+        items: [
+          {
+            id: 'rec1',
+            title: 'Рекомендованная задача',
+            difficulty: 'easy',
+            category: 'input_output',
+            tags: ['python'],
+            reason: 'starter',
+            reason_text: 'С чего начать: простая задача по теме',
+          },
+        ],
+      };
+    }
     if (path === '/me/notifications') {
       return {
         unread: 1,
@@ -105,5 +120,17 @@ describe('DashboardPage', () => {
     renderWithRouter(<DashboardPage />);
 
     await waitFor(() => expect(screen.getByText('Сумма')).toBeInTheDocument());
+  });
+
+  it('показывает рекомендации следующих задач', async () => {
+    mockDashboard();
+
+    renderWithRouter(<DashboardPage />);
+
+    expect(await screen.findByText('Рекомендуем дальше')).toBeInTheDocument();
+    expect(screen.getByText('Рекомендованная задача')).toBeInTheDocument();
+    expect(
+      screen.getByText('С чего начать: простая задача по теме'),
+    ).toBeInTheDocument();
   });
 });

@@ -146,7 +146,9 @@
     "statusLabel": "Status",
     "resetFilters": "Reset filters",
     "found": "Tasks found: {{count}}",
-    "emptyFiltered": "Nothing matches your filters. Try changing the conditions or reset the filters."
+    "emptyFiltered": "Nothing matches your filters. Try changing the conditions or reset the filters.",
+    "recommendedTitle": "Recommended next",
+    "recommendedEmpty": "Nothing to recommend yet — solve an introductory task and we will pick the next one by topic and difficulty."
   },
   "progress": {
     "title": "Progress",

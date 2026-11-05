@@ -202,6 +202,27 @@ class AttemptList(BaseModel):
     total: int = 0
 
 
+class RecommendedTask(BaseModel):
+    """Рекомендуемая задача с объяснением выбора (S42-005)"""
+
+    id: UUID
+    title: str
+    difficulty: TaskDifficulty
+    category: str
+    tags: list[str] = Field(default_factory=list)
+    #: Машиночитаемая причина: `continue` | `same_topic` | `easier` |
+    #: `next_step` | `starter`
+    reason: str
+    #: Пояснение для ученика (текст на русском)
+    reason_text: str
+
+
+class RecommendedTaskList(BaseModel):
+    """Список рекомендаций"""
+
+    items: list[RecommendedTask] = Field(default_factory=list)
+
+
 class ProgressItem(BaseModel):
     """Прогресс по одной задаче"""
 

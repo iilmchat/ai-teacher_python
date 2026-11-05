@@ -37,6 +37,7 @@ from app.schemas.task import (
     DraftStatus,
     HintResponse,
     ProgressSummary,
+    RecommendedTaskList,
     SubmitRequest,
     SubmitResponse,
     TaskAdminDetail,
@@ -255,6 +256,21 @@ async def get_stats(
 ) -> TaskStatsResponse:
     """Статистика задач и активности"""
     return await service.get_stats(current_user)
+
+
+@router.get("/recommended", response_model=RecommendedTaskList)
+async def recommended_tasks(
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+    limit: int = Query(default=5, ge=1, le=20),
+) -> RecommendedTaskList:
+    """Рекомендации следующих задач (S42-005).
+
+    Порядок детерминированный: начатые задачи, затем совпадение тегов
+    с недавно решёнными, затем близость по сложности. Каждая рекомендация
+    объясняет, почему она предложена.
+    """
+    return await service.recommended_tasks(current_user, limit=limit)
 
 
 @router.get("/{task_id}", response_model=TaskDetail)
