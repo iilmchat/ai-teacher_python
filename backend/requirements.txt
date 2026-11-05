@@ -6,29 +6,29 @@
 # Новые транзитивные зависимости fastapi: annotated-doc, opentelemetry-api.
 fastapi==0.162.0
 starlette==1.10.0
-uvicorn[standard]==0.32.1
+uvicorn[standard]==0.54.0
 # S20-001: 0.0.17 → 0.0.31 (GHSA-wp53-j4wj-2cfg, GHSA-pp6c-gr5w-3c5g,
 # GHSA-5rvq-cxj2-64vf, GHSA-v9pg-7xvm-68hf — все закрыты в 0.0.31).
 # Версия проверяется CI (job Security → pip-audit); локально PyPI на хосте
 # заблокирован — см. docs/reports/sprint-20/SECURITY_AUDIT.md.
-python-multipart==0.0.31
+python-multipart==0.0.33
 
 # Async
-asyncpg==0.30.0
+asyncpg==0.32.0
 
 # Database
-sqlalchemy[asyncio]==2.0.36
-alembic==1.14.0
-pgvector==0.3.6
+sqlalchemy[asyncio]==2.1.6
+alembic==1.20.1
+pgvector==0.5.1
 psycopg2-binary==2.9.13
 
 # Redis
 redis==8.1.0
 
 # Validation
-pydantic==2.10.1
+pydantic==2.14.2
 pydantic-settings==2.16.2
-email-validator==2.2.0
+email-validator==2.3.0
 
 # Security
 # passlib не используется: несовместим с bcrypt 5.x (ValueError на 72+ байтах),
@@ -52,11 +52,11 @@ pyjwt==2.15.1
 restrictedpython==8.5
 
 # LLM
-openai==3.40.0
+openai==3.42.1
 httpx==0.28.1
 
 # Task import/export (S14-001)
-PyYAML==6.0.2
+PyYAML==6.0.3
 
 # Logging & metrics (S25)
 structlog==26.1.0
@@ -66,12 +66,12 @@ prometheus-client==0.26.0
 # S22-003 (KI-016): pytest 8.3.3 → 9.2.0 + плагины (asyncio 1.4.1, cov 7.1.0,
 # env 1.8.3). Закрыт dev-only advisory PYSEC-2026-1845, поэтому из CI
 # pip-audit больше нет ни одного --ignore-vuln.
-ruff==0.8.1
-mypy==2.4.0
+ruff==0.17.3
+mypy==2.4.1
 pytest==9.2.0
 pytest-asyncio==1.4.1
 pytest-cov==7.1.0
-pytest-env==1.8.3
+pytest-env==1.8.4
 
 # Types
 types-redis==4.6.0.20241004
