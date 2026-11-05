@@ -163,3 +163,33 @@ class ChatSearchResponse(BaseModel):
     items: list[ChatSearchItem] = Field(default_factory=list)
     total: int
 
+
+class MessageFeedbackCreate(BaseModel):
+    """Оценка ответа ассистента (S43-003).
+
+    `value`: 1 — ответ помог, −1 — не помог. `comment` — необязательный
+    комментарий ученика до 500 символов.
+    """
+
+    value: Literal[1, -1]
+    comment: str | None = Field(default=None, max_length=500)
+
+    @field_validator("comment")
+    @classmethod
+    def _normalize_comment(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class MessageFeedbackResponse(BaseModel):
+    """Оценка ответа ассистента"""
+
+    message_id: UUID
+    value: int
+    comment: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+

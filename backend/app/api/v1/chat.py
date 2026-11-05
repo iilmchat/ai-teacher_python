@@ -25,9 +25,12 @@ from app.schemas.chat import (
     ChatSessionUpdate,
     ChatSessionWithMessages,
     ChatTurnResponse,
+    MessageFeedbackCreate,
+    MessageFeedbackResponse,
 )
 from app.services.cache import cache_get_json, cache_set_json, levels_cache_key
 from app.services.chat_service import ChatService
+from app.services.feedback_service import FeedbackService
 from app.services.levels import list_levels
 from app.services.llm import LLMProvider, create_llm_provider
 from app.services.llm.embeddings import (
@@ -67,6 +70,14 @@ def get_chat_service(
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
+
+
+def get_feedback_service(db: DbSession) -> FeedbackService:
+    """Сервис оценок ответов ассистента (S43-003)"""
+    return FeedbackService(db)
+
+
+FeedbackServiceDep = Annotated[FeedbackService, Depends(get_feedback_service)]
 
 
 @router.get("/levels")
@@ -113,6 +124,52 @@ async def regenerate_message(
     session = await service.get_session(session_id, current_user)
     message = await service.regenerate_reply(session, message_id)
     return ChatMessageResponse.from_message(message)
+
+
+@router.post(
+    "/messages/{message_id}/feedback",
+    response_model=MessageFeedbackResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def set_message_feedback(
+    message_id: UUID,
+    payload: MessageFeedbackCreate,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> MessageFeedbackResponse:
+    """Оценить ответ ассистента (S43-003).
+
+    Повторная оценка меняет значение: на пару «сообщение × ученик» оценка
+    всегда одна.
+    """
+    feedback = await service.set_feedback(
+        message_id, current_user, payload.value, payload.comment
+    )
+    return MessageFeedbackResponse.model_validate(feedback)
+
+
+@router.delete("/messages/{message_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_message_feedback(
+    message_id: UUID,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> None:
+    """Снять свою оценку ответа ассистента (S43-003)"""
+    await service.remove_feedback(message_id, current_user)
+
+
+@router.get(
+    "/sessions/{session_id}/feedback",
+    response_model=list[MessageFeedbackResponse],
+)
+async def list_session_feedback(
+    session_id: UUID,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> list[MessageFeedbackResponse]:
+    """Мои оценки по сообщениям сессии (S43-003)"""
+    items = await service.list_for_session(session_id, current_user)
+    return [MessageFeedbackResponse.model_validate(item) for item in items]
 
 
 @router.get("/search", response_model=ChatSearchResponse)

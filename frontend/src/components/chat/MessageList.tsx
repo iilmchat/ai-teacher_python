@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageFeedbackButtons } from '@/components/chat/MessageFeedback';
 import { RichText } from '@/components/chat/RichText';
 import { isStoppedMessage } from '@/lib/chatMessages';
-import type { ChatMessage } from '@/types/api';
+import type { ChatMessage, MessageFeedback } from '@/types/api';
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -11,6 +12,14 @@ interface MessageListProps {
   streaming?: boolean;
   /** Перегенерировать ответ ассистента (S43-002) */
   onRegenerate?: (messageId: string) => void;
+  /** Мои оценки ответов: id сообщения → оценка (S43-003) */
+  feedback?: Record<string, MessageFeedback>;
+  /** Поставить оценку ответа */
+  onRate?: (messageId: string, value: 1 | -1) => void;
+  /** Сохранить комментарий к оценке */
+  onComment?: (messageId: string, comment: string) => void;
+  /** Снять оценку */
+  onClearFeedback?: (messageId: string) => void;
 }
 
 export function MessageList({
@@ -18,6 +27,10 @@ export function MessageList({
   draft = '',
   streaming = false,
   onRegenerate,
+  feedback,
+  onRate,
+  onComment,
+  onClearFeedback,
 }: MessageListProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -66,6 +79,15 @@ export function MessageList({
             >
               {t('chat.regenerate')}
             </button>
+          )}
+          {message.role === 'assistant' && onRate && onComment && (
+            <MessageFeedbackButtons
+              messageId={message.id}
+              feedback={feedback?.[message.id]}
+              onRate={onRate}
+              onComment={onComment}
+              onClear={onClearFeedback}
+            />
           )}
         </article>
       ))}

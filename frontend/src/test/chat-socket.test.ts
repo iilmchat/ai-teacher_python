@@ -110,6 +110,29 @@ describe('chatSocket', () => {
       }),
     );
 
-    expect(onStopped).toHaveBeenCalledWith('Первая часть', []);
+    expect(onStopped).toHaveBeenCalledWith('Первая часть', [], undefined);
+  });
+
+  it('передаёт id сохранённого сообщения (S43-003)', () => {
+    const onDone = vi.fn();
+    openChatSocket('55555555-5555-5555-5555-555555555555', { onDone });
+    const ws = FakeWebSocket.instances[0];
+    ws.open();
+
+    ws.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({
+          type: 'done',
+          content: 'Ответ',
+          message_id: '77777777-7777-7777-7777-777777777777',
+        }),
+      }),
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      'Ответ',
+      [],
+      '77777777-7777-7777-7777-777777777777',
+    );
   });
 });

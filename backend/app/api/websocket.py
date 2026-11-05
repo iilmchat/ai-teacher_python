@@ -115,8 +115,12 @@ async def _stream_message(
 
     answer = "".join(chunks).strip()
     stopped = stop_event.is_set()
+    message_id: str | None = None
     if answer:
-        await service.save_reply(session, answer, stopped=stopped)
+        message = await service.save_reply(session, answer, stopped=stopped)
+        # Клиенту нужен настоящий id сообщения: локальный не подойдёт для
+        # оценки ответа (S43-003).
+        message_id = str(message.id)
     if stopped:
         await _send_safe(
             ws,
@@ -124,6 +128,7 @@ async def _stream_message(
                 "type": "stopped",
                 "content": answer,
                 "warnings": list(service.last_warnings),
+                "message_id": message_id,
             },
         )
     else:
@@ -134,6 +139,7 @@ async def _stream_message(
                 "content": answer,
                 # Нарушения политики уровня (S12-005) — клиент показывает плашку
                 "warnings": list(service.last_warnings),
+                "message_id": message_id,
             },
         )
 

@@ -10,6 +10,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type {
+  AdminQualityResponse,
   AdminTaskItem,
   AdminTaskListResponse,
   AdminUserItem,
@@ -34,6 +35,7 @@ export function AdminPage() {
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [quality, setQuality] = useState<AdminQualityResponse | null>(null);
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [tasks, setTasks] = useState<AdminTaskItem[]>([]);
   const [search, setSearch] = useState('');
@@ -45,16 +47,18 @@ export function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [analyticsData, usersData, tasksData] = await Promise.all([
+      const [analyticsData, usersData, tasksData, qualityData] = await Promise.all([
         api.get<AnalyticsResponse>('/admin/analytics'),
         api.get<AdminUserListResponse>(
           `/admin/users?limit=50${search ? `&search=${encodeURIComponent(search)}` : ''}`,
         ),
         api.get<AdminTaskListResponse>('/admin/tasks?limit=50'),
+        api.get<AdminQualityResponse>('/admin/quality'),
       ]);
       setAnalytics(analyticsData);
       setUsers(usersData.items);
       setTasks(tasksData.items);
+      setQuality(qualityData);
     } catch {
       setError(t('admin.loadError'));
     } finally {
@@ -145,6 +149,72 @@ export function AdminPage() {
           </Card>
         </>
       )}
+
+      <Card title={t('admin.qualityTitle')}>
+        {quality && quality.total === 0 ? (
+          <p className="text-sm text-slate-500">{t('admin.qualityEmpty')}</p>
+        ) : (
+          quality && (
+            <>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Metric label={t('admin.qualityTotal')} value={quality.total} />
+                <Metric label={t('admin.qualityPositive')} value={quality.positive} />
+                <Metric label={t('admin.qualityNegative')} value={quality.negative} />
+                <Metric
+                  label={t('admin.qualityApproval')}
+                  value={`${Math.round(quality.approval_rate * 100)}%`}
+                />
+              </div>
+
+              {quality.by_provider.length > 0 && (
+                <div className="mt-4 overflow-x-auto">
+                  <Table>
+                    <thead className="text-xs uppercase text-slate-500">
+                      <Tr>
+                        <Th className="py-2">{t('admin.qualityProvider')}</Th>
+                        <Th className="py-2">{t('admin.qualityTotal')}</Th>
+                        <Th className="py-2">{t('admin.qualityPositive')}</Th>
+                        <Th className="py-2">{t('admin.qualityNegative')}</Th>
+                        <Th className="py-2">{t('admin.qualityApproval')}</Th>
+                      </Tr>
+                    </thead>
+                    <tbody>
+                      {quality.by_provider.map((row) => (
+                        <Tr key={row.name} className="border-t border-slate-100">
+                          <Td className="py-2 font-medium text-slate-800">{row.name}</Td>
+                          <Td className="py-2">{row.total}</Td>
+                          <Td className="py-2">{row.positive}</Td>
+                          <Td className="py-2">{row.negative}</Td>
+                          <Td className="py-2">
+                            {Math.round(row.approval_rate * 100)}%
+                          </Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </div>
+              )}
+
+              {quality.negative_samples.length > 0 && (
+                <ul className="mt-4 flex flex-col gap-2 text-sm">
+                  {quality.negative_samples.map((item) => (
+                    <li
+                      key={item.message_id}
+                      className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-xs text-slate-700"
+                    >
+                      <span className="font-medium text-rose-700">
+                        {item.provider} · {item.model}
+                      </span>
+                      {item.comment && <p className="mt-1">{item.comment}</p>}
+                      <p className="mt-1 line-clamp-2 text-slate-500">{item.content}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )
+        )}
+      </Card>
 
       <Card title={t('admin.usersTitle')}>
         <div className="mb-3 flex items-end gap-2">

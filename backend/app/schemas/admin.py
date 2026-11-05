@@ -142,3 +142,37 @@ class DeleteResponse(BaseModel):
 
     deleted: bool
     detail: str = Field(default="Пользователь удалён")
+
+
+class QualityBreakdown(BaseModel):
+    """Агрегат оценок по одному срезу (провайдер или модель)"""
+
+    name: str
+    total: int
+    positive: int
+    negative: int
+    approval_rate: float
+
+
+class QualityNegativeItem(BaseModel):
+    """Негативная оценка с текстом ответа — вход для LLM-as-judge (S43-003)"""
+
+    message_id: UUID
+    comment: str | None = None
+    content: str
+    provider: str
+    model: str
+    created_at: datetime
+
+
+class AdminQualityResponse(BaseModel):
+    """Сводка качества ответов ассистента по оценкам учеников (S43-003)"""
+
+    total: int
+    positive: int
+    negative: int
+    approval_rate: float
+    by_provider: list[QualityBreakdown] = Field(default_factory=list)
+    by_model: list[QualityBreakdown] = Field(default_factory=list)
+    negative_samples: list[QualityNegativeItem] = Field(default_factory=list)
+    generated_at: str

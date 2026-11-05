@@ -93,6 +93,9 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | DELETE | `/chat/sessions/{id}` | — | 204 |
 | POST | `/chat/sessions/{id}/messages` | `{content, task_id?}` | 201 `{user_message, assistant_message}` |
 | POST | `/chat/sessions/{id}/messages/{message_id}/regenerate` | — | 201 `ChatMessage` (S43-002) |
+| POST | `/chat/messages/{id}/feedback` | `{value, comment?}` | 201 `MessageFeedback` (S43-003) |
+| DELETE | `/chat/messages/{id}/feedback` | — | 204 (S43-003) |
+| GET | `/chat/sessions/{id}/feedback` | — | `MessageFeedback[]` (S43-003) |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
 
 `GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
@@ -156,6 +159,22 @@ metadata, warnings}`.
   `replaced = true` и `replaced_by = <id нового ответа>`.
 - Ошибки: чужая сессия — 403; сообщение не найдено — 404; попытка
   перегенерировать вопрос ученика — 422.
+
+**Оценка ответов (S43-003).**
+
+- `POST /chat/messages/{message_id}/feedback` — оценка ответа ассистента:
+  `value` — `1` (помог) или `-1` (не помог), `comment` — необязательный
+  комментарий до 500 символов. Оценка на пару «сообщение × ученик» всегда
+  одна: повторная оценка меняет значение, а не добавляет строку.
+- `DELETE /chat/messages/{message_id}/feedback` — снять свою оценку (204).
+- `GET /chat/sessions/{session_id}/feedback` — мои оценки по сообщениям сессии.
+- Оценивать можно только ответ ассистента в своей сессии: чужое сообщение —
+  403, неизвестное — 404, вопрос ученика — 422.
+- `GET /admin/quality` (только администратор) — сводка качества:
+  `{total, positive, negative, approval_rate, by_provider[], by_model[],
+  negative_samples[]}`. Провайдер и модель берутся из `metadata` ответа,
+  `negative_samples` — последние негативные оценки с текстом ответа и
+  комментарием: это вход для LLM-as-judge (см. `docs/LLM_EVAL.md`).
 
 **Контекст задачи (S42-006).**
 
@@ -476,6 +495,12 @@ chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
    embedding — nullable: заполняется best-effort при сохранении, только если
    RAG_ENABLED=true и провайдер доступен; HNSW-индекс `vector_cosine_ops`
 
+message_feedback(id, message_id→chat_messages, user_id→users, value, comment,
+                 created_at)
+   value ∈ {1, -1} — CHECK `ck_message_feedback_value`
+   comment — nullable, до 500 символов
+   уникальность (message_id, user_id): `uq_message_feedback_message_user`
+
 code_executions(id, user_id→users, code, output, error, success, execution_time,
                 created_at)
 
@@ -516,6 +541,7 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
 `chat_sessions(user_id, pinned, updated_at)` (S43-001),
+`message_feedback(message_id)` (S43-003),
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
 `user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,

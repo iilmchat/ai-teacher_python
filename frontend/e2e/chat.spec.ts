@@ -150,6 +150,29 @@ test.describe('Чат', () => {
     await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible();
   });
 
+  test('оценивает ответ ассистента', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Как работает цикл for?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Оценка ответа (S43-003): кнопки под ответом ассистента
+    const like = page.getByRole('button', { name: 'Ответ помог' }).first();
+    await expect(like).toBeVisible();
+    await like.click();
+
+    await expect(like).toHaveAttribute('aria-pressed', 'true');
+    // После оценки появляется возможность оставить комментарий
+    await expect(page.getByRole('button', { name: 'Комментарий' }).first()).toBeVisible();
+  });
+
   test('уровень выбирается при создании сессии', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/chat');

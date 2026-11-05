@@ -20,9 +20,10 @@ import { getAccessToken } from '@/lib/token';
 export interface ChatSocketHandlers {
   onStart?: () => void;
   onToken?: (delta: string) => void;
-  onDone?: (full: string, warnings: string[]) => void;
+  /** Ответ сохранён сервером; `messageId` — его настоящий id (S43-003) */
+  onDone?: (full: string, warnings: string[], messageId?: string) => void;
   /** Генерация остановлена: сервер прислал частичный ответ (S43-002) */
-  onStopped?: (partial: string, warnings: string[]) => void;
+  onStopped?: (partial: string, warnings: string[], messageId?: string) => void;
   onError?: (detail: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -72,6 +73,7 @@ export function openChatSocket(
       content?: string;
       detail?: string;
       warnings?: unknown;
+      message_id?: string | null;
     };
     try {
       payload = JSON.parse(event.data) as typeof payload;
@@ -92,7 +94,7 @@ export function openChatSocket(
               (item): item is string => typeof item === 'string',
             )
           : [];
-        handlers.onDone?.(payload.content ?? '', warnings);
+        handlers.onDone?.(payload.content ?? '', warnings, payload.message_id ?? undefined);
         break;
       }
       case 'stopped': {
@@ -101,7 +103,11 @@ export function openChatSocket(
               (item): item is string => typeof item === 'string',
             )
           : [];
-        handlers.onStopped?.(payload.content ?? '', warnings);
+        handlers.onStopped?.(
+          payload.content ?? '',
+          warnings,
+          payload.message_id ?? undefined,
+        );
         break;
       }
       case 'error':

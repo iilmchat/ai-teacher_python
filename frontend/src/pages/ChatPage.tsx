@@ -33,6 +33,9 @@ export function ChatPage() {
   const renameSession = useChatStore((state) => state.renameSession);
   const togglePin = useChatStore((state) => state.togglePin);
   const regenerate = useChatStore((state) => state.regenerate);
+  const feedback = useChatStore((state) => state.feedback);
+  const setFeedback = useChatStore((state) => state.setFeedback);
+  const clearFeedback = useChatStore((state) => state.clearFeedback);
   const loadTaskContext = useChatStore((state) => state.loadTaskContext);
   const clearTaskContext = useChatStore((state) => state.clearTaskContext);
 
@@ -204,6 +207,16 @@ export function ChatPage() {
                 draft={draft}
                 streaming={streaming}
                 onRegenerate={(messageId) => void regenerate(messageId)}
+                feedback={feedback}
+                onRate={(messageId, value) => void setFeedback(messageId, value)}
+                onComment={(messageId, comment) =>
+                  void setFeedback(
+                    messageId,
+                    feedback[messageId]?.value ?? -1,
+                    comment,
+                  )
+                }
+                onClearFeedback={(messageId) => void clearFeedback(messageId)}
               />
             </div>
             <MessageInput onSend={send} disabled={streaming} />

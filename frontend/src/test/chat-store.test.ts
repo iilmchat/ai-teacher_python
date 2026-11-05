@@ -39,6 +39,7 @@ function resetStore(): void {
     loading: false,
     error: null,
     taskContext: null,
+    feedback: {},
   });
 }
 
@@ -305,6 +306,66 @@ describe('chat store', () => {
 
     expect(useChatStore.getState().error).toBe('Не удалось получить новый ответ');
     expect(useChatStore.getState().loading).toBe(false);
+  });
+
+  it('сохраняет оценку ответа ассистента (S43-003)', async () => {
+    const feedback = {
+      message_id: 'm1',
+      value: -1 as const,
+      comment: 'Непонятно',
+      created_at: '2026-11-06T10:00:00',
+    };
+    const post = vi.spyOn(api, 'post').mockResolvedValue(feedback);
+
+    await useChatStore.getState().setFeedback('m1', -1, 'Непонятно');
+
+    expect(post).toHaveBeenCalledWith('/chat/messages/m1/feedback', {
+      value: -1,
+      comment: 'Непонятно',
+    });
+    expect(useChatStore.getState().feedback.m1).toEqual(feedback);
+  });
+
+  it('снимает оценку ответа (S43-003)', async () => {
+    const remove = vi.spyOn(api, 'delete').mockResolvedValue(undefined);
+    useChatStore.setState({
+      feedback: {
+        m1: {
+          message_id: 'm1',
+          value: 1,
+          comment: null,
+          created_at: '2026-11-06T10:00:00',
+        },
+      },
+    });
+
+    await useChatStore.getState().clearFeedback('m1');
+
+    expect(remove).toHaveBeenCalledWith('/chat/messages/m1/feedback');
+    expect(useChatStore.getState().feedback.m1).toBeUndefined();
+  });
+
+  it('загружает мои оценки по сессии (S43-003)', async () => {
+    vi.spyOn(api, 'get').mockResolvedValue([
+      {
+        message_id: 'm1',
+        value: 1,
+        comment: null,
+        created_at: '2026-11-06T10:00:00',
+      },
+    ]);
+
+    await useChatStore.getState().loadFeedback(SESSION.id);
+
+    expect(useChatStore.getState().feedback.m1?.value).toBe(1);
+  });
+
+  it('показывает ошибку, если оценка не сохранилась (S43-003)', async () => {
+    vi.spyOn(api, 'post').mockRejectedValue(new Error('boom'));
+
+    await useChatStore.getState().setFeedback('m1', 1);
+
+    expect(useChatStore.getState().error).toBe('Не удалось сохранить оценку');
   });
 
   it('удаляет сессию из списка и сбрасывает активную', async () => {

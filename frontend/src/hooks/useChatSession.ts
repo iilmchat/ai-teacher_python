@@ -30,9 +30,10 @@ export function useChatSession(sessionId: string | null) {
       onClose: () => setConnected(false),
       onStart: () => startAssistantDraft(),
       onToken: (delta) => appendToken(delta),
-      onDone: (full, warnings) => finishStream(full, warnings),
+      onDone: (full, warnings, messageId) => finishStream(full, warnings, false, messageId),
       // Остановка генерации (S43-002): сервер прислал частичный ответ.
-      onStopped: (partial, warnings) => finishStream(partial, warnings, true),
+      onStopped: (partial, warnings, messageId) =>
+        finishStream(partial, warnings, true, messageId),
       onError: (detail) => failStream(detail),
     });
 

@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.db.repositories.base import BaseRepository
-from app.models.chat import ChatMessage, ChatSession, MessageRole
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback, MessageRole
 
 
 class ChatSessionRepository(BaseRepository[ChatSession]):
@@ -125,3 +125,68 @@ class ChatMessageRepository(BaseRepository[ChatMessage]):
             embedding=embedding,
         )
         return await self.create(message)
+
+
+class MessageFeedbackRepository(BaseRepository[MessageFeedback]):
+    """Репозиторий оценок ответов ассистента (S43-003)"""
+
+    def __init__(self, session: AsyncSession):
+        super().__init__(MessageFeedback, session)
+
+    async def get_for_user(
+        self, message_id: UUID, user_id: UUID
+    ) -> MessageFeedback | None:
+        """Оценка конкретного ученика для сообщения"""
+        result = await self.session.execute(
+            select(MessageFeedback).where(
+                MessageFeedback.message_id == message_id,
+                MessageFeedback.user_id == user_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def list_for_messages(
+        self, message_ids: list[UUID], user_id: UUID
+    ) -> list[MessageFeedback]:
+        """Оценки ученика по списку сообщений"""
+        if not message_ids:
+            return []
+        result = await self.session.execute(
+            select(MessageFeedback).where(
+                MessageFeedback.message_id.in_(message_ids),
+                MessageFeedback.user_id == user_id,
+            )
+        )
+        return list(result.scalars().all())
+
+    async def upsert(
+        self, message_id: UUID, user_id: UUID, value: int, comment: str | None
+    ) -> MessageFeedback:
+        """Поставить или изменить оценку (S43-003).
+
+        Оценка на пару «сообщение × ученик» одна: повторная оценка меняет
+        значение и комментарий, а не добавляет строку.
+        """
+        existing = await self.get_for_user(message_id, user_id)
+        if existing is not None:
+            existing.value = value
+            existing.comment = comment
+            await self.session.commit()
+            await self.session.refresh(existing)
+            return existing
+        feedback = MessageFeedback(
+            message_id=message_id,
+            user_id=user_id,
+            value=value,
+            comment=comment,
+        )
+        return await self.create(feedback)
+
+    async def delete_for_user(self, message_id: UUID, user_id: UUID) -> bool:
+        """Снять оценку ученика"""
+        existing = await self.get_for_user(message_id, user_id)
+        if existing is None:
+            return False
+        await self.session.delete(existing)
+        await self.session.commit()
+        return True

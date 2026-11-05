@@ -14,6 +14,7 @@ import type {
   ChatSession,
   ChatSessionWithMessages,
   ChatTurn,
+  MessageFeedback,
   TaskDetail,
   UserLevel,
 } from '@/types/api';
@@ -34,6 +35,8 @@ interface ChatState {
   error: string | null;
   /** Контекст задачи из deep-link `/chat?task=<id>` (S42-006) */
   taskContext: ChatTaskContext | null;
+  /** Мои оценки ответов ассистента: id сообщения → оценка (S43-003) */
+  feedback: Record<string, MessageFeedback>;
 
   loadSessions: () => Promise<void>;
   createSession: (level?: UserLevel) => Promise<ChatSession>;
@@ -44,12 +47,23 @@ interface ChatState {
   togglePin: (sessionId: string, pinned: boolean) => Promise<void>;
   loadTaskContext: (taskId: string) => Promise<void>;
   clearTaskContext: () => void;
+  /** Мои оценки ответов сессии (S43-003) */
+  loadFeedback: (sessionId: string) => Promise<void>;
+  /** Оценить ответ ассистента (S43-003) */
+  setFeedback: (messageId: string, value: 1 | -1, comment?: string | null) => Promise<void>;
+  /** Снять свою оценку ответа (S43-003) */
+  clearFeedback: (messageId: string) => Promise<void>;
 
   /** Добавить вопрос ученика локально (оптимистично) */
   addUserMessage: (content: string) => void;
   startAssistantDraft: () => void;
   appendToken: (delta: string) => void;
-  finishStream: (full?: string, warnings?: string[], stopped?: boolean) => void;
+  finishStream: (
+    full?: string,
+    warnings?: string[],
+    stopped?: boolean,
+    messageId?: string,
+  ) => void;
   failStream: (message: string) => void;
   /** Перегенерировать ответ ассистента (S43-002) */
   regenerate: (messageId: string) => Promise<void>;
@@ -82,9 +96,10 @@ function localMessage(
   content: string,
   warnings: string[] = [],
   metadata: Record<string, unknown> = {},
+  messageId?: string,
 ): ChatMessage {
   return {
-    id: `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    id: messageId ?? `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     session_id: sessionId,
     role,
     content,
@@ -103,6 +118,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   loading: false,
   error: null,
   taskContext: null,
+  feedback: {},
 
   async loadSessions() {
     set({ loading: true, error: null });
@@ -130,11 +146,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         `/chat/sessions/${sessionId}`,
       );
       set({ active, loading: false, streaming: false });
+      // Оценки ответов показываем сразу при открытии чата (S43-003)
+      void get().loadFeedback(sessionId);
     } catch {
       set({ loading: false, error: i18n.t('errors.chatOpen') });
     }
   },
-
   closeSession() {
     set({ active: null, draft: '', streaming: false });
   },
@@ -205,6 +222,50 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ taskContext: null });
   },
 
+  async loadFeedback(sessionId) {
+    try {
+      const items = await api.get<MessageFeedback[]>(
+        `/chat/sessions/${sessionId}/feedback`,
+      );
+      set({
+        feedback: Object.fromEntries(
+          items.map((item) => [item.message_id, item]),
+        ),
+      });
+    } catch {
+      // Оценки не загрузились — чат остаётся рабочим, просто без меток.
+      set({ feedback: {} });
+    }
+  },
+
+  async setFeedback(messageId, value, comment) {
+    try {
+      const item = await api.post<MessageFeedback>(
+        `/chat/messages/${messageId}/feedback`,
+        { value, comment: comment ?? null },
+      );
+      set((state) => ({
+        feedback: { ...state.feedback, [messageId]: item },
+        error: null,
+      }));
+    } catch {
+      set({ error: i18n.t('errors.chatFeedback') });
+    }
+  },
+
+  async clearFeedback(messageId) {
+    try {
+      await api.delete(`/chat/messages/${messageId}/feedback`);
+      set((state) => {
+        const feedback = { ...state.feedback };
+        delete feedback[messageId];
+        return { feedback };
+      });
+    } catch {
+      set({ error: i18n.t('errors.chatFeedback') });
+    }
+  },
+
   addUserMessage(content) {
     const active = get().active;
     if (!active) {
@@ -239,7 +300,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({ draft: state.draft + delta }));
   },
 
-  finishStream(full, warnings = [], stopped = false) {
+  finishStream(full, warnings = [], stopped = false, messageId) {
     const { active, draft } = get();
     const content = (full ?? draft).trim();
     if (!active || !content) {
@@ -257,6 +318,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
             content,
             warnings,
             stopped ? { stopped: true } : {},
+            // Настоящий id сообщения нужен для оценки ответа (S43-003).
+            messageId,
           ),
         ],
       },
