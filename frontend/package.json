@@ -20,8 +20,8 @@
     "e2e:ui": "playwright test --ui"
   },
   "dependencies": {
-    "i18next": "^26.5.11",
-    "monaco-editor": "^0.52.2",
+    "i18next": "^26.7.1",
+    "monaco-editor": "^0.57.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^15.4.1",
@@ -35,7 +35,7 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^26.6.5",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.1",
     "@vitejs/plugin-react": "^5.2.0",
