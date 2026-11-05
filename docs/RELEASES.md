@@ -2,8 +2,10 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.2.0 «Classroom» (2026-10-30)  
-**Текущий спринт:** спринты 19–20 завершены, этап v0.2.0 закрыт; следующий этап — v0.3.0
+**Текущая версия:** v0.3.3 (2026-11-05)  
+**Текущий этап:** v0.3.0 «Ops & Scale» (спринты 21–30,
+[TODO_V0.3.md](../TODO_V0.3.md)) завершён; далее — патчи v0.3.1–v0.3.3
+(UI-шаблоны, retention-планировщик, метрики-события и auth-hardening)
 
 ---
 
@@ -31,6 +33,15 @@
 - [Спринт 18: UX, A11y & Design System](#спринт-18-ux-a11y--design-system)
 - [Спринт 19: Performance & Scale](#спринт-19-performance--scale)
 - [Спринт 20: Security Audit & Release](#спринт-20-security-audit--release)
+- [Спринт 21: CI & Quality Gates](#спринт-21-ci--quality-gates)
+- [Спринт 22: Dependency Modernization](#спринт-22-dependency-modernization)
+- [Спринт 23: Sandbox Throughput](#спринт-23-sandbox-throughput)
+- [Спринт 24: Sandbox Runner Isolation](#спринт-24-sandbox-runner-isolation)
+- [Спринт 25: Observability & Audit Log](#спринт-25-observability--audit-log)
+- [Спринт 26: Export, Retention & Privacy](#спринт-26-export-retention--privacy)
+- [Спринт 27: RAG v2 & Search UX](#спринт-27-rag-v2--search-ux)
+- [Спринт 28: Teacher & Classroom v3](#спринт-28-teacher--classroom-v3)
+- [Спринт 29: UX, A11y & i18n Completion](#спринт-29-ux-a11y--i18n-completion)
 - [Релиз v0.2.0 «Classroom»](#релиз-v020-classroom)
 - [Шаблон отчёта по спринту](#шаблон-отчёта-по-спринту)
 
@@ -1064,6 +1075,751 @@
 [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) ·
 [reports/sprint-20/SPRINT-20.md](reports/sprint-20/SPRINT-20.md) ·
 [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md)
+
+---
+
+## Спринт 21: CI & Quality Gates
+
+**Период:** 2026-10-30  
+**Статус:** ✅ CI восстановлен (6/6 job'ов на self-hosted runner'е); merge-gate
+на GitHub Free невозможен — GitFlic-пилот ждёт доступа владельца (KI-023),
+S21-002/S21-004 закрыты частично
+
+### Задачи
+- [x] S21-001: Диагностика GitHub (аннотация API, причин — биллинг) и ADR
+- [~] S21-002: Пилот GitFlic — импорт выполнен, конфиги/рунбук/скрипты готовы;
+      живой прогон ждёт access token и агента (Java 11 + регистрация)
+- [x] S21-003: CI работает — 6 job'ов на self-hosted runner'е (GitFlic-порт готов)
+- [~] S21-004: Path-фильтры и скрипт защиты ветки готовы; автоматический
+      required-check гейт невозможен без Pro/публичного репо или GitFlic
+      (KI-023)
+- [x] S21-005: Release-workflow (гейты → тег → GitHub Release), dry-run,
+      заметки из `docs/RELEASES.md`; GitFlic-джоб `release` — тег-пайплайн
+- [x] S21-006: `docs/CI.md`, RULES §10/§11.20, README-бейдж, CHANGELOG,
+      KNOWN_ISSUES, отчёты
+
+### Что сделано
+- **Диагностика (S21-001):** причина падений подтверждена аннотацией API
+  (`check-runs/<job>/annotations`): «recent account payments have failed or your
+  spending limit needs to be increased» — KI-014. Токен `gh` без scope `user`,
+  поэтому billing-API недоступен из CLI (инструкция — `docs/CI.md` §1).
+- **CI (S21-003):** установлен self-hosted runner `ai-teacher-win`
+  (`C:\actions-runner`, labels `self-hosted, windows, ai-teacher`), workflow
+  `CI (self-hosted fallback)` — 6 job'ов, прогон **6/6 зелёный**
+  ([run 41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162),
+  12 мин 10 с). Job'ы используют общие `scripts/ci/*`, кэш pip/pnpm — named
+  volumes, плюс офлайн-wheelhouse (KI-017): PyPI с машины нестабилен.
+- **GitHub-hosted `ci.yml`** переведён в ручной режим: hosted-минуты заблокированы
+  биллингом, красный workflow не должен висеть на каждом PR; возврат — одна
+  правка `on:` после оплаты (KI-014, `docs/CI.md` §9).
+- **GitFlic (S21-002):** проект импортирован
+  (`gitflic.ru/project/ruchating/ai-teacher_python`, `main` = `5a74145`);
+  `gitflic-ci.yaml` — порт 5 job'ов + 3 security-job'а, `e2e`/`docker` на
+  PowerShell-агенте, path-фильтры, тег-джоб `release`; пилотный
+  `ci/gitflic-pilot.yaml` (lint+test с `services`); рунбук
+  `docs/GITFLIC_RUNNER.md`; настройка переменных и агента —
+  `scripts/gitflic/setup.ps1`. Локально команды всех job'ов прогнаны в тех же
+  Docker-образах (§8 `docs/CI.md`): lint/test/frontend/e2e 12/12/docker — PASS.
+- **Гейты (S21-004):** `paths-ignore` (docs-only PR не гоняет e2e/docker);
+  `scripts/ci/protect-branch.ps1` — 6 required checks + запрет force-push,
+  честный exit 3 на 403 Free/private.
+- **Релиз (S21-005):** `.github/workflows/release.yml` переиспользует
+  `ci-selfhosted.yml` через `workflow_call`; версия сверяется в трёх файлах
+  (`backend/scripts/check_version.py`), заметки — раздел «## Релиз vX.Y.Z» из
+  `docs/RELEASES.md` (`backend/scripts/release_notes.py`); dry-run по умолчанию
+  и для тега `v*-dryrun`; реальный релиз — `workflow_dispatch` с
+  `dry_run=false` (тег + `gh release create --verify-tag`).
+- **Документация (S21-006):** `docs/CI.md` (ADR, гейты, релиз, эксплуатация
+  runner'а, офлайн-путь), RULES §2.3/§5.1/§10/§11.19/§11.20, README-бейдж,
+  CHANGELOG `[Unreleased]`, KNOWN_ISSUES (KI-014 → Resolved, KI-023), отчёты
+  `docs/reports/sprint-21/STEP-04_QUALITY_GATES_RELEASE.md` и `SPRINT-21.md`.
+
+### Что не сделано
+- **Живой пилот GitFlic** (S21-002): импорт есть, но CI/CD проекта, агент
+  (нужны Java 11 + registration token) и MR-пайплайн требуют access token
+  владельца. Команды job'ов проверены локально, но `services`, маскировка
+  секретов и MR-пайплайн на платформе не подтверждены — KI-023.
+- **Автоматический merge-gate** (S21-004): GitHub Free/private → required checks
+  403; GitFlic даёт гейт бесплатно, но его проверка — после пилота — KI-023.
+- **Живой `workflow_dispatch`-релиз** — файла нет в `default`-ветке до мержа
+  спринта; репетиция выполнена тегом `v0.2.0-dryrun` (run 41126158359, зелёный).
+  Ветка «реальный релиз» (тег + `gh release create`) впервые пройдёт на v0.3.0.
+- **Playwright-кэш в CI** не выделен отдельным томом: браузеры стоят в профиле
+  пользователя runner'а и между прогонами не пересоздаются.
+
+### Метрики
+- CI (self-hosted): **6/6 job'ов success**, run 41122794849 — 11 мин 53 с;
+  Frontend 50 с, Security 1 мин 17 с, Lint 32 с, Test 1 мин 56 с (354 passed
+  + 1 skip), Docker build 5 мин 55 с (pip внутри Dockerfile — PyPI), E2E
+  1 мин 5 с (**12/12**)
+- Release dry-run: run 41126158359 — 6/6 гейтов + `Tag & Release` success
+- Backend: +13 тестов (`tests/test_release_tools.py`), ruff 0 (скоуп
+  `app tests scripts`), mypy strict 0
+- Frontend: 80/80 unit, entry **78.71 kB gzip** (без изменений в коде)
+- Артефакты CI: `notes.md` (GitFlic-тег), Playwright-репорт (7 дней)
+
+### Проблемы
+- **KI-023 (High):** merge-gate не обеспечен — GitHub Free/private + GitFlic
+  ждёт доступ. Workaround: RULES §10 (мерж только при зелёном fallback-CI).
+- **KI-017:** PyPI с машины стал ещё нестабильнее — job `lint` залипал в
+  `pip install` на 20+ минут (TLS-таймауты). Решение: wheelhouse (named volume)
+  + кэши pip/pnpm; PyPI — только fallback.
+- **Лишний red-шум:** hosted-`ci.yml` отключён от PR (иначе красный на каждом
+  PR из-за биллинга); при возврате hosted-минут — снять `workflow_dispatch`-only.
+- **Кэш Actions на self-hosted** не используется намеренно (named volumes
+  проще); при переезде в GitFlic кэш — локальный на Docker-агенте.
+
+### DoD
+- ⚠️ Красный PR не мержится **автоматически** — невозможно на GitHub
+  Free/private и в ожидании GitFlic (KI-023); правило RULES §10 действует.
+- ✅ 6 job'ов CI зелёные (run 41122794849); локальные гейты v0.3.0 не сломаны.
+- ✅ Release dry-run выполнен живьём (run 41126158359, тег `v0.2.0-dryrun`);
+  реальная ветка релиза — на v0.3.0 (S30-004).
+- ✅ `docs/CI.md` описывает процессы и решение; KI-014 → `Resolved`; KI-023
+  заведена с планом.
+
+---
+
+## Спринт 22: Dependency Modernization
+
+**Период:** 2026-10-31  
+**Статус:** ✅ завершён: `fastapi`/`starlette`/`pytest` обновлены, контракт API
+зафиксирован тестами, `pip-audit` без игноров; авто-мерж Dependabot недоступен
+на Free/private (KI-023) — политика ручная
+
+### Задачи
+- [x] S22-001: Контрактные тесты API (снапшот OpenAPI + формы ответов)
+- [x] S22-002: `fastapi` 0.162 + `starlette` 1.10 (KI-015) — закрыт
+- [x] S22-003: `pytest` 9.2 + плагины (KI-016) — закрыт (`filterwarnings` отложен)
+- [~] S22-004: Dependabot: группировка/лимиты/политика — сделано; авто-мерж
+      невозможен на текущем тарифе (KI-023)
+- [x] S22-005: `scripts/wheelhouse.py` для offline-окружений (KI-017) — закрыт
+- [x] S22-006: Документация (RULES §11.21, GETTING_STARTED, ARCHITECTURE, CI.md §13)
+
+### Что сделано
+- **Контракт (S22-001):** снапшот `backend/tests/contracts/openapi.json`
+  (68 операций, 92 схемы), компаратор `tests/contract_utils.py` (разрешены
+  только аддитивные изменения: новые пути/поля/значения enum; breaking →
+  падение), 12 юнит-тестов правил и 21 форма ответов ключевых эндпоинтов
+  (`tests/test_api_contract_shapes.py` + `contracts/endpoints.json`).
+  Перегенерация — `scripts/snapshot_openapi.py` и
+  `UPDATE_CONTRACT_FIXTURES=1 pytest`.
+- **Апгрейд (S22-002):** `fastapi 0.115.5 → 0.162.0`, `starlette 0.41.3 →
+  1.10.0` (пин), транзитивные `annotated-doc`, `opentelemetry-api`; pydantic
+  2.10.1 совместим. Единственное поведенческое изменение — без заголовка
+  `Authorization` теперь **401** вместо 403 (RFC 7235, Starlette 1.x): SPEC §7,
+  `test_access_matrix` и CHANGELOG обновлены; фронтенд уже обрабатывал 401.
+  Снапшот перегенерирован (косметика: `format: password`, `contentMediaType`,
+  `ValidationError.ctx/input` — без удалений).
+- **Dev-зависимости (S22-003):** `pytest 9.2.0`, `pytest-asyncio 1.4.1`,
+  `pytest-cov 7.1.0`, `pytest-env 1.8.3`; конфиг `pyproject.toml` менять не
+  пришлось. `filterwarnings = error` осознанно не включён (~1 400
+  `datetime.utcnow()` предупреждений — отдельная чистка).
+- **Аудит:** `pip-audit` в CI **без `--ignore-vuln`** («No known
+  vulnerabilities found»); 7 starlette- и dev-pytest-игноры убраны из
+  `ci.yml`, `gitflic-ci.yaml`, `scripts/ci/security-backend.sh`.
+- **Wheelhouse (S22-005):** `scripts/wheelhouse.py` (`build --docker`,
+  `install --no-index`, `list`); CI volume `ai-teacher-wheelhouse` пересобран
+  (101 колесо, 75 МБ, Linux), `build-wheelhouse.ps1` — тонкая обёртка.
+- **Dependabot (S22-004):** политика в `.github/dependabot.yml` и `CI.md` §13
+  (minor/patch группой после зелёного CI, major вручную); 3 устаревших PR
+  после ручного апгрейда закрыты.
+- **Документация (S22-006):** RULES §11.21 «Обновление зависимостей» (порядок,
+  контрактные тесты, wheelhouse, откат), GETTING_STARTED §4 (wheelhouse),
+  ARCHITECTURE (версии, аудит), CHANGELOG `[Unreleased]`, KNOWN_ISSUES.
+
+### Что не сделано
+- **`filterwarnings = error`** — отложено: ~1 400 предупреждений
+  `datetime.utcnow()`; нужна отдельная чистка кода (кандидат — спринт 25/30).
+- **Авто-мерж Dependabot** — невозможен на GitHub Free/private (нет branch
+  protection/auto-merge), KI-023; мерж minor/patch — вручную после зелёного CI.
+- **Мажорные PR GitHub Actions** (#12–#14: `checkout@7`, `setup-python@7`,
+  `setup-node@7`) не разобраны: мажор, требуется проверка self-hosted job'ов.
+
+### Метрики
+- Backend: **367 passed + 1 skipped** (113 с; +13 контрактных тестов), ruff 0,
+  mypy strict 0, `pip check` — OK
+- Контракт: 68 операций / 92 схемы / 21 форма ответов; breaking-изменений 0
+- `pip-audit` — 0 находок без игноров; `pnpm audit --audit-level=high` — 0
+- CI: 6/6 job'ов (PR), `main` зелёный после мержа спринта 21 (run 41214317323)
+- e2e: 12/12
+
+### Проблемы
+- **401 вместо 403** — поведенческое изменение апгрейда; риск для внешних
+  клиентов минимален (наш фронтенд обрабатывает 401), но зафиксировано в SPEC
+  и CHANGELOG как осознанное.
+- **PyPI/зеркала** — апгрейд ставился из `mirrors.aliyun.com`; wheelhouse
+  пересобран, но `docker volume rm` не всегда очищает том (остались колёса
+  старых версий — на установку не влияет).
+- **Dependabot PR** — 13 открытых; major-обновления требуют ручного разбора.
+
+### DoD
+- ✅ `fastapi`/`starlette`/`pytest` обновлены; контрактные тесты и e2e зелёные.
+- ✅ `pip-audit` без игнора (0 high/critical без обоснования).
+- ✅ CI required checks проходят (self-hosted, 6/6).
+- ✅ KI-015/016/017 закрыты; KI-023 (merge-gate/авто-мерж) — остаётся.
+
+---
+
+## Спринт 23: Sandbox Throughput
+
+**Период:** 2026-10-31  
+**Статус:** ✅ завершён: submit 5 RPS — p95 **48.9 мс** (бюджет 2000 мс, было
+2219.7), knee не найден до 40 RPS; KI-022 закрыт
+
+### Задачи
+- [x] S23-001: Батчинг тест-кейсов в одном процессе
+- [x] S23-002: Пул тёплых интерпретаторов (`EXECUTOR_POOL_SIZE`)
+- [x] S23-003: Нагрузочный гейт (0.5 RPS на PR, 2 RPS ночью) + отчёт
+- [x] S23-004: Безопасность батча и пула (36 тестов)
+- [x] S23-005: Документация (ARCHITECTURE, RULES §11.8, SPEC, CHANGELOG)
+
+### Что сделано
+- **Батч (S23-001):** `_BATCH_RUNNER` выполняет все кейсы задачи одним
+  интерпретатором; протокол — построчный JSON (строка на кейс + `{"done": true}`),
+  таймаут **на кейс** в родителе. Зависший кейс убивает процесс, текущий кейс —
+  `TimeoutError`, остальные — `SandboxError`. Лимит памяти ставится один раз.
+  `run_test_cases` идёт батчем по умолчанию, последовательный путь — fallback.
+- **Пул (S23-002):** `app/core/runner_pool.py` — idle-процессы на event loop,
+  переиспользование между задачами, перезапуск после `EXECUTOR_POOL_MAX_TASKS`
+  (50), после `TimeoutError`/`MemoryError`/сбоя протокола, закрытие в `lifespan`.
+  Изоляция — свежие `globals`/`builtins` на каждый кейс.
+- **Гейт (S23-003):** `scripts/ci/perf.ps1` (поднимает backend на 8002, ждёт
+  health, гоняет submit), job `Perf smoke (submit)` в CI (0.5 RPS) и ночной
+  `perf-nightly.yml` (2 RPS). Отчёт
+  `docs/reports/sprint-23/LOAD_TEST-SUBMIT.md` + `load-test.json`.
+- **Безопасность (S23-004):** 14 атакующих векторов × 2 режима (батч/пул),
+  отсутствие побочных эффектов, восстановление после `MemoryError`/`TimeoutError`,
+  отсутствие утечки переменных между кейсами.
+- **Документация (S23-005):** ARCHITECTURE (слой 5 — раннер и пул), RULES §11.8
+  п. 12–15, SPEC (лимиты/батч/пул/throughput), `.env.example`
+  (`EXECUTOR_POOL_*`), CHANGELOG, KNOWN_ISSUES.
+
+### Метрики
+- submit 5 RPS: p50 **34.8 мс**, p95 **48.9 мс**, p99 338.4 мс, 0 ошибок
+  (до: p50 1964 мс, p95 2219.7 мс)
+- knee: 15/25/40 RPS — p95 48.9/54.3/94.8 мс; без пула knee ≈12 RPS (p95 567 мс)
+- health 50 RPS — p95 7.3 мс; tasks 20 RPS — p95 19.3 мс
+- Тесты: backend **430 passed + 1 skipped** (+63: батч 16, пул 11, безопасность 36)
+
+### Проблемы
+- **Фейковые исполнители в тестах** должны реализовать `execute_many` — два
+  теста прогресса «сломались», потому что фейк переопределял только `execute`
+  и батч уходил в настоящую песочницу (RULES §11.8 п. 14).
+- **p99 ≈ 338 мс** в submit — «холодные» первые запросы, пока пул поднимает
+  процессы; после прогрева p99 стабилен.
+- **Лимит памяти — на процесс пула**, а не на задачу (RLIMIT/Job Object нельзя
+  ослабить); значение одинаково для всех задач конфигом.
+
+### DoD
+- ✅ 5 RPS submit PASS (p95 48.9 мс ≤ 2000 мс).
+- ✅ Тесты песочницы и 36 атакующих кейсов зелёные; перезапуск пула проверен.
+- ✅ Нагрузочный отчёт с цифрами и knee; CI perf-smoke и ночной прогон.
+- ✅ KI-022 → `Resolved`.
+
+---
+
+## Спринт 24: Sandbox Runner Isolation
+
+**Период:** 2026-10-31  
+**Статус:** ✅ контейнер-раннер реализован и проверен (self-check + 21 тест
+изоляции), режим по умолчанию — `native` (включается `EXECUTOR_MODE=container`)
+
+### Задачи
+- [x] S24-001: Контейнер-раннер (образ, протокол, `EXECUTOR_MODE`)
+- [x] S24-002: Fallback на native без Docker + сборка образа по требованию
+- [x] S24-003: Тесты изоляции (self-check, атаки, лимиты) — 21 тест
+- [x] S24-004: Метрики контейнерного режима (заглушка до `/metrics` в S25)
+- [x] S24-005: Документация
+
+### Что сделано
+- **Образ `ai-teacher-sandbox-runner`** (`backend/sandbox_runner`): python:3.12-slim
+  + RestrictedPython + чистое ядро `app/core/sandbox_runtime.py` (вынесено из
+  `executor.py`), non-root 65534, без зависимостей приложения и без монтирования
+  исходников — код приходит по stdin, ответ уходит в stdout.
+- **Запуск:** `--network none --read-only --cap-drop ALL --security-opt
+  no-new-privileges --user 65534:65534 --tmpfs /tmp:rw,noexec,nosuid,size=64m
+  --memory … --memory-swap … --pids-limit 64 --pull never`.
+- **`EXECUTOR_MODE=native|container`** (по умолчанию native) + `EXECUTOR_IMAGE`;
+  при недоступном Docker/образе — warning (один раз), счётчик `fallbacks` и
+  нативный путь. Windows dev остаётся на Job Object/RLIMIT_AS.
+- **`--self-check`** подтверждает изоляцию изнутри: `uid=65534`, read-only rootfs,
+  tmpfs пишется, сеть недоступна, `CapEff=0`. Проверяется в CI (job `Docker build`)
+  и `scripts/ci/docker.ps1`.
+- **Метрики:** `runs`, `errors`, `timeouts`, `fallbacks`, `start_ms_avg/last`,
+  `memory_limit_mb` (снимок — `container_sandbox.metrics`), основа для `/metrics` в S25.
+- **Тесты:** 9 unit (команда/протокол/fallback) + 21 isolation (self-check,
+  батч, изоляция кейсов, 14 атакующих векторов, память, таймаут, обрезка вывода).
+
+### Метрики
+- Полный backend: **460 passed + 1 skipped**; контейнерные тесты — 30 passed.
+- Время исполнения контейнерного батча (3 кейса) — ~0.7–1 с против ~0.05 с у
+  тёплого нативного пула; поэтому режим включается осознанно (S24 DoD).
+
+### Проблемы
+- **Пул контейнеров не сделан** — каждый батч поднимает новый контейнер; при
+  нагрузке >5 RPS это станет узким местом (кандидат в v0.3.x).
+- **Контейнерные тесты пропускаются в CI `test`-job** (внутри контейнера нет
+  Docker socket): они идут на машине разработки/runner'е, а в CI проверяется
+  self-check образа в job `Docker build`.
+- **Windows-шим Docker CLI** (`shutil.which` → файл без `.exe`) давал WinError 193;
+  исправлено поиском `docker.exe`.
+
+### DoD
+- ✅ Контейнерный режим проходит атакующие кейсы и лимиты (21 тест).
+- ✅ Fallback документирован и покрыт тестами; влияние на p95 зафиксировано.
+- ✅ Выбор режима — флаг `EXECUTOR_MODE`, по умолчанию `native`.
+
+---
+## Спринт 25: Observability & Audit Log
+
+**Период:** 2026-10-31  
+**Статус:** ✅ завершён: request-id, `/metrics`, liveness/readiness, аудит
+действий teacher/admin (миграция 011) и админ-эндпоинт журнала
+
+### Задачи
+- [x] S25-001: Request-ID и корреляция логов
+- [x] S25-002: Prometheus `/metrics`
+- [x] S25-003: Liveness/Readiness
+- [x] S25-004: Audit log + `GET /admin/audit`
+- [x] S25-005: Документация и гайд по мониторингу
+
+### Что сделано
+- **S25-001.** `RequestContextMiddleware`: `X-Request-ID` из запроса или `uuid4`,
+  ответ с тем же заголовком, `structlog.contextvars` (функция
+  `current_request_id()`), запись `http_request` с длительностью. Добавлена
+  конфигурация structlog (`app/core/logging.py`, JSON/console).
+- **S25-002.** `app/core/metrics.py` на `prometheus_client` с отдельным реестром:
+  HTTP (`http_requests_total`, гистограмма длительности по шаблону маршрута),
+  песочница (`sandbox_runs_total`, `sandbox_duration_seconds`,
+  `sandbox_timeouts_total`), LLM/кэш (gauge из in-memory счётчиков при scrape),
+  пул БД. `GET /metrics` без авторизации; `METRICS_ENABLED` отключает; nginx
+  отдаёт 404 на `/metrics` и `/health/*`.
+- **S25-003.** `/health/live` (без зависимостей) и `/health/ready` (БД, Redis,
+  конфиг LLM; 503 + `checks`); `/api/v1/health` не изменён; healthcheck в
+  `docker-compose.prod.yml` переведён на readiness.
+- **S25-004.** Таблица `audit_log` (миграция `011`, индексы по времени/действию/
+  актору), `record_audit` (best-effort, отдельный коммит), `list_audit`;
+  `GET /api/v1/admin/audit` с фильтрами и пагинацией. Пишутся: `user.updated`,
+  `user.deleted`, `task.created/updated/deleted`, `classroom.created`,
+  `assignment.created`.
+- **S25-005.** SPEC §15, DESIGN_ADMIN_AND_OPS §10 (метрики, алерты, логи,
+  аудит), RULES §11.22, CHANGELOG, отчёт SPRINT-25.
+
+### Метрики
+- Backend: **+13 тестов** наблюдаемости/аудита; полный прогон — см. отчёт.
+- Миграции: `011` (audit_log), `alembic check` — без расхождений.
+
+### Проблемы
+- Метрики LLM/кэша/пула — **gauge из счётчиков процесса**: на нескольких
+  воркерах не суммируются (осознанно до общего экспортёра).
+- `audit_log` растёт без ограничения — retention появится в спринте 26
+  (`RETENTION_AUDIT_DAYS`).
+- Запись аудита — отдельный коммит после действия: при падении процесса между
+  действием и аудитом запись может потеряться (best-effort, задокументировано).
+
+### DoD
+- ✅ `/metrics` отдаёт метрики; request_id в логах и ответе.
+- ✅ Readiness корректно отражает зависимости; liveness не зависит от них.
+- ✅ Audit log пишется и читается админом (фильтры/пагинация, 403 для ученика).
+
+---
+
+## Спринт 26: Export, Retention & Privacy
+
+**Период:** 2026-11-01  
+**Статус:** ✅ завершён: экспорт аналитики CSV/JSON, отчёт класса, retention-скрипт,
+удаление аккаунта с анонимизацией и политика ПДн
+
+### Задачи
+- [x] S26-001: Экспорт аналитики CSV/JSON
+- [x] S26-002: Отчёт класса CSV (API; UI-кнопка — отдельным шагом)
+- [x] S26-003: Retention-политика и скрипт
+- [x] S26-004: Удаление аккаунта и `docs/PRIVACY.md`
+- [x] S26-005: Документация
+
+### Что сделано
+- **S26-001.** `GET /api/v1/admin/analytics/export?dataset=…&format=csv|json`
+  (`app/services/export_service.py`): серверный курсор, CSV/JSON-поток,
+  лимит `EXPORT_MAX_ROWS` (100 000), заголовки `Content-Disposition` и
+  `X-Export-Limit`, аудит `analytics.exported`. Наборы: users, tasks, attempts,
+  activity (чат + запуски кода).
+- **S26-002.** `GET /api/v1/classrooms/{id}/report` — CSV (UTF-8 BOM) с
+  матрицей «ученик × задача», статусом, попытками, `overdue` и строкой «ИТОГО»;
+  доступ только владельцу/админу, аудит `classroom.report_exported`.
+- **S26-003.** `RETENTION_*_DAYS` (chat 90, code 90, notifications 180,
+  audit 365; `0` — выключено) + `backend/scripts/apply_retention.py`
+  (`--dry-run`, `--only`, `--batch-size`); логи `retention_applied` как метрика
+  удалённых строк.
+- **S26-004.** `DELETE /api/v1/auth/me` (пароль обязателен): анонимизация
+  username/email, сброс пароля, `is_active=false` (миграция 012), аудит
+  `user.self_deleted`. `docs/PRIVACY.md` — состав данных, сроки, экспорт,
+  удаление, права пользователя.
+- **S26-005.** SPEC §16, DESIGN_ADMIN_AND_OPS §11 (retention/cron, экспорт,
+  удаление), RULES §11.23, CHANGELOG, PRIVACY.
+
+### Метрики
+- Backend: **+12 тестов** (экспорт, отчёт, retention, удаление); полный прогон —
+  см. отчёт.
+- Миграция `012` (`users.is_active`), `alembic check` — без расхождений.
+
+### Проблемы
+- **UI-кнопка «Скачать отчёт»** не вошла в этот заход: API готов, кнопка —
+  отдельным небольшим коммитом (S26-002 остаётся `[~]`).
+- **Retention не автоматизирован в compose** (cron-пример в документации):
+  запуск — ручной/по cron, чтобы не удалять данные неожиданно.
+- **Self-service экспорт для ученика** не сделан: по запросу к администратору
+  (в PRIVACY.md зафиксировано).
+
+### DoD
+- ✅ Экспорт аналитики и отчёт класса работают (CSV/JSON, аудит, лимиты).
+- ✅ Retention `--dry-run` и применение; настройки задокументированы.
+- ✅ Удаление аккаунта анонимизирует данные и блокирует вход.
+- ✅ Политика ПДн описана (`docs/PRIVACY.md`), ссылки в USER_GUIDE.
+
+---
+
+## Спринт 27: RAG v2 & Search UX
+
+**Период:** 2026-11-01  
+**Статус:** ✅ backfill, порог релевантности, UI поиска и фикстуры качества;
+документация обновлена
+
+### Задачи
+- [x] S27-001: Backfill эмбеддингов
+- [x] S27-002: Порог релевантности и качество
+- [x] S27-003: UI поиска в чате
+- [x] S27-004: Документация
+
+### Что сделано
+- **S27-001.** `app/services/backfill.py` + `backend/scripts/backfill_embeddings.py`:
+  только `embedding IS NULL`, батчи, `--limit`, `--sleep`, `--dry-run`;
+  обработанные id исключаются из выборки (идемпотентность и защита от
+  бесконечного цикла), ошибки провайдера считаются и не рвут прогон.
+- **S27-002.** `RAG_MIN_SCORE` (0…1): фильтрация семантических попаданий до
+  fallback; пустая выдача → ILIKE. Фикстуры `tests/fixtures/rag_queries.json`,
+  тест precision@k и тесты порога.
+- **S27-003.** `ChatSearchPanel` на странице чата: поле, результаты с
+  подсветкой `<mark>`, режим выдачи, `aria-live`, i18n ru/en, переход к сессии;
+  4 frontend-теста + e2e-сценарий (`e2e/chat.spec.ts`).
+- **S27-004.** SPEC §17, USER_GUIDE (как искать), ARCHITECTURE (backfill/порог),
+  RULES §11.24, CHANGELOG, RELEASES.
+
+### Метрики
+- Backend: **+8 тестов** (backfill/порог/precision); Frontend: **+4 теста**;
+  полный прогон — см. отчёт.
+- Новых миграций нет.
+
+### Проблемы
+- **Backfill не в cron** — запускается вручную/по расписанию эксплуатации.
+- Семантический поиск в e2e не проверяется (RAG выключен в CI): e2e покрывает
+  ILIKE-режим и UI-переход; семантика — unit-тестами на фейковых эмбеддингах.
+
+### DoD
+- ✅ Backfill идемпотентен, dry-run и ошибки провайдера безопасны.
+- ✅ Поиск в UI с порогом и fallback; e2e-сценарий зелёный.
+- ✅ Документация (SPEC/USER_GUIDE/ARCHITECTURE/RULES) обновлена.
+
+---
+
+## Спринт 28: Teacher & Classroom v3
+
+**Период:** 2026-11-01  
+**Статус:** ✅ массовые назначения, шаблоны, журнал оценок (+CSV) и email за
+флагом; UI-мультивыбор и страница журнала — остаток
+
+### Задачи
+- [x] S28-001: Массовые назначения
+- [x] S28-002: Шаблоны назначений
+- [x] S28-003: Журнал оценок (API + CSV; UI-страница — остаток)
+- [x] S28-004: Email-уведомления (флаг + SMTP + фейковый отправитель)
+- [x] S28-005: Документация
+
+### Что сделано
+- **S28-001.** `ClassroomService.add_assignments_bulk` + маршрут
+  `POST /classrooms/{id}/assignments/bulk`: дедупликация, `created/skipped/
+  unknown`, один коммит, уведомления только по новым; аудит
+  `assignment.bulk_created`.
+- **S28-002.** Таблица `assignment_templates` (миграция 013, JSONB `task_ids`),
+  маршруты `/teacher/assignment-templates` и применение к классу; аудит
+  `assignment.template_applied`.
+- **S28-003.** `GET /classrooms/{id}/gradebook` (ячейки с `completed_at`,
+  `overdue`) и `/gradebook/csv` (формат отчёта S26-002, аудит).
+- **S28-004.** `app/services/email.py`: `LoggingEmailSender`/`SMTPEmailSender`,
+  `NOTIFICATIONS_*` в конфиге; письмо по новому назначению, сбой SMTP не ломает
+  API; `scripts/notify_deadlines.py` для напоминаний.
+- **S28-005.** SPEC §18, USER_GUIDE (учителю), RULES §11.25, CHANGELOG.
+
+### Метрики
+- Backend: **+9 тестов**; миграция `013`; полный прогон — см. отчёт.
+
+### Проблемы
+- **UI-мультивыбор и страница журнала** не сделаны (API готов) — отдельным
+  фронтенд-шагом.
+- **Напоминания о дедлайнах** — CLI без планировщика (cron/ручной запуск);
+  без дедупликации отправок (задокументировано).
+
+### DoD
+- ✅ Массовые назначения идемпотентны; шаблоны создаются/применяются/удаляются.
+- ✅ Журнал оценок с CSV-экспортом.
+- ✅ Email включается флагом и не ломает API при сбое.
+- ⚠️ UI-часть (мультивыбор, страница журнала) — остаток.
+
+---
+
+## Спринт 29: UX, A11y & i18n Completion
+
+**Период:** 2026-11-01  
+**Статус:** ✅ адаптивные таблицы, полная локализация с CI-аудитом, axe-контраст 0
+нарушений, e2e a11y/мобильные сценарии
+
+### Задачи
+- [x] S29-001: Карточный вид таблиц на мобильных
+- [x] S29-002: Аудит локализации
+- [x] S29-003: Авто-проверка контраста
+- [x] S29-004: E2E a11y/мобильные сценарии
+- [x] S29-005: Документация
+
+### Что сделано
+- **S29-001.** `Table`/`Tr`/`Td`/`Th` с контекстом заголовков: на `<640px`
+  `thead` скрыт, строки — карточки, ячейки получают `data-label`; CSS в
+  `index.css`; страницы переведены на компоненты (`AdminPage`,
+  `AssignmentsPage`, `ClassroomDetailPage`, `DevUiPage`, `TeacherStudentsPage`,
+  `TeacherTasksPage`); unit-тест `table-cards.test.tsx`.
+- **S29-002.** Все русские fallback-строки заменены на `i18n.t('errors.*')`;
+  `scripts/check-i18n.mjs` — кириллица вне локалей + паритет ключей; шаг в
+  `scripts/ci/frontend.sh`.
+- **S29-003.** `e2e/a11y-contrast.spec.ts`: axe-core (inject) + `color-contrast`
+  на `/dashboard`, `/chat`, `/tasks`, `/assignments` в light/dark — 0 нарушений.
+- **S29-004.** `e2e/a11y-mobile.spec.ts`: skip-link, мобильное меню, карточки на
+  375px без переполнения.
+- **S29-005.** SPEC §19, MANUAL_TESTING_GUIDE §17, RULES §11.26, CHANGELOG.
+
+### Метрики
+- Frontend: **87 unit-тестов** (+3), **17 e2e passed / 1 skipped**, typecheck и
+  eslint — 0, i18n-аудит — OK (306 ключей).
+
+### Проблемы
+- Тест модалки по Escape убран (не на всех страницах есть модалка) — риск
+  регрессии закрывается unit-тестами `Modal`.
+- Контраст проверяется на 4 ключевых страницах, не на всех маршрутах (время
+  прогона); расширение — по мере роста.
+
+### DoD
+- ✅ Таблицы-карточки на мобильных без горизонтального скролла.
+- ✅ 0 RU-fallback в UI-коде; аудит в CI.
+- ✅ axe-контраст 0 нарушений (light/dark); e2e a11y зелёные.
+
+---
+
+## Спринт 32: Ops hardening — retention-планировщик (v0.3.2)
+
+**Период:** 2026-11-03  
+**Статус:** ✅ Завершён  
+**Задачи:** S32-001…S32-003 (закрытие KI-025)
+
+### Задачи
+- [x] S32-001: `app/services/scheduler.py` — asyncio-задача в lifespan, флаги
+      `RETENTION_SCHEDULER_*`, advisory-lock PostgreSQL, graceful stop
+- [x] S32-002: Prometheus-счётчики `retention_rows_deleted_total` /
+      `retention_runs_total`; 18 backend-тестов планировщика и счётчиков
+- [x] S32-003: докчистка — чекбоксы TODO (UI-остатки 26/28 уже реализованы),
+      шапки TODO/RELEASES, UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS, `.env.example`
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 520 собрано (519 passed + 1 skipped в CI-окружении) |
+| Новые тесты | 18 (`tests/test_scheduler.py`) |
+| Frontend-тесты | 94 passed (без изменений) |
+| Миграции | нет (014 не требуется) |
+
+### DoD
+- ✅ Retention запускается приложением без cron; двойного запуска нет
+  (advisory-lock); cli-скрипт продолжает работать
+- ✅ ruff/mypy/pytest зелёные; check_version — 0.3.2 везде
+- ✅ Документация описывает новое поведение и обновление
+
+---
+
+## Релиз v0.3.3
+
+**Дата:** 2026-11-05 · **Тег:** `v0.3.3` · **Предыдущий:** [v0.3.2](#релиз-v032)
+
+### Что вошло
+- **Метрики-события (KI-024):** LLM/кэш инкрементируют счётчики и гистограммы
+  в момент события — `llm_requests_total{provider,model,status}`,
+  `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total`,
+  `llm_fallbacks_total{primary}`, `cache_*_total`; добавлен multiprocess-режим
+  `PROMETHEUS_MULTIPROC_DIR` (каталог чистит `docker-entrypoint.sh`) и
+  `app_build_info{version}`
+- **Auth-hardening (KI-026):** `login`/`refresh` отклоняют неактивные аккаунты,
+  bcrypt вынесен в `run_in_threadpool`, при старте пишется `insecure_secret_key`,
+  email в логах маскируется
+- **LICENSE (MIT), SECURITY.md, TODO_V0.4.md** (план v0.4.0, спринты 33–41);
+  обновлены CHANGELOG, KNOWN_ISSUES, DESIGN_ADMIN_AND_OPS, README, UPGRADE
+- Удалены мёртвые зависимости `aioredis`, `testcontainers`
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 531 собрано (509 passed + 22 skipped; 3 sandbox-теста нестабильны на Windows) |
+| Frontend-тесты | 94 passed |
+| E2E | 17 passed, 1 skipped |
+| CI | 7/7 success (self-hosted) |
+| Миграции | нет |
+
+### Обновление
+Миграций нет. Пересобрать backend; обновить дашборды/алерты под новые имена
+метрик; при `uvicorn --workers N` включить `PROMETHEUS_MULTIPROC_DIR`.
+Подробно — [UPGRADE.md](UPGRADE.md) §0.1.
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-027 (нет отзыва JWT — план v0.4.0).
+
+---
+
+## Релиз v0.3.2
+
+**Дата:** 2026-11-03 · **Тег:** `v0.3.2` · **Предыдущий:** [v0.3.1](#релиз-v031)
+
+### Что вошло
+- **Встроенный retention-планировщик (KI-025):** `RETENTION_SCHEDULER_ENABLED`
+  + `RETENTION_SCHEDULER_AT` (UTC) → приложение само раз в сутки применяет
+  `RETENTION_*_DAYS`; advisory-lock PostgreSQL защищает от двойного запуска
+  при нескольких инстансах, остановка даёт доиграть текущий прогон
+- **Метрики retention:** `retention_rows_deleted_total` и
+  `retention_runs_total` — видны в `/metrics` для scheduler и CLI
+- **Документация:** актуализированы TODO (UI-остатки S26/S28 уже сделаны),
+  UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS, `.env.example`
+- **`.env.example`:** убрана переменная `VERSION` — версия больше не дублируется
+  и не устаревает (источник — `backend/app/config.py`)
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 520 собрано (519 passed + 1 skipped) |
+| Frontend-тесты | 94 passed |
+| Миграции | нет |
+| Новые ENV | `RETENTION_SCHEDULER_ENABLED`, `RETENTION_SCHEDULER_AT`, `RETENTION_SCHEDULER_BATCH_SIZE` |
+
+### Обновление
+Миграций нет. Пересобрать backend (в production планировщик уже включён через
+`docker-compose.prod.yml`); если в `.env` осталась строка `VERSION=...` —
+удалить её. Подробно — [UPGRADE.md](UPGRADE.md).
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-024 (метрики LLM/кэша считаются на процесс — план v0.4.0).
+
+---
+
+## Релиз v0.3.1
+
+**Дата:** 2026-11-01 · **Тег:** `v0.3.1` · **Предыдущий:** [v0.3.0](#релиз-v030-ops--scale)
+
+### Что вошло
+- **Шаблоны назначений (UI):** на странице класса — список шаблонов, создание
+  набора из выбранных задач, применение к классу одним действием и удаление
+  (`AssignmentTemplates`); API шаблонов появился в v0.3.0
+- **Тесты:** 94 frontend-теста (включая 4 новых), typecheck/lint/i18n-аудит —
+  зелёные
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 501 passed + 1 skipped (без изменений) |
+| Frontend-тесты | 94 passed |
+| CI | 7/7 job'ов зелёные |
+
+### Обновление
+Миграций нет; версия в `/health` — `0.3.1`. Достаточно пересобрать frontend и
+backend (`docker compose ... up -d --build`).
+
+---
+
+## Релиз v0.3.0 «Ops & Scale»
+
+**Дата:** 2026-11-01 · **Тег:** `v0.3.0` · **Предыдущий:** [v0.2.0](#релиз-v020-classroom)
+
+### Что вошло
+- **CI и релиз:** self-hosted runner, 7 job'ов (lint/test/frontend/security/e2e/
+  docker/perf), контрактные тесты API, релиз-workflow с проверкой версии и
+  заметками из этого журнала
+- **Зависимости:** FastAPI 0.162 / Starlette 1.x / React 19, `pip-audit` и
+  Dependabot, 0 открытых уязвимостей
+- **Песочница:** батч-исполнение и пул воркеров, контейнерный раннер с
+  `--network none --read-only --cap-drop ALL`, self-check изоляции
+- **Наблюдаемость:** `X-Request-ID`, JSON-логи, `/metrics`, liveness/readiness,
+  аудит действий teacher/admin
+- **Данные и приватность:** экспорт CSV/JSON, отчёт и журнал класса, retention,
+  удаление аккаунта с анонимизацией, PRIVACY.md
+- **RAG v2:** порог релевантности, backfill эмбеддингов, поиск в UI
+- **Учителю:** массовые назначения, шаблоны, журнал оценок, email за флагом
+- **UX/a11y/i18n:** карточки таблиц на мобильных, полная локализация с CI-аудитом,
+  axe-контраст 0 нарушений
+
+### Метрики
+| Показатель | Значение |
+|------------|----------|
+| Backend-тесты | 501 passed + 1 skipped |
+| Frontend-тесты | 90 passed |
+| E2E | 17 passed / 1 skipped |
+| Миграции | 001–013 (аддитивные) |
+| CI | 7/7 job'ов зелёные |
+
+### Обновление
+См. [UPGRADE.md](UPGRADE.md): миграции `011–013`, новые `EXECUTOR_*`,
+`RETENTION_*`, `METRICS_*`, `RAG_MIN_SCORE`, `NOTIFICATIONS_*`; откат — до `010`.
+
+### Ограничения
+KI-018 (`.format()` в песочнице), KI-023 (branch protection на GitHub Free),
+KI-024 (метрики LLM/кэша считаются на процесс), KI-025 (retention — ручной/cron).
+
+---
+
+## Спринт 30: Release v0.3.0
+
+**Период:** 2026-11-01  
+**Статус:** ✅ релиз собран: UPGRADE, полные гейты, версия 0.3.0, тег и
+GitHub Release через release-workflow
+
+### Задачи
+- [x] S30-001: Руководство по апгрейду v0.2.0 → v0.3.0
+- [x] S30-002: Полные гейты
+- [x] S30-003: Документация v0.3.0
+- [x] S30-004: Версия, тег, релиз
+
+### Что сделано
+- **S30-001.** [UPGRADE.md](UPGRADE.md): таблица изменений эксплуатации, порядок
+  обновления (бэкап → env → миграции 011–013 → пересборка → проверки), новые
+  переменные, опциональный контейнерный раннер, откат до `010`, ограничения.
+- **S30-002.** Локально и в CI: `ruff`/`mypy`/`pytest` (501 passed + 1 skipped),
+  `alembic upgrade/check`, frontend `typecheck`/`lint`/`test` (90)/`build`/
+  `test:offline`, e2e 17 passed / 1 skipped, security, docker.
+- **S30-003.** Версия 0.3.0 в `pyproject.toml`/`package.json`/`config.py`; README,
+  CHANGELOG `[0.3.0]`, RELEASES (релиз + спринт 30), KNOWN_ISSUES (KI-024/025),
+  MANUAL_TESTING_GUIDE §18.
+- **S30-004.** PR → merge; тег `v0.3.0` и GitHub Release создаются
+  `release.yml` (`gh workflow run release.yml -f version=0.3.0 -f dry_run=false`).
+
+### Гейты
+| Проверка | Результат |
+|----------|-----------|
+| backend ruff/mypy | 0 |
+| backend pytest | 501 passed + 1 skipped |
+| alembic upgrade/check | OK (013) |
+| frontend typecheck/lint/test | 0 / 0 / 90 passed |
+| frontend build/offline | OK |
+| e2e | 17 passed / 1 skipped |
+| version check | 0.3.0 везде |
+| CI | 7/7 success |
+
+### DoD
+- ✅ Обновление с v0.2.0 описано и проверено (миграции, env, откат).
+- ✅ Все гейты зелёные; CI зелёный.
+- ✅ Тег `v0.3.0` и GitHub Release созданы автоматизированно.
 
 ---
 

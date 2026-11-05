@@ -90,9 +90,31 @@ pip install -r requirements.txt
 .\venv\Scripts\pytest.exe -q
 ```
 
-> **PyPI с хоста может быть заблокирован** (KI-017). Тогда `pip install`/
-> `pip-audit` локально не работают: аудит backend — в контейнере
-> `python:3.12-slim`, локальный fallback — `backend/scripts/audit_python_deps.py`
+### Если PyPI недоступен: wheelhouse (S22-005)
+
+PyPI с рабочей машины может быть заблокирован (KI-017). Тогда зависимости
+ставятся из локального «склада» колёс:
+
+```powershell
+# 1) скачать все пины (Docker, Linux-колёса — как в CI):
+python scripts/wheelhouse.py build --out .wheelhouse --docker `
+    --index-url https://mirrors.aliyun.com/pypi/simple/
+
+# 2) поставить в venv без сети:
+python scripts/wheelhouse.py install --from .wheelhouse `
+    --python backend\venv\Scripts\python.exe
+
+# 3) посмотреть, что лежит:
+python scripts/wheelhouse.py list --from .wheelhouse
+```
+
+`.wheelhouse/` — в `.gitignore`; колёса, собранные pip'ом Windows-хоста, в
+Linux-контейнер не ставятся, поэтому в CI используется тот же скрипт, но с
+именованным томом (`scripts/ci/build-wheelhouse.ps1`). Порядок безопасного
+апгрейда зависимостей — [RULES.md](RULES.md) §11.21.
+
+> Аудит backend — в контейнере `python:3.12-slim` (`pip-audit`), локальный
+> fallback — `backend/scripts/audit_python_deps.py`
 > (см. [reports/sprint-20/SECURITY_AUDIT.md](reports/sprint-20/SECURITY_AUDIT.md)).
 
 ---
@@ -225,3 +247,9 @@ docker exec ai_teacher_postgres dropdb -U ai_teacher ai_teacher_restore_check
 - [../docs/RULES.md](RULES.md) — правила разработки
 - [../TODO_V0.2.md](../TODO_V0.2.md) — этап v0.2.0 (спринты 11–20, завершён)
 - [../docs/KNOWN_ISSUES.md](KNOWN_ISSUES.md) — известные проблемы и принятые риски
+
+> **Сборка образов без PyPI (S25).** `backend/Dockerfile` и
+> `backend/sandbox_runner/Dockerfile` принимают `--build-arg PIP_INDEX_URL`;
+> `scripts/ci/docker.ps1` передаёт зеркало (`CI_PYPI_MIRROR`, по умолчанию
+> `mirrors.aliyun.com`), иначе сборка висит на pypi.org. GitHub-hosted runner
+> может использовать индекс по умолчанию.

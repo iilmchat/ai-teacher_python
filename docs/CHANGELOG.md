@@ -7,6 +7,252 @@
 
 ---
 
+## [Unreleased]
+
+—
+
+## [0.3.3] — 2026-11-05
+
+Патч наблюдаемости и безопасности: метрики-события и multiprocess-экспортёр
+(KI-024), auth-hardening (KI-026), лицензия и политика безопасности. План
+v0.4.0 — в [TODO_V0.4.md](../TODO_V0.4.md).
+
+### Добавлено
+- Общий экспортёр метрик (KI-024): multiprocess-режим `prometheus_client`
+  (`PROMETHEUS_MULTIPROC_DIR`) — при `uvicorn --workers N` любая реплика отдаёт
+  общий агрегат; каталог чистит `docker-entrypoint.sh` перед стартом
+- `app_build_info{version}` в `/metrics`
+- `LICENSE` (MIT), `SECURITY.md` (политика безопасности), `TODO_V0.4.md`
+  (план v0.4.0, спринты 33–41)
+- Тесты: `tests/test_metrics_export.py`, `tests/test_auth.py` (+3)
+
+### Изменено
+- Версия 0.3.3
+- Метрики LLM/кэша стали событиями (KI-024): `llm_requests_total{provider,model,status}`,
+  `llm_latency_seconds`, `llm_first_token_seconds` (гистограммы),
+  `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}`,
+  `cache_*_total` вместо per-process gauge — значения складываются между воркерами
+- Удалены мёртвые зависимости `aioredis`, `testcontainers`
+- `.env.example`: добавлены `METRICS_*`, `CACHE_*` и `PROMETHEUS_MULTIPROC_DIR`
+
+### Исправлено
+- KI-026 (безопасность): неактивный аккаунт больше не входит и не обновляет
+  токены; `bcrypt` вынесен в поток (не блокирует event loop); при старте
+  предупреждение о дефолтном `SECRET_KEY`; email в логах маскируется
+- KI-024 переведён в `Resolved`
+
+### Безопасность
+- `POST /auth/login` и `/auth/refresh` проверяют `is_active` (KI-026)
+- `LoggingEmailSender` маскирует адрес получателя (PII, PRIVACY.md)
+
+## [0.3.2] — 2026-11-03
+
+### Добавлено
+- Встроенный планировщик retention (KI-025): при `RETENTION_SCHEDULER_ENABLED`
+  приложение раз в сутки (`RETENTION_SCHEDULER_AT`, UTC) само применяет
+  `RETENTION_*_DAYS`; cron на хосте становится опциональным. На время прогона
+  берётся advisory-lock PostgreSQL — при нескольких инстансах двойного запуска
+  нет; остановка приложения даёт доиграть текущий прогон
+- Prometheus-счётчики retention: `retention_rows_deleted_total{table}` и
+  `retention_runs_total{table,result}` (в т.ч. для CLI-запусков)
+
+### Изменено
+- Версия 0.3.2; в `docker-compose.prod.yml` планировщик включён по умолчанию
+- `.env.example`: убрана переменная `VERSION` (перекрывала версию из
+  `backend/app/config.py` и устаревала при каждом релизе); добавлены
+  `RETENTION_SCHEDULER_*`
+- Документация: актуализированы чекбоксы TODO (UI-остатки 26/28 уже сделаны),
+  шапки TODO/RELEASES, UPGRADE, PRIVACY, DESIGN_ADMIN_AND_OPS
+
+## [0.3.1] — 2026-11-01
+
+### Добавлено
+- UI шаблонов назначений: список, создание из выбранных задач, применение к
+  классу и удаление на странице класса (`AssignmentTemplates`); закрыт последний
+  API-only пробел после v0.3.0
+- 4 frontend-теста на шаблоны (список/применение, сохранение, удаление, ошибка)
+
+### Изменено
+- Версия 0.3.1; release-заметки — раздел «Релиз v0.3.1» в RELEASES
+
+## [0.3.0] — 2026-11-01 «Ops & Scale»
+
+Этап v0.3.0 (спринты 21–30): CI и релиз-процесс, современные зависимости,
+производительность и изоляция песочницы, наблюдаемость, приватность, поиск,
+инструменты учителя и завершение UX/a11y/i18n.
+
+### Добавлено
+- Наблюдаемость: `X-Request-ID`, структурированные логи (JSON), `/metrics`
+  (Prometheus), `/health/live` и `/health/ready`
+- Аудит действий teacher/admin: `audit_log` (миграция 011) и `GET /admin/audit`
+- Экспорт: `GET /admin/analytics/export` (CSV/JSON), `GET /classrooms/{id}/report`,
+  `GET /classrooms/{id}/gradebook` (+`/csv`); retention-скрипт и `RETENTION_*`
+- Приватность: `DELETE /auth/me` (анонимизация, `users.is_active` — миграция 012),
+  `docs/PRIVACY.md`
+- RAG v2: `RAG_MIN_SCORE`, backfill эмбеддингов, панель поиска в чате
+- Учителю: массовые назначения, шаблоны назначений (миграция 013), журнал
+  оценок, email-уведомления за флагом
+- UX: адаптивные таблицы-карточки, аудит локализации в CI, axe-контраст (light/dark)
+- Песочница: контейнерный раннер (`EXECUTOR_MODE=container`) с self-check изоляции,
+  пул воркеров и батч-исполнение
+
+### Изменено
+- FastAPI 0.162 / Starlette 1.x: отсутствующий `Authorization` → 401 (было 403)
+- Логи по умолчанию — JSON, режим `console` — для разработки
+- Compose healthcheck использует `/health/ready`
+
+### Исправлено
+- Windows: `docker.exe` вместо extension-less shim (WinError 193)
+- Контейнерный батч: чтение stderr после kill (устранён hang)
+- Async-тесты: фейковые исполнители реализуют `execute_many`
+
+### Безопасность
+- 0 открытых уязвимостей в зависимостях (`pip-audit`, OSV fallback)
+- `/metrics` и `/health/*` не публикуются через nginx
+- Аудит без PII; удаление аккаунта необратимо и логируется
+
+## [0.3.0] — детали спринтов 19–30
+
+Подробные записи по спринтам, вошедшим в v0.2.0 («Classroom») и v0.3.0
+(«Ops & Scale»); выше — сводка релизов.
+
+### Добавлено
+
+**UX, A11y и локализация (S29)**
+
+- Адаптивные таблицы: на `<640px` строки превращаются в карточки с подписями
+  колонок (`Table`/`Tr`/`Td`/`Th`), без горизонтального скролла
+- Локализация: все RU-fallback убраны из кода (`api.ts`, `auth.ts`,
+  `chatSocket.ts`, сторы, `Spinner`) → ключи `errors.*`/`common.loading`
+- Аудит локализации `scripts/check-i18n.mjs` в CI (кириллица вне локалей,
+  паритет ключей ru/en)
+- Playwright + `axe-core`: контраст WCAG AA на ключевых страницах в светлой и
+  тёмной теме — 0 нарушений; e2e skip-link/меню/карточек
+
+**Teacher & Classroom v3 (S28)**
+
+- `POST /classrooms/{id}/assignments/bulk` — идемпотентные массовые назначения
+  (`{created, skipped, unknown}`), уведомления только по новым
+- Шаблоны назначений: таблица `assignment_templates` (миграция 013) и
+  `/teacher/assignment-templates` (создание/список/удаление, применение к классу)
+- `GET /classrooms/{id}/gradebook` + `/gradebook/csv` — журнал оценок с
+  `completed_at` и `overdue`
+- Email-уведомления за флагом `NOTIFICATIONS_EMAIL_ENABLED` (SMTP, best-effort)
+
+**RAG v2 и поиск (S27)**
+
+- `RAG_MIN_SCORE` — порог релевантности семантической выдачи; пустая выдача
+  после фильтра уходит в ILIKE-fallback
+- `scripts/backfill_embeddings.py` + `app/services/backfill.py`: идемпотентный
+  backfill (батчи, лимит, dry-run, продолжение после ошибок провайдера)
+- UI поиска в `ChatPage`: панель «Поиск по чату», подсветка `<mark>`,
+  aria-live, i18n ru/en; e2e-сценарий
+- Фикстуры `tests/fixtures/rag_queries.json` + precision@k тест
+
+**Данные и приватность (S26)**
+
+- `GET /api/v1/admin/analytics/export` — CSV/JSON, потоково, лимит
+  `EXPORT_MAX_ROWS`, аудит каждого экспорта
+- `GET /api/v1/classrooms/{id}/report` — CSV-матрица класса (overdue, итоги),
+  только владельцу/админу
+- Retention: `RETENTION_*_DAYS` + `backend/scripts/apply_retention.py`
+  (`--dry-run`, батчи, `--only`)
+- `DELETE /api/v1/auth/me` — удаление аккаунта с подтверждением паролем:
+  анонимизация, блокировка входа (`users.is_active`, миграция 012)
+- `docs/PRIVACY.md` — политика ПДн: состав, сроки, экспорт, удаление
+
+**Наблюдаемость и аудит (S25)**
+
+- `X-Request-ID` (входящий или `uuid4`) в ответе, в structlog-контексте и во
+  всех записях логов; middleware пишет `http_request` с методом, путём, статусом
+  и длительностью
+- `GET /metrics` (Prometheus): HTTP, песочница, LLM, кэш, пул БД; LLM/кэш —
+  gauge из счётчиков процесса; в nginx `/metrics` и `/health/*` → 404
+- `/health/live` (процесс) и `/health/ready` (БД, Redis, конфиг LLM; 503 при
+  недоступности); `/api/v1/health` сохранён; compose healthcheck → readiness
+- Аудит `audit_log` (миграция 011) + `GET /api/v1/admin/audit` (фильтры,
+  пагинация): роли, задачи, классы, назначения, удаление; best-effort запись
+- `LOG_LEVEL`/`LOG_FORMAT` в конфиге (JSON по умолчанию, console — dev)
+
+**Изоляция песочницы (S24)**
+
+- Контейнер-раннер `ai-teacher-sandbox-runner` (`backend/sandbox_runner`):
+  python:3.12-slim + RestrictedPython + чистое ядро песочницы, non-root;
+  запуск `--network none --read-only --cap-drop ALL --security-opt
+  no-new-privileges --user 65534:65534 --tmpfs /tmp --memory`
+- `EXECUTOR_MODE=native|container` (по умолчанию `native`), `EXECUTOR_IMAGE`;
+  при недоступном Docker/образе — fallback на native + warning и метрика
+  `fallbacks`
+- `--self-check` изоляции (uid, read-only rootfs, tmpfs, сеть, `CapEff=0`);
+  проверяется в CI (`Docker build`) и `scripts/ci/docker.ps1`
+- Метрики контейнерного режима (`runs`, `errors`, `timeouts`, `fallbacks`,
+  среднее время старта) — основа для `/metrics` в S25
+
+**Производительность песочницы (S23, KI-022)**
+
+- Батч тест-кейсов: все кейсы задачи выполняет **один** дочерний
+  интерпретатор (построчный JSON-протокол, таймаут на кейс). Submit 5 RPS:
+  p95 **2219.7 → 395.0 мс**
+- Пул тёплых интерпретаторов (`EXECUTOR_POOL_SIZE`, `EXECUTOR_POOL_MAX_TASKS`):
+  переиспользование процесса между задачами, перезапуск после 50 задач и
+  после `TimeoutError`/`MemoryError`/сбоя; закрытие в `lifespan`. Submit
+  5 RPS: p95 **48.9 мс**, p50 34.8 мс
+- Нагрузочные гейты: job `Perf smoke (submit)` (0.5 RPS на PR) и ночной
+  `perf-nightly.yml` (2 RPS); отчёт `docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`
+- Тесты: батч (16), пул (11), безопасность батча/пула (36: 14 атакующих
+  векторов × 2 режима + восстановление после MemoryError/TimeoutError)
+**Контрактные тесты и зависимости (S22)**
+
+- Снапшот OpenAPI (`backend/tests/contracts/openapi.json`, 68 операций,
+  92 схемы) и тест совместимости: разрешены только аддитивные изменения
+  (`backend/tests/contract_utils.py`); перегенерация —
+  `python scripts/snapshot_openapi.py`
+- Фикстуры форм ответов 21 ключевого эндпоинта (auth, tasks, chat, classrooms,
+  admin analytics) — `backend/tests/test_api_contract_shapes.py` +
+  `contracts/endpoints.json`
+- `fastapi 0.162.0` + `starlette 1.10.0` (KI-015): 7 advisory starlette
+  закрыты, `pip-audit` в CI — без `--ignore-vuln`
+- `pytest 9.2.0`, `pytest-asyncio 1.4.1`, `pytest-cov 7.1.0`,
+  `pytest-env 1.8.3` (KI-016): dev-only advisory PYSEC-2026-1845 закрыт
+
+**CI (S21)**
+
+- CI снова запускает проверки: workflow `CI (self-hosted fallback)` на
+  Windows-runner'е (`C:\actions-runner`) — `Lint (backend)`, `Test (backend)`,
+  `Frontend`, `Security`, `E2E (Playwright)`, `Docker build`; прогон 6/6
+  зелёный, минуты GitHub не расходуются (KI-014)
+- Переиспользуемый набор гейтов (`workflow_call`) — его же вызывает релиз,
+  команды не дублируются
+- Path-фильтры: docs-only PR не гоняет e2e/docker (GitHub `paths-ignore`,
+  GitFlic `rules: changes:`)
+- Офлайн-путь зависимостей для CI: wheelhouse в named volume
+  `ai-teacher-wheelhouse` (`scripts/ci/build-wheelhouse.ps1`,
+  `scripts/ci/install-python-deps.sh`) + постоянные кэши pip/pnpm — job'ы не
+  зависят от нестабильного PyPI (KI-017)
+- Релиз одной командой: `.github/workflows/release.yml` (гейты → тег →
+  GitHub Release), dry-run по умолчанию, репетиция по тегу `v*-dryrun`,
+  заметки — из `docs/RELEASES.md`
+- `scripts/ci/protect-branch.ps1` — готовая защита ветки (6 required checks,
+  запрет force-push) с честной диагностикой 403 на GitHub Free/private
+- GitFlic: полный `gitflic-ci.yaml` (5 job'ов + 3 security + e2e/docker на
+  PowerShell-агенте + тег-джоб `release`), пилотный `ci/gitflic-pilot.yaml`,
+  рунбук `docs/GITFLIC_RUNNER.md`, настройка проекта `scripts/gitflic/setup.ps1`
+- `docs/CI.md` — платформа, гейты, релиз, эксплуатация runner'а; RULES §11.20
+
+### Изменено
+
+- **401 вместо 403 без заголовка `Authorization`** (S22-002, Starlette 1.x):
+  поведение выровнено по RFC 7235 (`401` + `WWW-Authenticate`); клиентский код
+  уже обрабатывал 401 (refresh/логин). Переводы ошибок и SPEC §7 обновлены.
+- `pytest`/`ruff`/`mypy` в CI ставятся из `backend/requirements.txt`
+  (закреплённые версии): unpinned ruff давал 54 ложных ошибки на неизменённом
+  коде, а mypy без runtime-зависимостей — 295 `import-not-found`
+- GitHub-hosted `ci.yml` переведён в ручной режим до восстановления биллинга
+  (KI-014) — красный workflow больше не висит на каждом PR
+- `E2E_PYTHON` для runner'а указывает на актуальный venv проекта
+
+---
+
 ## [0.2.0] - 2026-10-30
 
 Релиз «Classroom»: классы и назначения, достижения и дашборд, UX/тёмная

@@ -16,6 +16,11 @@ from app.db.database import get_db
 from app.db.repositories.task import ProgressRepository, TaskRepository
 from app.models.task import Task, TaskStatus, UserTaskProgress
 from app.models.user import User, UserRole
+from app.schemas.classroom import (
+    TemplateCreate,
+    TemplateItem,
+    TemplateList,
+)
 from app.schemas.task import TaskAdminDetail, TestCase
 from app.schemas.teacher import (
     TeacherProgressItem,
@@ -25,6 +30,7 @@ from app.schemas.teacher import (
     TeacherTaskItem,
     TeacherTaskList,
 )
+from app.services.classroom_service import ClassroomService
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
@@ -197,3 +203,45 @@ async def get_task_for_teacher(
         test_cases=[TestCase(**case) for case in (task.test_cases or [])],
         is_active=task.is_active,
     )
+
+
+# --- Шаблоны назначений (S28-002) ------------------------------------------
+
+
+@router.post(
+    "/assignment-templates",
+    response_model=TemplateItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_assignment_template(
+    payload: TemplateCreate,
+    current_user: TeacherUser,
+    db: DbSession,
+) -> TemplateItem:
+    """Сохранить набор задач как шаблон (teacher/admin)"""
+    template = await ClassroomService(db).create_template(
+        current_user, payload.name, payload.task_ids
+    )
+    return TemplateItem.model_validate(template)
+
+
+@router.get("/assignment-templates", response_model=TemplateList)
+async def list_assignment_templates(
+    current_user: TeacherUser, db: DbSession
+) -> TemplateList:
+    """Шаблоны текущего учителя"""
+    templates = await ClassroomService(db).list_templates(current_user)
+    return TemplateList(
+        items=[TemplateItem.model_validate(t) for t in templates],
+        total=len(templates),
+    )
+
+
+@router.delete(
+    "/assignment-templates/{template_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_assignment_template(
+    template_id: UUID, current_user: TeacherUser, db: DbSession
+) -> None:
+    """Удалить свой шаблон"""
+    await ClassroomService(db).delete_template(template_id, current_user)

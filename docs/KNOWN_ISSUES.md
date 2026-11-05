@@ -3,8 +3,8 @@
 > Этот документ содержит список всех известных проблем, ограничений и блокеров.
 > Каждая проблема имеет ID `KI-NNN`, статус, severity и план закрытия.
 
-**Последнее обновление:** 2026-10-30 (спринт 20 / релиз v0.2.0)  
-**Всего проблем:** 22 (активных: 6, закрытых: 16)
+**Последнее обновление:** 2026-11-05 (v0.3.3: KI-024 и KI-026 закрыты)  
+**Всего проблем:** 27 (активных: 3, закрытых: 24)
 
 ---
 
@@ -31,85 +31,32 @@ Workaround: временное решение (если есть)
 
 ## Активные проблемы
 
-### KI-014 · Open · High · CI · GitHub Actions не запускает job'ы (биллинг)
+### KI-023 · Open · High · CI · merge-gate не обеспечен: GitHub Free не даёт required checks, GitFlic-пилот ждёт доступа
 
-**Описание:** при push ветки `sprint/12-llmops` job'ы `Lint (Backend)` и
-`Frontend` завершаются за 2 с без выполнения шагов. Аннотация GitHub:
-«The job was not started because recent account payments have failed or your
-spending limit needs to be increased». Код, workflow и локальные проверки ни
-при чём: ruff/mypy/pytest и pnpm-проверки зелёные.
+**Описание:** зелёный CI восстановлен (KI-014), но *заблокировать* мерж красного
+PR нечем: GitHub Free для приватного репозитория отвечает `403 Upgrade to GitHub
+Pro or make this repository public` на `PUT /repos/.../branches/main/protection`
+(проверено 2026-10-30, дважды). GitFlic даёт защиту ветвей и опцию «Проверять
+статус последнего конвейера при слиянии» на бесплатном тарифе, но пилот
+(S21-002) требует access token GitFlic и зарегистрированного агента — это доступ
+владельца, у агента разработки его нет.
 
-**Workaround:** локальные прогоны (см. отчёт спринта 12); PR остаётся
-открытым до восстановления Actions. Владелец проекта разрешил мерж без
-зелёного CI на 5 дней (до 2026-11-03) — решение временное.
+**Что уже готово:** `scripts/ci/protect-branch.ps1` (payload с 6 required
+checks, запрет force-push, `-DryRun`/`-Verify`); `gitflic-ci.yaml` с MR-правилами;
+ADR и инструкции — `docs/CI.md` §10; проверка того, что красный пайплайн
+блокирует merge, описана пошагово.
 
-**План закрытия:** проверить GitHub → Settings → Billing & plans, пополнить
-или поднять лимит Actions, затем перезапустить CI (`gh run rerun <id>`).
+**Workaround:** RULES §10 — мерж только при зелёном `CI (self-hosted fallback)`
+(проверка глазами), зелёный прогон 6/6 известен (run 41070317162).
+С S22-004 это же ограничение закрывает авто-мерж Dependabot minor/patch: на
+Free/private нет ни branch protection, ни auto-merge — группа обновлений
+мержится вручную после зелёного CI.
 
-**Обновлено 2026-10-30 (спринт 20):** добавлен job `Security` (pip-audit,
-gitleaks, pnpm audit), но на GitHub он не запускался — причина прежняя
-(биллинг Actions). Гейты v0.2.0 выполняются локально (ruff, mypy, pytest,
-pnpm, Docker); непройденным остаётся именно CI на GitHub — в отчёте это
-фиксируется как «CI не стартовал», а не «CI зелёный».
+**План закрытия:** (1) владелец выдаёт GitFlic-токен/регистрирует агент →
+прогнать пилот → включить гейт и проверить красным MR; либо (2) GitHub Pro /
+публичный репозиторий → `pwsh scripts/ci/protect-branch.ps1`.
 
-**Создано:** 2026-10-29 · **Обновлено:** 2026-10-30 (спринт 20)
-
----
-
-### KI-015 · Accepted · High · deps: fastapi/starlette · отложенный апгрейд starlette 0.41.3
-
-**Описание:** `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) содержит
-7 ID: high — PYSEC-2026-161, PYSEC-2026-248; medium/low — PYSEC-2026-1941,
-1942, 2280, 2281, 249. Апгрейд до исправленной версии требует мажорного
-`starlette` (≥1.3.1) и координированного апгрейда `fastapi` с полным
-прогоном тестов — в спринте 20 это за рамками бюджета и рискованно перед
-релизом.
-
-**Почему риск принят (векторы не применимы):** файлы статики отдаёт nginx
-(`StaticFiles`/`FileResponse` в API не используются), тела запросов — JSON
-(не urlencoded-формы), `HTTPEndpoint` не используется, решения аутентификации
-не зависят от `request.url`/Host (валидация — за nginx). `pip-audit` в CI
-игнорирует эти 7 ID до апгрейда, чтобы job ловил новые уязвимости.
-
-**Workaround:** Dependabot откроет PR на starlette; мажор проверять вручную —
-в рамках v0.3.0 (координированный апгрейд fastapi+starlette, полный прогон
-`test_access_matrix`, API, WS и e2e).
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
-
----
-
-### KI-016 · Accepted · Low · dev-deps · pytest 8.3.3 (dev-only advisory)
-
-**Описание:** `pytest 8.3.3` — PYSEC-2026-1845 (moderate, UNIX tmpdir).
-Зависимость только для разработки/CI, в runtime-образ не попадает; на
-Windows-машине разработки вектор не воспроизводится. Фикс — мажорный
-`pytest 9.x` вместе с dev-апгрейдом.
-
-**Workaround:** CI `pip-audit` игнорирует 1 ID (PYSEC-2026-1845); апгрейд —
-в плановом dev-обновлении.
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
-
----
-
-### KI-017 · Open · Low · окружение/инструменты · PyPI недоступен с хоста
-
-**Описание:** на машине разработки `pypi.org`/`files.pythonhosted.org`
-заблокированы (connection reset/timeout): `pip install`/`pip-audit` с хоста
-не работают, часть апгрейдов пришлось ставить вручную через Docker-wheelhouse.
-Docker-контейнеры PyPI видят, npm registry и `api.github.com` доступны.
-
-**Workaround:** аудит backend выполняется в контейнере (`python:3.12-slim`) —
-это же путь CI; для локальной разработки — `backend/scripts/audit_python_deps.py`
-по GitHub Advisory API (лимит 60 запросов/час, кэш, `--resume`, `--offline`,
-exit 2 при неполном прогоне). Закрепление версий — `requirements.txt` +
-Dependabot; авторитетный результат — CI `Security`.
-
-**План закрытия:** восстановление доступа к PyPI на рабочей машине
-(прокси/сеть) либо переход на локальное зеркало; до этого — процесс выше.
-
-**Создано:** 2026-10-30 (S20-001) · **Обновлено:** 2026-10-30
+**Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-10-30
 
 ---
 
@@ -135,37 +82,189 @@ Dependabot; авторитетный результат — CI `Security`.
 
 ---
 
-### KI-022 · Accepted · Med · performance/песочница · предел throughput submit (~2 RPS)
+### KI-027 · Accepted · Low · api/auth, frontend · нет отзыва JWT: logout — no-op
 
-**Описание:** нагрузочный тест S19-006 (S19-006,
-[LOAD_TEST.md](reports/sprint-19/LOAD_TEST.md)): `health` держит 50 RPS
-(p95 6.3 мс), каталог — 20 RPS (p95 25.4 мс), а `submit` целевые 5 RPS не
-достигает: факт 2.5 RPS, p50 1964 мс / p95 2219.7 мс при бюджете 2000 мс;
-деградация на 3 RPS (p95 2387 мс). Точка насыщения ≈2 RPS, максимум
-≈2.2–2.5 submit/s.
+**Описание:** `POST /auth/logout` ничего не делает (клиент просто забывает
+токены), денлиста/`token_version` нет, JWT живут в `localStorage` (XSS-риск).
+Access-токен (30 мин) после удаления аккаунта или смены пароля валиден до
+истечения; refresh уже отклоняется для неактивных (KI-026).
 
-**Причина:** песочница, а не БД/HTTP. Один `submit` — 3 тест-кейса, каждый в
-отдельном дочернем интерпретаторе Python (~0.5–0.6 с на кейс); при
-`EXECUTOR_MAX_CONCURRENCY=4` это ≈7 exec/s ≈ 2.3 submit/s (сходится с
-измерением). При `DEBUG=true` SQLAlchemy `echo` пишет каждый запрос и цифры
-хуже — артефакт логирования, нагрузку запускать только с `DEBUG=false`.
+**Workaround:** короткий `ACCESS_TOKEN_EXPIRE_MINUTES`, `is_active` как ручной
+«рубильник» блокировки, удаление аккаунта анонимизирует данные.
 
-**Почему принято в v0.2.0:** профиль зафиксирован и воспроизводим; 5 RPS
-submit не входит в DoD релиза; деградация ограничена сценарием `submit`,
-health/каталог имеют запас 47×/12×. Рекомендации — в отчёте LOAD_TEST §5.
+**План (v0.4.0):** `token_version` в `users` + проверка в `get_current_user`
+(инкремент при смене пароля/роли/удалении), отзыв refresh при logout,
+перенос хранения токенов в httpOnly-cookie/BFF.
 
-**План:** v0.3.0 — прогонять все кейсы в одном дочернем процессе или пул
-«тёплых» интерпретаторов; поднять `EXECUTOR_MAX_CONCURRENCY` (процессы
-CPU-bound — рост до загрузки ядер); если 5 RPS submit — продуктовое
-требование, защищать latency очередью с явным 429/503 и SLO, а не накоплением
-очереди. Для CI — smoke ниже knee (submit 1–2 RPS, health 50, tasks 20).
-
-**Создано:** 2026-10-30 (S19-006) · **Обновлено:** 2026-10-30
+**Создано:** 2026-11-04 · **Обновлено:** 2026-11-04
 
 ---
 
 ## Закрытые проблемы
 
+### KI-024 · Resolved · Low · core/metrics · метрики LLM/кэша считались на процесс
+
+**Описание:** `llm_requests`, `cache_hits` и т.п. отдавались как gauge из in-memory
+счётчиков процесса; при нескольких воркерах значения не суммировались.
+
+**Решение (v0.3.3):** метрики стали событиями — `llm_requests_total{provider,model,status}`,
+`llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`,
+`llm_fallbacks_total{primary}`, `cache_*_total`; сервисы инкрементируют их в момент
+события (`llm_call_observed`, `cache_observed`), а не снимают gauge при scrape.
+Добавлен multiprocess-режим `prometheus_client` (`PROMETHEUS_MULTIPROC_DIR`): любая
+реплика отдаёт общий агрегат, каталог чистит `docker-entrypoint.sh` перед стартом.
+Пул БД остался gauge (`db_pool_connections{livesum}`, `db_pool_size{max}`) — это
+состояние процесса; версия сборки — `app_build_info{version}`.
+Тесты: `tests/test_metrics_export.py`.
+
+**Создано:** 2026-11-01 · **Закрыто:** 2026-11-05 (v0.3.3)
+
+---
+
+### KI-026 · Resolved · Med · api/auth, core/security · неактивный аккаунт мог получить токены
+
+**Описание (аудит v0.3.3):** `POST /auth/login` и `POST /auth/refresh` не
+проверяли `users.is_active`: после `DELETE /auth/me` (анонимизация + `is_active=false`)
+держатель refresh-токена получал новую пару токенов, а `logout` был no-op.
+Дополнительно: `bcrypt` вызывался синхронно из async-обработчиков и блокировал
+event loop на ~0.1–0.3 с; `SECRET_KEY` по умолчанию совпадал с `.env.example`;
+`LoggingEmailSender` писал адрес получателя в лог открытым текстом.
+
+**Решение:** login отклоняет неактивных (и не различает «нет такого» и
+«заблокирован»), refresh проверяет `is_active`; `hash_password`/`verify_password`
+выполняются в `run_in_threadpool`; при старте пишется `insecure_secret_key`,
+если ключ дефолтный или короче 32 символов; email в логах маскируется
+(`mask_email`). Тесты: `tests/test_auth.py` (неактивный login/refresh, refresh
+после удаления аккаунта). Отзыв токенов вынесен в **KI-027**.
+
+**Создано:** 2026-11-04 · **Закрыто:** 2026-11-05 (v0.3.3)
+
+---
+
+### KI-025 · Resolved · Low · scripts/apply_retention · retention запускается вручную
+
+**Описание:** очистка по `RETENTION_*_DAYS` выполнялась скриптом/по cron, а не
+самим приложением; автоматического планировщика не было — на self-hosted
+установке retention легко забыть, хотя сроки хранения заявлены в PRIVACY.md.
+
+**Решение (S32, v0.3.2):** встроенный планировщик
+`app/services/scheduler.py`: одна asyncio-задача в lifespan, включается
+`RETENTION_SCHEDULER_ENABLED` (в production — из `docker-compose.prod.yml`),
+время запуска `RETENTION_SCHEDULER_AT` (UTC). На время прогона берётся
+advisory-lock PostgreSQL (`pg_try_advisory_lock`) — при нескольких инстансах
+двойного запуска нет; остановка приложения даёт доиграть текущий прогон.
+Добавлены счётчики `retention_rows_deleted_total` / `retention_runs_total`
+(в т.ч. для CLI). Покрыто `tests/test_scheduler.py` (18 тестов), описано в
+DESIGN_ADMIN_AND_OPS §11 и PRIVACY §4. Cron остаётся альтернативой.
+
+**Создано:** 2026-11-01 · **Закрыто:** 2026-11-03 (спринт 32, S32-001…S32-002)
+
+---
+
+### KI-014 · Resolved · High · CI · GitHub Actions не запускает job'ы (биллинг)
+
+**Описание:** все GitHub-hosted job'ы завершались за 0–4 с без выполнения шагов;
+аннотация API: «The job was not started because recent account payments have
+failed or your spending limit needs to be increased». Код и workflow были ни
+при чём (ruff/mypy/pytest/pnpm/e2e зелёные локально).
+
+**Решение (S21, спринт 21):** CI восстановлен **без hosted-минут** —
+self-hosted runner `ai-teacher-win` (labels `self-hosted, windows, ai-teacher`,
+`C:\actions-runner`) и workflow `CI (self-hosted fallback)`. На нём — все 6
+job'ов (Lint, Test, Frontend, Security, E2E, Docker), прогон **6/6 зелёный**
+(run 41070317162, 12 мин 10 с). Сам биллинг hosted-минут остаётся вопросом
+владельца: `ci.yml` переведён в ручной режим, чтобы не висел красным; после
+оплаты/лимита достаточно вернуть `on: push/pull_request`. Merge-gate —
+отдельная проблема **KI-023** (на Free/private required checks недоступны).
+
+**Создано:** 2026-10-29 · **Закрыто:** 2026-10-30 (спринт 21, S21-003)
+
+---
+
+### KI-015 · Resolved · High · deps: fastapi/starlette · starlette 0.41.3 → 1.10.0
+
+**Описание:** `starlette 0.41.3` (транзитивно от `fastapi 0.115.5`) содержал
+7 advisory: high — PYSEC-2026-161, PYSEC-2026-248; medium/low — PYSEC-2026-1941,
+1942, 2280, 2281, 249. Апгрейд требовал мажорного `starlette` (≥1.3.1) и
+координированного апгрейда `fastapi`.
+
+**Решение (S22-002, спринт 22):** `fastapi 0.115.5 → 0.162.0`,
+`starlette 0.41.3 → 1.10.0` (пин в requirements). Прогон: контрактные тесты
+S22-001 (68 операций, 92 схемы — breaking-изменений нет, обновлены только
+косметические `format`/`contentMediaType`/`ValidationError.ctx`), полный
+pytest **367 passed + 1 skipped**, e2e 12/12. Единственное поведенческое
+изменение — отсутствие `Authorization` теперь даёт **401** вместо 403
+(RFC 7235 в Starlette 1.x): тест `test_access_matrix` и SPEC §7 обновлены.
+`pip-audit` — без `--ignore-vuln` («No known vulnerabilities found»).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-002)
+
+---
+
+### KI-016 · Resolved · Low · dev-deps · pytest 8.3.3 → 9.2.0
+
+**Описание:** `pytest 8.3.3` — PYSEC-2026-1845 (moderate, UNIX tmpdir);
+зависимость только для разработки/CI.
+
+**Решение (S22-003):** `pytest 9.2.0`, `pytest-asyncio 1.4.1`,
+`pytest-cov 7.1.0`, `pytest-env 1.8.3`; конфиг `pyproject.toml` менять не
+потребовалось (`asyncio_mode`, `asyncio_default_fixture_loop_scope`,
+`testpaths` — без предупреждений об устаревших опциях). Полный прогон —
+367 passed + 1 skipped; `pip check` — OK; `pip-audit` — без игноров.
+`filterwarnings = error` намеренно не включён: в коде ~1 400 предупреждений
+`datetime.utcnow()`, это отдельная чистка (см. отчёт спринта 22).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-003)
+
+---
+
+### KI-017 · Resolved · Low · окружение/инструменты · PyPI недоступен с хоста
+
+**Описание:** pypi.org/iles.pythonhosted.org с машины разработки
+заблокированы (connection reset/timeout): pip install/pip-audit с хоста
+не работают. Docker-контейнеры PyPI видят (нестабильно), npm registry и
+pi.github.com доступны.
+
+**Решение (S22-005, спринт 22):** офлайн-установка формализована —
+scripts/wheelhouse.py: uild --out .wheelhouse --docker (скачивание всех
+пинов Linux-контейнером) и install --from .wheelhouse --python
+backend/venv/Scripts/python.exe (pip install --no-index --find-links). Для CI
+тот же скрипт наполняет named volume i-teacher-wheelhouse
+(scripts/ci/build-wheelhouse.ps1). Порядок — GETTING_STARTED §4 и RULES §11.21;
+аудит — pip-audit в контейнере / ackend/scripts/audit_python_deps.py,
+авторитетный результат — job Security.
+
+**Оговорка:** сам доступ к PyPI с хоста не восстановлен — это ограничение
+сети, а не проекта; основной путь остаётся CI (контейнер, зеркала, wheelhouse).
+
+**Создано:** 2026-10-30 (S20-001) · **Закрыто:** 2026-10-31 (спринт 22, S22-005)
+
+---
+### KI-022 · Resolved · Med · performance/песочница · throughput submit (2.5 RPS → 40+ RPS)
+
+**Описание:** нагрузочный тест S19-006: submit держал 2.5 RPS при p95
+2219.7 мс (бюджет 2000 мс), knee ≈2 RPS. Причина — песочница: каждый тест-кейс
+в отдельном дочернем интерпретаторе (~0.5–0.6 с старта на кейс), 3 кейса ×
+EXECUTOR_MAX_CONCURRENCY=4 ≈ 2.3 submit/s.
+
+**Решение (S23-001/S23-002):**
+- батч: все кейсы задачи — один интерпретатор, построчный JSON-протокол,
+  таймаут на кейс (_BATCH_RUNNER);
+- пул тёплых процессов (
+unner_pool.py, EXECUTOR_POOL_SIZE=2), перезапуск
+  после 50 задач и после любого сбоя;
+- нагрузочный гейт в CI: PR — 0.5 RPS (Perf smoke), ночь — 2 RPS
+  (perf-nightly.yml).
+
+**Результат:** submit 5 RPS — p50 34.8 мс, **p95 48.9 мс** (было 2219.7),
+0 ошибок; knee не найден до 40 RPS (p95 95 мс). health 50 RPS p95 7.3 мс,
+	asks 20 RPS p95 19.3 мс. Цифры — docs/reports/sprint-23/LOAD_TEST-SUBMIT.md,
+docs/reports/sprint-23/load-test.json. Атакующие кейсы в батче/пуле — 36
+тестов (	est_sandbox_batch_security.py), пул — 11 тестов.
+
+**Создано:** 2026-10-30 (S19-006) · **Закрыто:** 2026-10-31 (спринт 23, S23-001/002)
+
+---
 ### KI-019 · Resolved · Critical · deps/security · python-jose и PyJWT 2.10.0
 
 **Описание:** аудит backend (`pip-audit`, Docker/CI-путь) показал 66 записей

@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** v0.2.0 «Classroom» (2026-10-30) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** v0.3.3 (2026-11-05) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -13,7 +13,7 @@
 | первый раз запускаете проект | [GETTING_STARTED.md](GETTING_STARTED.md) | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
-| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.2.md](../TODO_V0.2.md) |
+| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -34,7 +34,11 @@
 - [ARCHITECTURE.md](ARCHITECTURE.md) — как система устроена сейчас: модули, потоки, контракты
 - [RULES.md](RULES.md) — правила кода, тестов, коммитов, окружения
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
-- [../TODO_V0.2.md](../TODO_V0.2.md) — **этап v0.2.0** (спринты 11–20; завершён)
+- [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
+- [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
+  патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
+- [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41, план)
+- [CI.md](CI.md) — CI-платформа: self-hosted runner, гейты, релиз, эксплуатация
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
 ### Для QA и продукта
@@ -61,15 +65,15 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.2.0 «Classroom»** (2026-10-30); спринты 1–20 завершены |
-| Тесты backend | **341** (pytest, реальный PostgreSQL; +1 skip на Windows) |
-| Тесты frontend | 80 unit + 12 e2e (Playwright; 12/12 green) |
+| Версия | **v0.3.3** (2026-11-05); спринты 1–32 завершены |
+| Тесты backend | **531** (pytest, реальный PostgreSQL; 22 skip на Windows) |
+| Тесты frontend | 94 unit + 12 e2e (Playwright; 12/12 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
-| Миграции | head 010 (`alembic check` чист) |
+| Миграции | head 013 (`alembic check` чист) |
 | Размер фронтенда | entry 78.71 kB gzip (лимит 80) |
 | Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
-| Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
+| Активные проблемы | 3 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---
 

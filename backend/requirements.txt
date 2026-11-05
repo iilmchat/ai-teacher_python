@@ -1,5 +1,11 @@
 # Web Framework
-fastapi==0.115.5
+# S22-002 (KI-015): fastapi 0.115.5 → 0.162.0, starlette 0.41.3 → 1.10.0.
+# Закрыты 7 advisory starlette (PYSEC-2026-161/248/249/1941/1942/2280/2281),
+# поэтому из CI pip-audit игноры убраны. Поведение аутентификации выровнено
+# по RFC 7235: без заголовка Authorization теперь 401 (было 403) — SPEC §7.
+# Новые транзитивные зависимости fastapi: annotated-doc, opentelemetry-api.
+fastapi==0.162.0
+starlette==1.10.0
 uvicorn[standard]==0.32.1
 # S20-001: 0.0.17 → 0.0.31 (GHSA-wp53-j4wj-2cfg, GHSA-pp6c-gr5w-3c5g,
 # GHSA-5rvq-cxj2-64vf, GHSA-v9pg-7xvm-68hf — все закрыты в 0.0.31).
@@ -9,7 +15,6 @@ python-multipart==0.0.31
 
 # Async
 asyncpg==0.30.0
-aioredis==2.0.1
 
 # Database
 sqlalchemy[asyncio]==2.0.36
@@ -53,17 +58,20 @@ httpx==0.28.1
 # Task import/export (S14-001)
 PyYAML==6.0.2
 
-# Logging
+# Logging & metrics (S25)
 structlog==24.4.0
+prometheus-client==0.26.0
 
 # Linting & Testing (dev)
+# S22-003 (KI-016): pytest 8.3.3 → 9.2.0 + плагины (asyncio 1.4.1, cov 7.1.0,
+# env 1.8.3). Закрыт dev-only advisory PYSEC-2026-1845, поэтому из CI
+# pip-audit больше нет ни одного --ignore-vuln.
 ruff==0.8.1
-mypy==1.13.0
-pytest==8.3.3
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-pytest-env==1.1.5
-testcontainers==4.9.0
+mypy==2.4.0
+pytest==9.2.0
+pytest-asyncio==1.4.1
+pytest-cov==7.1.0
+pytest-env==1.8.3
 
 # Types
 types-redis==4.6.0.20241004

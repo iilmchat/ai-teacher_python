@@ -1,3 +1,4 @@
+import i18n from '@/i18n';
 /**
  * HTTP-клиент API (RULES §3.2): единая точка для запросов, типизированные
  * ответы, автоматическая подстановка токена и обновление по refresh-токену.
@@ -56,7 +57,7 @@ function extractDetail(payload: unknown): string {
       }
     }
   }
-  return 'Не удалось выполнить запрос';
+  return i18n.t('errors.network');
 }
 
 async function parseBody(response: Response): Promise<unknown> {
@@ -135,7 +136,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     if (!newToken) {
       clearTokens();
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
-      throw new ApiError(401, 'Сессия истекла, войдите заново');
+      throw new ApiError(401, i18n.t('errors.sessionExpired'));
     }
     response = await send(path, options);
   }
@@ -149,6 +150,18 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   return payload as T;
 }
 
+
+async function downloadRequest(path: string): Promise<Blob> {
+  const token = getAccessToken();
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, i18n.t('errors.network'));
+  }
+  return response.blob();
+}
+
 export const api = {
   get: <T>(path: string) => apiRequest<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -160,6 +173,7 @@ export const api = {
   patch: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PATCH', body }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
+  download: (path: string) => downloadRequest(path),
   anonymousPostForm: <T>(path: string, form: Record<string, string>) =>
     apiRequest<T>(path, { method: 'POST', form, anonymous: true }),
   anonymousPost: <T>(path: string, body?: unknown) =>

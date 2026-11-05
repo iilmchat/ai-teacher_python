@@ -1,8 +1,9 @@
+import i18n from '@/i18n';
 interface SpinnerProps {
   label?: string;
 }
 
-export function Spinner({ label = 'Загрузка…' }: SpinnerProps) {
+export function Spinner({ label = i18n.t('common.loading') }: SpinnerProps) {
   return (
     <div className="flex items-center justify-center gap-3 py-8 text-sm text-slate-500">
       <span

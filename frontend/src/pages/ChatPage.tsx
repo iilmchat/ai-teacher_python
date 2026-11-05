@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel';
 import { LevelSelector } from '@/components/chat/LevelSelector';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { MessageList } from '@/components/chat/MessageList';
@@ -85,6 +86,13 @@ export function ChatPage() {
         </div>
 
         <LevelSelector value={level} onChange={setLevel} disabled={creating} />
+
+        <ChatSearchPanel
+          onOpenSession={(sessionId) => {
+            void openSession(sessionId);
+            setSessionsOpen(false);
+          }}
+        />
 
         <Button onClick={() => void handleCreate()} loading={creating}>
           {t('chat.newSession')}

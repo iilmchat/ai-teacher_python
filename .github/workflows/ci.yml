@@ -1,30 +1,44 @@
 name: CI
 
+# GitHub-hosted job'ы не запускаются с 2026-10-29: биллинг Actions (KI-014) —
+# job падает за 2–4 с без шагов с аннотацией «recent account payments have
+# failed or your spending limit needs to be increased» (docs/CI.md §1).
+# Поэтому workflow переведён в ручной режим и не висит красным на каждом PR:
+# PR-гейты даёт .github/workflows/ci-selfhosted.yml (те же команды, тот же
+# набор job'ов, self-hosted runner). Вернуть push/pull_request сюда — после
+# восстановления биллинга GitHub (KI-014) или при переезде на GitFlic
+# (gitflic-ci.yaml уже содержит полный порт).
 on:
-  push:
-    branches: [main, 'sprint/**']
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Причина ручного запуска (для истории)'
+        required: false
+        type: string
 
 jobs:
   lint:
     name: Lint (Backend)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+          cache: 'pip'
 
-      - name: Install linters
+      - name: Install dependencies (mypy нужны импортируемые пакеты)
         run: |
           python -m pip install --upgrade pip
-          pip install ruff mypy
+          # ruff/mypy закреплены в requirements.txt (dev), unpinned ruff ломал lint
+          pip install -r backend/requirements.txt
 
       - name: Run Ruff
-        run: ruff check backend/
+        run: |
+          cd backend
+          ruff check app tests scripts
 
       # Конфиг mypy лежит в корневом pyproject.toml, поэтому передаём его явно
       - name: Run MyPy (strict)
@@ -76,10 +90,10 @@ jobs:
       SECRET_KEY: ci_secret_key_do_not_use_in_production
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -106,7 +120,7 @@ jobs:
           pytest -v --cov=app --cov-report=xml
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v7
         with:
           file: backend/coverage.xml
           fail_ci_if_error: false
@@ -159,10 +173,10 @@ jobs:
       E2E_PYTHON: python
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -174,12 +188,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
@@ -207,16 +221,16 @@ jobs:
     name: Frontend
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       # pnpm 12 читает настройки из pnpm-workspace.yaml (RULES §11.10)
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
@@ -247,39 +261,26 @@ jobs:
     name: Security
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks сканирует всю историю, а не только последний коммит
           fetch-depth: 0
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
       # pip-audit требует PyPI. Локальный fallback для разработки —
       # backend/scripts/audit_python_deps.py (GitHub Advisory API).
       #
-      # --ignore-vuln: известные residual-риски, которые нельзя закрыть без
-      # координированного апгрейда (локальный PyPI заблокирован, апгрейд
-      # ломает совместимость и требует полного прогона тестов). Каждый ID и
-      # обоснование — docs/reports/sprint-20/SECURITY_AUDIT.md §8.
-      # RestrictedPython обновлён до 8.5 (S20-001b) — его PYSEC-2026-1874/
-      # 3917/4161 из игнора убраны. Остались starlette (транзитивно от
-      # fastapi 0.115.5) и dev-only pytest.
+      # S22-002/003: starlette 1.10 и pytest 9 закрыли прежние advisory,
+      # поэтому --ignore-vuln больше нет — job ловит любые новые находки.
       - name: Audit backend dependencies (pip-audit)
         run: |
           python -m pip install --upgrade pip
           pip install pip-audit
-          pip-audit -r backend/requirements.txt --strict --desc \
-            --ignore-vuln PYSEC-2026-161 \
-            --ignore-vuln PYSEC-2026-1941 \
-            --ignore-vuln PYSEC-2026-1942 \
-            --ignore-vuln PYSEC-2026-2280 \
-            --ignore-vuln PYSEC-2026-2281 \
-            --ignore-vuln PYSEC-2026-248 \
-            --ignore-vuln PYSEC-2026-249 \
-            --ignore-vuln PYSEC-2026-1845
+          pip-audit -r backend/requirements.txt --strict --desc
 
       - name: Install gitleaks
         env:
@@ -296,12 +297,12 @@ jobs:
         run: gitleaks git . --config .gitleaks.toml --redact --verbose
 
       - name: Set up Node.js 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 12
 
@@ -316,7 +317,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [lint, test]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build Backend Image
         run: docker build -t ai-teacher-backend ./backend

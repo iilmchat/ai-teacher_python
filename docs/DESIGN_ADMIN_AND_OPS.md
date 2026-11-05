@@ -251,3 +251,97 @@ code_executions=2), retention удалил тестовый бэкап стар�
 6. ~~Скрипты бэкапа/восстановления (S20-004)~~ — сделано в S20-004.
 7. Автоматические бэкапы по расписанию + off-site копия — после v0.2.0.
 8. Экспорт метрик в Prometheus/OTel и алерты — после v0.2.0.
+
+---
+
+## 10. Мониторинг и аудит (S25)
+
+**Метрики.** `GET /metrics` (Prometheus text format) на том же процессе, без
+авторизации — предназначен для внутренней сети: nginx отдаёт 404 на `/metrics`
+и `/health/*`, поэтому наружу они не попадают. Собираются:
+
+| Группа | Метрики |
+|--------|---------|
+| HTTP | `http_requests_total{method,path,status}`, `http_request_duration_seconds` (гистограмма) |
+| Песочница | `sandbox_runs_total{mode,result}`, `sandbox_duration_seconds`, `sandbox_timeouts_total` |
+| LLM | `llm_requests_total{provider,model,status}`, `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}` |
+| Кэш | `cache_hits_total`, `cache_misses_total`, `cache_sets_total`, `cache_invalidations_total`, `cache_errors_total` |
+| Retention | `retention_runs_total{table,result}`, `retention_rows_deleted_total{table}` |
+| БД | `db_pool_connections{state}`, `db_pool_size` |
+| Сборка | `app_build_info{version}` |
+
+LLM/кэш/retention — **события** (счётчики и гистограммы), поэтому корректно
+складываются между воркерами. Для нескольких воркеров включите общий экспортёр:
+
+```env
+PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-multiproc
+```
+
+и запускайте API с `--workers N` (каталог чистит `docker-entrypoint.sh` перед
+стартом; при запуске без entrypoint очистите его сами). В этом режиме любая
+реплика отдаёт общий агрегат — `sum by (instance)` в Prometheus не нужен.
+Пул БД — состояние процесса: `db_pool_connections` суммируется (`livesum`),
+`db_pool_size` берётся максимумом.
+
+**Алерты (рекомендуемые):** 5xx rate > 1% за 5 мин; p95 `http_request_duration`
+> 2 с; `sandbox_timeouts_total` растёт; `sandbox_runs_total{result="error"}`
+растёт; `llm_requests_total{status="error"}` растёт; `retention_runs_total{result="error"}`
+> 0; `db_pool_connections{state="checked_out"}` близко к `db_pool_size`.
+
+**Логи.** JSON (`LOG_FORMAT=json`), каждая запись содержит `request_id`
+(из `X-Request-ID`), `http_request` пишется на каждый запрос с длительностью.
+`LOG_FORMAT=console` — для локальной разработки.
+
+**Health.** Docker healthcheck и compose используют `/health/ready`
+(БД + Redis), liveness — `/health/live`. `/api/v1/health` остаётся для
+совместимости и показывает состояние LLM.
+
+**Аудит.** `audit_log` (кто/что/над чем/IP/время) + `GET /api/v1/admin/audit`
+с фильтрами. Retention — в спринте 26 (`RETENTION_AUDIT_DAYS`).
+
+---
+
+## 11. Экспорт данных и retention (S26)
+
+**Экспорт аналитики.** `GET /api/v1/admin/analytics/export` — только admin.
+Ответ потоковый (серверный курсор SQLAlchemy), поэтому большие выгрузки не
+занимают память процесса. Лимит `EXPORT_MAX_ROWS` (100 000) защищает БД от
+«выгрузить всё»; при обрезке в `audit_log` пишется `analytics.exported` с
+параметрами. Даты — ISO 8601, CSV в UTF-8.
+
+**Отчёт класса.** `GET /api/v1/classrooms/{id}/report` отдаёт CSV-матрицу
+«ученик × задача» с overdue-флагом и итоговой строкой; доступ — владелец
+класса/админ, действие аудируется.
+
+**Retention.** Встроенный планировщик (KI-025) — `RETENTION_SCHEDULER_ENABLED`:
+приложение раз в сутки в `RETENTION_SCHEDULER_AT` (UTC, по умолчанию 03:30)
+само применяет `RETENTION_*_DAYS`. На время прогона берётся advisory-lock
+PostgreSQL, поэтому при нескольких инстансах retention не выполнится дважды;
+остановка приложения даёт доиграть текущий прогон. В production флаг включён в
+`docker-compose.prod.yml`. Ручной запуск и `--dry-run` — через скрипт
+`backend/scripts/apply_retention.py` (в контейнере:
+`docker compose exec backend python scripts/apply_retention.py --dry-run`):
+
+| Таблица | Настройка | По умолчанию |
+|---------|-----------|--------------|
+| `chat_messages` | `RETENTION_CHAT_MESSAGES_DAYS` | 90 |
+| `code_executions` | `RETENTION_CODE_EXECUTIONS_DAYS` | 90 |
+| `notifications` | `RETENTION_NOTIFICATIONS_DAYS` | 180 |
+| `audit_log` | `RETENTION_AUDIT_LOG_DAYS` | 365 |
+
+Cron на хосте — альтернатива планировщику (если приложение запускать без флага;
+пример, раз в сутки в 03:30):
+
+```cron
+30 3 * * * cd /opt/ai-teacher && docker compose exec -T backend \
+  python scripts/apply_retention.py >> /var/log/ai-teacher/retention.log 2>&1
+```
+
+Каждый запуск пишет `retention_applied` с числом удалённых строк и увеличивает
+Prometheus-счётчики `retention_rows_deleted_total` / `retention_runs_total`;
+`--dry-run` ничего не удаляет и показывает объём.
+
+**Удаление аккаунта.** Пользователь удаляет себя через `DELETE /auth/me`
+(пароль обязателен): анонимизация + блокировка входа. Администратор по-прежнему
+может удалить пользователя полностью (`DELETE /admin/users/{id}`). Политика
+данных — `docs/PRIVACY.md`.

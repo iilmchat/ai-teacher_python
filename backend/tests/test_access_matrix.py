@@ -182,17 +182,17 @@ async def test_anonymous_requests_rejected(client: AsyncClient) -> None:
     assert not failures, "анонимный доступ: " + "; ".join(failures)
 
 
-async def test_missing_credentials_403_and_invalid_token_401(
+async def test_missing_credentials_and_invalid_token_are_401(
     client: AsyncClient,
 ) -> None:
-    """Нет заголовка — 403 (FastAPI HTTPBearer), битый токен — 401"""
+    """Нет заголовка — 401 (HTTPBearer в Starlette 1.x), битый токен — 401"""
     no_header = await client.get("/api/v1/auth/me")
     bad_token = await client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer not-a-valid-jwt"},
     )
 
-    assert no_header.status_code == 403
+    assert no_header.status_code == 401
     assert bad_token.status_code == 401
 
 

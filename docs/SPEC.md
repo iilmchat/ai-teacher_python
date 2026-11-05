@@ -137,8 +137,8 @@ limit  — опциональный; по умолчанию RAG_TOP_K (5), ма
 - `mode="ilike"` — всегда доступный fallback: подстрока без учёта регистра.
   Используется при выключенном RAG, недоступном/упавшем провайдере,
   несовпадении размерности эмбеддинга и при пустой семантической выдаче.
-- Ошибки: 403 — нет заголовка `Authorization` (так ведёт себя FastAPI
-  `HTTPBearer`); 401 — невалидный/просроченный токен; 422 — пустой/слишком
+- Ошибки: 401 — нет заголовка `Authorization` или невалидный/просроченный
+  токен (Starlette 1.x `HTTPBearer`, S22-002); 422 — пустой/слишком
   длинный `q`, `limit` вне диапазона; 500 не возникает при сбое эмбеддингов
   (fail-open → ILIKE).
 
@@ -203,8 +203,8 @@ TTL 60 с; инвалидация — при создании/правке/уд�
 делается).
 
 `GET /tasks/{id}/hints/{index}` требует аутентификации (S20-003): раньше
-эндпоинт был анонимным, теперь без заголовка — 403 (HTTPBearer), с невалидным
-токеном — 401, как и остальные роуты `/tasks`; поведение для
+эндпоинт был анонимным, теперь без заголовка — 401 (HTTPBearer, как и
+остальные защищённые роуты), с невалидным токеном — тоже 401; поведение для
 неактивной/несуществующей задачи не изменилось.
 
 ### 3.6 Админка
@@ -409,9 +409,13 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 | Запрещённые модули | `os, sys, subprocess, socket, shutil, pathlib, importlib, builtins, ctypes, multiprocessing, threading, sqlite3, http, urllib, requests, pickle, marshal` |
 | Запрещённые вызовы | `open, eval, exec, compile, globals, locals, __import__` (прямой) |
 | Dunder-атрибуты | запрещены |
-| Таймаут | `EXECUTOR_TIMEOUT` (5 с), процесс убивается |
+| Таймаут | `EXECUTOR_TIMEOUT` (5 с) — **на каждый кейс**; процесс убивается |
 | Память | `EXECUTOR_MEMORY_LIMIT` (128 МБ): `RLIMIT_AS` / Job Object |
 | Параллельные запуски | `EXECUTOR_MAX_CONCURRENCY` (4), при перегрузке 503 |
+| Пул тёплых процессов (S23) | `EXECUTOR_POOL_SIZE` (2; 0 — выключен), перезапуск после `EXECUTOR_POOL_MAX_TASKS` (50) задач и после сбоя |
+| Батч тест-кейсов (S23) | все кейсы задачи — один процесс, результат по кейсам; зависший кейс → `TimeoutError`, остальные → `SandboxError` |
+| Throughput submit | 5 RPS, p95 ≤ 2000 мс (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`) |
+| Режим исполнения (S24) | `EXECUTOR_MODE=native` (по умолчанию) или `container`; образ `EXECUTOR_IMAGE`. Контейнер: `--network none`, `--read-only`, `--cap-drop ALL`, `no-new-privileges`, non-root `65534`, tmpfs `/tmp`, `--memory`; при недоступном Docker — fallback на native + warning |
 | Вывод | `EXECUTOR_MAX_OUTPUT` (100 000 символов), обрезка с пометкой |
 | Размер кода | ≤ 20 000 символов |
 | `input()` | читает подготовленный `stdin`, на исчерпании возвращает `""` |
@@ -509,9 +513,10 @@ ENV: `POSTGRES_CONTAINER`, `POSTGRES_DB`, `POSTGRES_USER`, `BACKUP_DIR`,
 
 **Результат S20-003:** 35 тестов (17 функций) — все проходят; **IDOR не
 найден**; одна находка F1 (LOW, hints был анонимным) исправлена. Нюанс
-конвенции: отсутствие заголовка `Authorization` → **403** (`HTTPBearer`),
-невалидный/просроченный токен → **401** (одинаково для всех защищённых
-маршрутов).
+конвенции: отсутствие заголовка `Authorization` → **401**, невалидный/
+просроченный токен → **401** (одинаково для всех защищённых маршрутов).
+До S22-002 отсутствие заголовка давало 403 — Starlette 1.x выровнял поведение
+по RFC 7235 (401 + `WWW-Authenticate`), клиентский код это не затрагивает.
 
 ---
 
@@ -618,3 +623,79 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 | React / Vite / TypeScript | 19 / 6 / 5.8 |
 | Vitest / coverage | 4.1.12 |
 | API | v1 (`/api/v1`), обратная совместимость внутри major |
+
+---
+
+## 15. Наблюдаемость и аудит (S25)
+
+| Что | Контракт |
+|-----|----------|
+| Request-ID | заголовок `X-Request-ID` принимается и возвращается; если не передан — `uuid4`; значение попадает в логи (`request_id`) |
+| `/metrics` | Prometheus text format, **без авторизации**, только внутренняя сеть; в nginx не публикуется. `METRICS_ENABLED=false` отключает |
+| `/health/live` | 200, если процесс жив; зависимости не проверяются |
+| `/health/ready` | 200, если БД и Redis доступны (LLM — только конфиг); иначе 503 со списком `checks` |
+| `/api/v1/health` | обратно совместим: детальный статус LLM |
+| `GET /api/v1/admin/audit` | admin; пагинация `skip`/`limit` (≤200), фильтры `action`, `entity_type`, `actor_id`; новые записи сверху |
+
+**Аудит (таблица `audit_log`, миграция 011):** актор (`actor_id`, `actor_role`),
+действие, сущность (`entity_type`, `entity_id`), сводка `payload` (без PII),
+IP, время. Записываются: `user.updated`, `user.deleted`, `task.created`,
+`task.updated`, `task.deleted`, `classroom.created`, `assignment.created`.
+Запись best-effort: ошибка аудита не ломает действие (warning в лог).
+
+---
+
+## 16. Экспорт, retention и удаление аккаунта (S26)
+
+| Что | Контракт |
+|-----|----------|
+| `GET /api/v1/admin/analytics/export` | admin; параметры `dataset` (`users`/`tasks`/`attempts`/`activity`), `format` (`csv`/`json`); потоковый ответ, `Content-Disposition: attachment`, `X-Export-Limit`; лимит `EXPORT_MAX_ROWS` (100 000, 0 — без лимита); каждое скачивание — `analytics.exported` в аудите |
+| `GET /api/v1/classrooms/{id}/report` | владелец класса/админ; CSV (UTF-8 BOM), колонки `student_id, username, task_id, task_title, status, attempts, completed_at, due_at, overdue`; последняя строка — «ИТОГО»; ученик получает 403; пишется `classroom.report_exported` |
+| Retention | `RETENTION_CHAT_MESSAGES_DAYS` (90), `RETENTION_CODE_EXECUTIONS_DAYS` (90), `RETENTION_NOTIFICATIONS_DAYS` (180), `RETENTION_AUDIT_LOG_DAYS` (365); `0` — отключено; применяется `backend/scripts/apply_retention.py` (`--dry-run`, `--only`, `--batch-size`) либо встроенным планировщиком: `RETENTION_SCHEDULER_ENABLED`, `RETENTION_SCHEDULER_AT` (UTC, `HH:MM`, по умолчанию `03:30`), `RETENTION_SCHEDULER_BATCH_SIZE` (1000); на время прогона — advisory-lock PostgreSQL (KI-025) |
+| `DELETE /api/v1/auth/me` | тело `{"password": "..."}`; 204 при успехе, 400 при неверном пароле; анонимизация username/email, сброс пароля, `is_active=false`; событие `user.self_deleted`; необратимо |
+
+Неактивный (`is_active=false`) аккаунт получает **401** на защищённых
+маршрутах и не может войти (пароль сброшен).
+
+---
+
+## 17. RAG v2: порог релевантности и backfill (S27)
+
+| Что | Контракт |
+|-----|----------|
+| `GET /api/v1/chat/search` | без изменений: `q` (1…200), `limit` (1…50, по умолчанию `RAG_TOP_K`); `mode` = `semantic` или `ilike`; поиск только по сессиям текущего пользователя |
+| `RAG_MIN_SCORE` | 0…1, по умолчанию 0 (порог выключен). Семантические попадания с `score < RAG_MIN_SCORE` отбрасываются; если после фильтрации пусто — ILIKE-fallback (как и раньше) |
+| Backfill | `python backend/scripts/backfill_embeddings.py [--dry-run] [--batch-size N] [--limit N] [--sleep S]` — заполняет `chat_messages.embedding` только у сообщений с `NULL`; идемпотентен; ошибки провайдера не прерывают прогон (`errors` в сводке); без настроенного провайдера — exit 2 |
+
+`score` в ответе — косинусная близость `1 - distance` (4 знака). При
+`RAG_MIN_SCORE=0` поведение совпадает с S19-005.
+
+---
+
+## 18. Teacher & Classroom v3 (S28)
+
+| Что | Контракт |
+|-----|----------|
+| `POST /api/v1/classrooms/{id}/assignments/bulk` | teacher/admin, владелец класса; `{task_ids: [1…50], due_at?}` → `{created, skipped, unknown}`; дубликаты и уже назначенные — `skipped`, неизвестные/неактивные — `unknown`; 201 |
+| `POST /api/v1/classrooms/{id}/assignments/from-template` | `{template_id, due_at?}` → тот же результат (шаблон применяется как массовое назначение) |
+| `POST/GET /api/v1/teacher/assignment-templates`, `DELETE /{id}` | шаблоны учителя: `name` (1…120), `task_ids` (1…100); удалить может только владелец (403) |
+| `GET /api/v1/classrooms/{id}/gradebook` | матрица `students/tasks/cells` (status, attempts, completed_at), `completion_rate`, `overdue`; только владелец/админ |
+| `GET /api/v1/classrooms/{id}/gradebook/csv` | CSV-выгрузка журнала (формат как S26-002), аудит `gradebook.exported` |
+
+**Email (S28-004).** `NOTIFICATIONS_EMAIL_ENABLED=false` по умолчанию; при
+включении — SMTP (`SMTP_HOST/PORT/USER/PASSWORD/FROM`). Письмо уходит по
+каждому новому назначению; ошибка SMTP не ломает запрос (warning в лог).
+`NOTIFICATIONS_DEADLINE_HOURS` (72) — окно напоминаний (CLI
+`scripts/notify_deadlines.py`).
+
+---
+
+## 19. UX, A11y & i18n (S29)
+
+| Что | Контракт |
+|-----|----------|
+| Адаптивные таблицы | `Table` (`@/components/ui/Table`) + `Tr/Td/Th`: на экранах `<640px` заголовки скрыты, строки — карточки, в каждой ячейке подпись колонки (`data-label`); горизонтальный скролл не нужен |
+| Локализация | Все пользовательские тексты — только в `src/i18n/locales/{ru,en}.json`; кириллица вне локалей запрещена (кроме тестов и учебных примеров в `CodePage`); паритет ключей ru/en обязателен |
+| Аудит i18n | `node scripts/check-i18n.mjs` в CI (шаг Frontend) — падает при кириллице в коде или расхождении ключей |
+| Контраст | Playwright + `axe-core` (`color-contrast`, WCAG AA) на ключевых страницах в светлой и тёмной теме — 0 нарушений |
+| A11y/e2e | skip-link `a[href="#main"]`, мобильное меню (`aria-controls="mobile-nav"`), таблицы-карточки на 375px без переполнения |

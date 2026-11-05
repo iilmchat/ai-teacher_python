@@ -6,7 +6,10 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { AssignmentTemplates } from '@/components/teacher/AssignmentTemplates';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
+import { saveBlob } from '@/lib/download';
 import { useAuthStore } from '@/store/auth';
 import type {
   Assignment,
@@ -26,6 +29,9 @@ export function ClassroomDetailPage() {
   const [tasks, setTasks] = useState<TeacherTaskItem[]>([]);
   const [progress, setProgress] = useState<ClassProgress | null>(null);
   const [taskId, setTaskId] = useState('');
+  const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [dueAt, setDueAt] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,6 +67,48 @@ export function ClassroomDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function bulkAssign() {
+    if (selectedTaskIds.length === 0) {
+      return;
+    }
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const result = await api.post<{ created: string[]; skipped: string[]; unknown: string[] }>(
+        `/classrooms/${classroomId}/assignments/bulk`,
+        {
+          task_ids: selectedTaskIds,
+          due_at: dueAt ? new Date(dueAt).toISOString() : null,
+        },
+      );
+      setNotice(
+        t('classrooms.bulkAssigned', {
+          created: result.created.length,
+          skipped: result.skipped.length + result.unknown.length,
+        }),
+      );
+      setSelectedTaskIds([]);
+      await load();
+    } catch {
+      setError(t('classrooms.bulkError'));
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function downloadReport() {
+    setDownloading(true);
+    setError(null);
+    try {
+      const blob = await api.download(`/classrooms/${classroomId}/report`);
+      saveBlob(blob, `classroom-${classroomId}-report.csv`);
+    } catch {
+      setError(t('classrooms.reportError'));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function addAssignment() {
     if (!taskId) {
@@ -134,6 +182,16 @@ export function ClassroomDetailPage() {
 
       <Card title={t('classrooms.assignments')}>
         {isOwner && (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Button onClick={() => void downloadReport()} loading={downloading}>
+              {t('classrooms.report')}
+            </Button>
+            <Link to={`/classrooms/${classroomId}/gradebook`}>
+              <Button variant="ghost">{t('classrooms.gradebookLink')}</Button>
+            </Link>
+          </div>
+        )}
+        {isOwner && (
           <div className="mb-3 flex flex-col gap-2 sm:flex-row">
             <select
               value={taskId}
@@ -160,38 +218,83 @@ export function ClassroomDetailPage() {
             </Button>
           </div>
         )}
+        {isOwner && (
+          <div className="mb-3 flex flex-col gap-2">
+            <label className="text-sm font-medium text-slate-700" htmlFor="bulk-tasks">
+              {t('classrooms.bulk')}
+            </label>
+            <select
+              id="bulk-tasks"
+              multiple
+              size={Math.min(4, Math.max(2, tasks.length))}
+              value={selectedTaskIds}
+              onChange={(event) =>
+                setSelectedTaskIds(
+                  Array.from(event.target.selectedOptions).map((option) => option.value),
+                )
+              }
+              aria-describedby="bulk-hint"
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            >
+              {tasks.map((task) => (
+                <option key={task.id} value={task.id}>
+                  {task.title}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => void bulkAssign()}
+                disabled={selectedTaskIds.length === 0}
+                loading={bulkBusy}
+              >
+                {t('classrooms.assign')}
+              </Button>
+              <span id="bulk-hint" className="text-xs text-slate-500">
+                {t('classrooms.bulkHint')}
+              </span>
+            </div>
+          </div>
+        )}
+        {isOwner && (
+          <AssignmentTemplates
+            classroomId={classroomId}
+            selectedTaskIds={selectedTaskIds}
+            onApplied={() => void load()}
+          />
+        )}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <Table>
             <thead className="text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2">{t('teacher.colTask')}</th>
-                <th className="py-2">{t('classrooms.dueAt')}</th>
-                <th className="py-2">{t('classrooms.done')}</th>
-              </tr>
+              <Tr>
+                <Th className="py-2">{t('teacher.colTask')}</Th>
+                <Th className="py-2">{t('classrooms.dueAt')}</Th>
+                <Th className="py-2">{t('classrooms.done')}</Th>
+              </Tr>
             </thead>
             <tbody>
               {assignments.map((item) => (
-                <tr key={item.id} className="border-t border-slate-100">
-                  <td className="py-2 font-medium text-slate-800">{item.title}</td>
-                  <td className="py-2 text-slate-600">
+                <Tr key={item.id} className="border-t border-slate-100">
+                  <Td className="py-2 font-medium text-slate-800">{item.title}</Td>
+                  <Td className="py-2 text-slate-600">
                     {item.due_at
                       ? new Date(item.due_at).toLocaleString('ru-RU')
                       : '—'}
-                  </td>
-                  <td className="py-2 text-slate-600">
+                  </Td>
+                  <Td className="py-2 text-slate-600">
                     {item.completed_count}/{item.total_members}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {assignments.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="py-3 text-center text-slate-500">
+                <Tr>
+                  <Td colSpan={3} className="py-3 text-center text-slate-500">
                     {t('classrooms.noAssignments')}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               )}
             </tbody>
-          </table>
+          </Table>
         </div>
       </Card>
 
@@ -201,32 +304,32 @@ export function ClassroomDetailPage() {
             {t('classrooms.completionRate')}: {progress.completion_rate}%
           </p>
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
+            <Table className="text-xs">
               <thead className="text-slate-500">
-                <tr>
-                  <th className="py-2">{t('classrooms.student')}</th>
+                <Tr>
+                  <Th className="py-2">{t('classrooms.student')}</Th>
                   {progress.tasks.map((task) => (
-                    <th key={task.id} className="max-w-24 truncate py-2">
+                    <Th key={task.id} className="max-w-24 truncate py-2">
                       {task.title}
-                    </th>
+                    </Th>
                   ))}
-                </tr>
+                </Tr>
               </thead>
               <tbody>
                 {progress.students.map((student) => (
-                  <tr key={student.id} className="border-t border-slate-100">
-                    <td className="py-2 font-medium text-slate-800">
+                  <Tr key={student.id} className="border-t border-slate-100">
+                    <Td className="py-2 font-medium text-slate-800">
                       {student.username}
-                    </td>
+                    </Td>
                     {progress.tasks.map((task) => (
-                      <td key={task.id} className="py-2 text-slate-600">
+                      <Td key={task.id} className="py-2 text-slate-600">
                         {cell(student.id, task.id)}
-                      </td>
+                      </Td>
                     ))}
-                  </tr>
+                  </Tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           {progress.problem_tasks.length > 0 && (
             <div className="mt-3 text-xs text-amber-700">

@@ -8,9 +8,10 @@ from typing import Any
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.api import websocket
+from app.api.health import router as health_router
 from app.api.v1 import (
     admin,
     auth,
@@ -22,14 +23,21 @@ from app.api.v1 import (
     teacher,
     users,
 )
-from app.config import settings
+from app.config import DEFAULT_SECRET_KEY, settings
+from app.core.logging import configure_logging
+from app.core.metrics import HTTPMetricsMiddleware, render_metrics, set_build_info
 from app.core.rate_limiter import RateLimitMiddleware
+from app.core.request_context import RequestContextMiddleware
+from app.core.runner_pool import close_current_pool as close_executor_pool
 from app.db.database import async_session_factory
 from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
 from app.services.llm import LLMError, LLMUnavailableError, create_llm_provider
 from app.services.llm.health import check_provider_health
+from app.services.scheduler import SchedulerHandle, start_scheduler, stop_scheduler
 from app.services.seed_service import seed_tasks
+
+configure_logging()
 
 logger = structlog.get_logger(__name__)
 
@@ -37,6 +45,14 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения"""
+    set_build_info(settings.version)
+    if settings.secret_key == DEFAULT_SECRET_KEY or len(settings.secret_key) < 32:
+        # Не валим старт (локальная разработка), но шумим заметно: дефолтный
+        # ключ позволяет подделать JWT любому, кто видел .env.example.
+        logger.error(
+            "insecure_secret_key",
+            hint="задайте случайный SECRET_KEY (>= 32 символов) в .env",
+        )
     redis_ok = await ping_redis()
     logger.info(
         "app_starting",
@@ -54,7 +70,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception as exc:  # noqa: BLE001 — seed не должен валить старт
             logger.warning("seed_failed", error=str(exc))
 
+    scheduler: SchedulerHandle | None = None
+    if settings.retention_scheduler_enabled:
+        scheduler = start_scheduler(
+            batch_size=settings.retention_scheduler_batch_size
+        )
+
     yield
+    # Планировщик retention (KI-025): сначала остановить его (ему нужна БД),
+    # затем закрыть пул песочницы и Redis.
+    await stop_scheduler(scheduler)
+    # Пул песочницы (S23-002): тёплые интерпретаторы не должны переживать
+    # приложение — иначе они останутся висеть до выхода процесса.
+    await close_executor_pool()
     await close_redis()
     logger.info("app_stopped", app_name=settings.app_name)
 
@@ -81,6 +109,12 @@ app.add_middleware(
 # Rate limiting (fail-open: если Redis недоступен, запросы проходят)
 app.add_middleware(RateLimitMiddleware)
 
+# Метрики и request-id (S25-001/002). Порядок важен: последний добавленный
+# middleware — самый внешний, поэтому RequestContext оборачивает метрики и
+# request_id привязан до записи метрик/логов.
+app.add_middleware(HTTPMetricsMiddleware)
+app.add_middleware(RequestContextMiddleware)
+
 
 @app.exception_handler(AppError)
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
@@ -104,6 +138,7 @@ async def llm_unavailable_handler(
 
 
 # Include routers
+app.include_router(health_router)
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
@@ -114,6 +149,18 @@ app.include_router(teacher.router, prefix="/api/v1")
 app.include_router(classrooms.router, prefix="/api/v1")
 app.include_router(engagement.router, prefix="/api/v1")
 app.include_router(websocket.router)
+
+
+if settings.metrics_enabled:
+
+    @app.get(settings.metrics_path, include_in_schema=False)
+    async def prometheus_metrics() -> Response:
+        """Prometheus-метрики (S25-002): без авторизации, только внутренняя сеть.
+
+        В nginx `/metrics` наружу не публикуется (см. DESIGN_ADMIN_AND_OPS).
+        """
+        body, content_type = render_metrics()
+        return Response(content=body, headers={"Content-Type": content_type})
 
 
 @app.get("/api/v1/health", tags=["Health"])

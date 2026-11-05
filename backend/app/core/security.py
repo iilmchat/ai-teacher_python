@@ -117,7 +117,13 @@ async def get_current_user(
 async def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
-    """Проверка что пользователь активен"""
+    """Проверка что пользователь активен (S26-004: удалённый аккаунт → 401)"""
+    if not current_user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Аккаунт удалён",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return current_user
 
 

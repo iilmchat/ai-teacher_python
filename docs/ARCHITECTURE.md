@@ -109,9 +109,37 @@ dunder-атрибуты.
 |-------|----------|-----------|
 | Память, POSIX | `resource.setrlimit(RLIMIT_AS)` в дочернем процессе | `EXECUTOR_MEMORY_LIMIT` |
 | Память, Windows | Job Object + `JOB_OBJECT_LIMIT_PROCESS_MEMORY` | `EXECUTOR_MEMORY_LIMIT` |
-| Время | `subprocess.run(timeout=...)`, процесс убивается | `EXECUTOR_TIMEOUT` |
+| Время | таймаут на **кейс** в родителе, процесс убивается | `EXECUTOR_TIMEOUT` |
 | Параллелизм | `threading.BoundedSemaphore`, отказ 503 | `EXECUTOR_MAX_CONCURRENCY`, `EXECUTOR_QUEUE_TIMEOUT` |
 | Вывод | обрезка до JSON-сериализации | `EXECUTOR_MAX_OUTPUT` |
+| Пул процессов | idle-интерпретаторы, перезапуск после N задач/сбоя | `EXECUTOR_POOL_SIZE`, `EXECUTOR_POOL_MAX_TASKS` |
+
+Слой 5 — батч и пул (S23, KI-022):
+
+- **Батч:** все кейсы задачи выполняет один дочерний интерпретатор
+  (`_BATCH_RUNNER`). Протокол — построчный JSON: на кейс строка результата,
+  в конце `{"done": true}`. Родитель держит таймаут на каждый кейс, поэтому
+  зависший кейс не ждёт весь батч; процесс убивается, остальные кейсы
+  помечаются `SandboxError`.
+- **Пул:** до `EXECUTOR_POOL_SIZE` поднятых процессов переиспользуются между
+  задачами (`runner_pool.py`); изоляция — свежие `globals`/`builtins` на каждый
+  кейс, перезапуск после `EXECUTOR_POOL_MAX_TASKS` задач, после
+  `TimeoutError`/`MemoryError` и при shutdown приложения.
+- **Эффект:** submit 5 RPS — p95 2219 мс → **49 мс**
+  (`docs/reports/sprint-23/LOAD_TEST-SUBMIT.md`).
+
+Слой 6 — контейнерный раннер (S24, `EXECUTOR_MODE=container`):
+
+- образ `ai-teacher-sandbox-runner` (`backend/sandbox_runner/Dockerfile`):
+  `python:3.12-slim` + `RestrictedPython` + чистое ядро
+  (`app/core/sandbox_runtime.py`), без зависимостей приложения;
+- запуск на батч: `--network none --read-only --cap-drop ALL
+  --security-opt no-new-privileges --user 65534:65534 --tmpfs /tmp ... --memory`;
+- протокол — тот же stdin/stdout JSON, что у нативного батча;
+- `--self-check` проверяет изоляцию изнутри (uid, read-only, сеть, `CapEff`);
+  в CI вызывается в job `Docker build`;
+- Docker недоступен/образа нет → warning + счётчик `fallbacks` + нативный путь;
+- по умолчанию `native` (контейнер добавляет ~0.6–1 с на старт).
 
 ```
 POST /code/execute {code, stdin?} → {success, output, error, error_type,
@@ -283,12 +311,13 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
 ### 9.2. Аудит зависимостей и секреты
 
 - **CI job `Security`:** `pip-audit` (backend), `gitleaks` по всей истории,
-  `pnpm audit --audit-level=high`. Временно `--ignore-vuln` для
-  задокументированных остатков (starlette 0.41.3 — KI-015, dev pytest —
-  KI-016): job должен ловить **новые** уязвимости, а не повторять известные.
-- **Локально:** PyPI с хоста заблокирован (KI-017) → аудит в Docker-контейнере
-  или `backend/scripts/audit_python_deps.py` (GitHub Advisory API, лимит
-  60/час, кэш, `--resume`, exit 2 при неполном прогоне).
+  `pnpm audit --audit-level=high`. С S22-002/003 `--ignore-vuln` больше нет:
+  `fastapi 0.162`/`starlette 1.10` и `pytest 9.2` закрыли прежние advisory,
+  job должен ловить **новые** уязвимости.
+- **Локально:** PyPI с хоста заблокирован (KI-017) → офлайн-wheelhouse
+  (`scripts/wheelhouse.py`: `build --docker` + `install --no-index`) или аудит
+  в Docker-контейнере / `backend/scripts/audit_python_deps.py` (GitHub
+  Advisory API, лимит 60/час, кэш, `--resume`, exit 2 при неполном прогоне).
 - **Секреты:** `.gitleaks.toml` (встроенные + проектные правила, allowlist —
   только плейсхолдеры), `.env`/`backups/` вне git; prod-compose требует
   `POSTGRES_PASSWORD`/`SECRET_KEY` (`:?`), `DEBUG=false`, БД/Redis не
@@ -324,8 +353,26 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
   провайдер покрыт фейком (SPRINT-19 §5).
 - **Кэш:** метрики в памяти процесса (не общие между воркерами); каталог
   после `submit` обновляется с задержкой до TTL (60 с).
-- **Зависимости:** координированный апгрейд `fastapi`/`starlette` отложен
-  (KI-015, v0.3.0), dev-апгрейд `pytest` 9.x — KI-016; PyPI с хоста
-  заблокирован (KI-017).
-- **CI:** GitHub Actions не запускает job'ы (KI-014, биллинг) — проверки
-  выполняются локально/эквивалентными командами.
+- **Зависимости:** `fastapi 0.162` + `starlette 1.10`, `pytest 9.2` (S22-002/003);
+  контракт API зафиксирован снапшотом OpenAPI (S22-001), апгрейды проверяются
+  им же. PyPI с хоста заблокирован (KI-017) → wheelhouse (`scripts/wheelhouse.py`).
+- **CI:** self-hosted runner, 7 job'ов (S21-003 + perf-smoke S23-003); GitHub-hosted минуты
+  заблокированы биллингом (KI-014, workflow в ручном режиме), merge-gate —
+  KI-023.
+
+---
+
+## RAG v2: backfill и порог релевантности (S27)
+
+- **Backfill.** `app/services/backfill.py` выбирает сообщения с
+  `embedding IS NULL` батчами, зовёт провайдера эмбеддингов и пишет векторы;
+  обработанные id исключаются из следующих выборок — поэтому dry-run и сбои
+  провайдера не приводят к бесконечному циклу. CLI —
+  `backend/scripts/backfill_embeddings.py`.
+- **Порог.** `settings.rag_min_score` фильтрует семантические попадания
+  (`score >= RAG_MIN_SCORE`) до fallback-логики в `app/services/rag.py`;
+  пустая выдача → ILIKE. Это защищает от «уверенных» ответов на нерелевантный
+  запрос при выключенном RAG-индексе.
+- **Метрики качества.** `backend/tests/fixtures/rag_queries.json` — набор
+  запросов с ожидаемыми сообщениями; тест `test_precision_on_fixture_queries`
+  проверяет precision@k на детерминированных эмбеддингах.

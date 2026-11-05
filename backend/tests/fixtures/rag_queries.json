@@ -1,0 +1,29 @@
+[
+  {
+    "query": "кошка",
+    "k": 1,
+    "min_precision": 1.0,
+    "messages": [
+      {"text": "Кошка спит на окне", "expected": true},
+      {"text": "Собака лает во дворе", "expected": false}
+    ]
+  },
+  {
+    "query": "собака",
+    "k": 1,
+    "min_precision": 1.0,
+    "messages": [
+      {"text": "Собака лает во дворе", "expected": true},
+      {"text": "Цикл for в Python", "expected": false}
+    ]
+  },
+  {
+    "query": "список",
+    "k": 1,
+    "min_precision": 1.0,
+    "messages": [
+      {"text": "Как перебрать список?", "expected": true},
+      {"text": "Кошка спит на окне", "expected": false}
+    ]
+  }
+]

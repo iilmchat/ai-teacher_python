@@ -11,6 +11,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { ApiError, api } from '@/lib/api';
 import type {
   TaskAdminDetail,
@@ -204,37 +205,37 @@ export function TeacherTasksPage() {
           <Spinner />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <Table>
               <thead className="text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="py-2">{t('teacher.colTitle')}</th>
-                  <th className="py-2">{t('teacher.colDifficulty')}</th>
-                  <th className="py-2">{t('teacher.colCategory')}</th>
-                  <th className="py-2">{t('teacher.colTests')}</th>
-                  <th className="py-2">{t('teacher.colActive')}</th>
-                  <th className="py-2">{t('teacher.colActions')}</th>
-                </tr>
+                <Tr>
+                  <Th className="py-2">{t('teacher.colTitle')}</Th>
+                  <Th className="py-2">{t('teacher.colDifficulty')}</Th>
+                  <Th className="py-2">{t('teacher.colCategory')}</Th>
+                  <Th className="py-2">{t('teacher.colTests')}</Th>
+                  <Th className="py-2">{t('teacher.colActive')}</Th>
+                  <Th className="py-2">{t('teacher.colActions')}</Th>
+                </Tr>
               </thead>
               <tbody>
                 {tasks.map((task) => (
-                  <tr key={task.id} className="border-t border-slate-100">
-                    <td className="py-2 font-medium text-slate-800">
+                  <Tr key={task.id} className="border-t border-slate-100">
+                    <Td className="py-2 font-medium text-slate-800">
                       {task.title}
                       {task.tags.length > 0 && (
                         <span className="ml-2 text-xs text-slate-400">
                           {task.tags.join(', ')}
                         </span>
                       )}
-                    </td>
-                    <td className="py-2 text-slate-600">
+                    </Td>
+                    <Td className="py-2 text-slate-600">
                       {t(`tasks.difficulty.${task.difficulty}`)}
-                    </td>
-                    <td className="py-2 text-slate-600">{task.category}</td>
-                    <td className="py-2 text-slate-600">{task.test_cases_count}</td>
-                    <td className="py-2">
+                    </Td>
+                    <Td className="py-2 text-slate-600">{task.category}</Td>
+                    <Td className="py-2 text-slate-600">{task.test_cases_count}</Td>
+                    <Td className="py-2">
                       {task.is_active ? '✓' : '—'}
-                    </td>
-                    <td className="flex gap-1 py-2">
+                    </Td>
+                    <Td className="flex gap-1 py-2">
                       <Button variant="ghost" onClick={() => void openEdit(task.id)}>
                         {t('teacher.edit')}
                       </Button>
@@ -243,18 +244,18 @@ export function TeacherTasksPage() {
                           {t('teacher.deactivate')}
                         </Button>
                       )}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 ))}
                 {tasks.length === 0 && !loading && (
-                  <tr>
-                    <td colSpan={6} className="py-4 text-center text-slate-500">
+                  <Tr>
+                    <Td colSpan={6} className="py-4 text-center text-slate-500">
                       {t('teacher.noTasks')}
-                    </td>
-                  </tr>
+                    </Td>
+                  </Tr>
                 )}
               </tbody>
-            </table>
+            </Table>
           </div>
         )}
       </Card>

@@ -105,3 +105,8 @@ frontend/.pnp.js
 *.tmp
 *.bak
 *.swp
+
+.release/
+
+# Wheelhouse для офлайн-установки (S22-005)
+.wheelhouse/

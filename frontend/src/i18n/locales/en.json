@@ -67,7 +67,21 @@
     "levelLabel": "Help level",
     "connected": "Streaming connected",
     "disconnected": "Streaming unavailable, replies arrive complete",
-    "policyWarning": "The basic level should not give a ready solution — please tell your teacher"
+    "policyWarning": "The basic level should not give a ready solution — please tell your teacher",
+    "search": {
+      "title": "Search chat",
+      "label": "Search query",
+      "placeholder": "For example: for loop",
+      "submit": "Search",
+      "loading": "Searching…",
+      "empty": "Nothing found — try different words",
+      "found": "Found: {{count}} ({{mode}})",
+      "error": "Search is unavailable, try again later",
+      "modes": {
+        "semantic": "semantic",
+        "ilike": "substring"
+      }
+    }
   },
   "code": {
     "title": "Playground",
@@ -293,7 +307,42 @@
     "class": "Class",
     "overdue": "overdue",
     "noMyAssignments": "No assignments yet",
-    "assignmentsError": "Could not load assignments"
+    "assignmentsError": "Could not load assignments",
+    "report": "Download report",
+    "reportError": "Could not download the report",
+    "gradebookLink": "Gradebook",
+    "bulk": "Bulk assignment",
+    "bulkAssigned": "Created: {{created}}, skipped: {{skipped}}",
+    "bulkError": "Bulk assignment failed",
+    "bulkHint": "Select several tasks (Ctrl/Cmd)",
+    "gradebook": {
+      "title": "Gradebook",
+      "caption": "Student × task matrix",
+      "summary": "Average completion: {{rate}}%, overdue: {{overdue}}",
+      "download": "Download CSV",
+      "downloadError": "Could not download CSV",
+      "loadError": "Could not load the gradebook",
+      "attempts": "Attempts: {{count}}",
+      "empty": "No students yet",
+      "statusNotStarted": "not started",
+      "statusInProgress": "in progress",
+      "statusCompleted": "completed"
+    },
+    "templates": {
+      "title": "Assignment templates",
+      "select": "Choose a template",
+      "apply": "Apply",
+      "name": "Template name",
+      "namePlaceholder": "For example: intro block",
+      "save": "Save selection",
+      "saved": "Template saved",
+      "saveError": "Could not save the template",
+      "applyError": "Could not apply the template",
+      "loadError": "Could not load templates",
+      "delete": "Delete template",
+      "deleteError": "Could not delete the template",
+      "empty": "No templates yet — select tasks and save a set"
+    }
   },
   "dashboard": {
     "title": "My progress",
@@ -319,11 +368,25 @@
     "notFoundTitle": "Page not found",
     "notFoundText": "Check the address or go back home.",
     "toHome": "Go home",
-    "generic": "Something went wrong"
+    "generic": "Something went wrong",
+    "network": "Request failed",
+    "sessionExpired": "Session expired, please sign in again",
+    "login": "Sign-in failed, please try again",
+    "register": "Registration failed",
+    "chat": "Chat error",
+    "chatConnect": "Could not connect to chat",
+    "chatList": "Could not load chat list",
+    "chatOpen": "Could not open chat",
+    "chatSend": "Could not send the message",
+    "tasksLoad": "Could not load tasks",
+    "taskNotFound": "Task not found",
+    "progressLoad": "Could not load progress",
+    "submit": "Could not check the solution"
   },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",
-    "close": "Close"
+    "close": "Close",
+    "back": "Back"
   }
 }

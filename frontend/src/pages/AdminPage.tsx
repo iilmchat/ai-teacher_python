@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
+import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import type {
@@ -158,21 +159,21 @@ export function AdminPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <Table>
             <thead className="text-xs uppercase text-slate-500">
-              <tr>
-                <th className="py-2">{t('admin.colUser')}</th>
-                <th className="py-2">{t('admin.colEmail')}</th>
-                <th className="py-2">{t('admin.colRole')}</th>
-                <th className="py-2">{t('admin.colActions')}</th>
-              </tr>
+              <Tr>
+                <Th className="py-2">{t('admin.colUser')}</Th>
+                <Th className="py-2">{t('admin.colEmail')}</Th>
+                <Th className="py-2">{t('admin.colRole')}</Th>
+                <Th className="py-2">{t('admin.colActions')}</Th>
+              </Tr>
             </thead>
             <tbody>
               {users.map((user) => (
-                <tr key={user.id} className="border-t border-slate-100">
-                  <td className="py-2 font-medium text-slate-800">{user.username}</td>
-                  <td className="py-2 text-slate-600">{user.email}</td>
-                  <td className="py-2">
+                <Tr key={user.id} className="border-t border-slate-100">
+                  <Td className="py-2 font-medium text-slate-800">{user.username}</Td>
+                  <Td className="py-2 text-slate-600">{user.email}</Td>
+                  <Td className="py-2">
                     <select
                       aria-label={`${t('admin.colRole')}: ${user.username}`}
                       value={user.role}
@@ -188,8 +189,8 @@ export function AdminPage() {
                         </option>
                       ))}
                     </select>
-                  </td>
-                  <td className="py-2">
+                  </Td>
+                  <Td className="py-2">
                     <Button
                       variant="ghost"
                       disabled={user.id === currentUserId}
@@ -197,18 +198,18 @@ export function AdminPage() {
                     >
                       {t('admin.delete')}
                     </Button>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
               {users.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={4} className="py-4 text-center text-slate-500">
+                <Tr>
+                  <Td colSpan={4} className="py-4 text-center text-slate-500">
                     {t('admin.nothingFound')}
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               )}
             </tbody>
-          </table>
+          </Table>
         </div>
       </Card>
 

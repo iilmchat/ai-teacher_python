@@ -1,0 +1,195 @@
+# =============================================================================
+# CI (self-hosted fallback) — GitHub Actions на нашем Windows-runner'е.
+#
+# Зачем: GitHub Actions на github-hosted минутах заблокирован биллингом
+# (KI-014), а GitFlic-пилот (S21-002) ещё не завершён. Этот workflow — вариант A
+# из docs/CI.md: проверки идут на self-hosted runner'е (`actions/runner`,
+# labels: self-hosted, windows, ai-teacher), поэтому не расходуют минуты.
+#
+# Триггеры: PR (кроме docs-only), push в main, ручной запуск. Required checks на
+# GitHub Free/private недоступны (403, нужен Pro) — гейт мержа описан в
+# docs/CI.md §10 и отслеживается в KI-023.
+#
+# Также вызывается из release.yml (`workflow_call`) как набор гейтов перед
+# тегом/релизом — release не дублирует команды, а переиспользует эти job'ы.
+#
+# Требования к машине-runner'у: Docker Desktop, Node/pnpm, Playwright-браузеры,
+# локальный compose-Postgres/Redis (для e2e), переменная репозитория E2E_PYTHON,
+# secret POSTGRES_PASSWORD. Скрипты job'ов — в scripts/ci/.
+# =============================================================================
+name: CI (self-hosted fallback)
+
+on:
+  workflow_dispatch:
+  # Path-фильтры (S21-004): docs-only PR не гоняет ни e2e, ни docker, ни
+  # остальные job'ы. '**.md' покрывает README/CHANGELOG/TODO/отчёты.
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+  # Вызов из release.yml (S21-005): гейты — те же job'ы, что в PR.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-selfhosted-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  lint:
+    name: Lint (backend)
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Ruff + MyPy в python:3.12-slim
+        run: |
+          # Кэш pip + офлайн-wheelhouse: PyPI с runner'а нестабилен (KI-017).
+          # Wheelhouse наполняется `pwsh scripts/ci/build-wheelhouse.ps1`.
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pip-cache:/root/.cache/pip `
+            -v ai-teacher-wheelhouse:/wheelhouse:ro `
+            python:3.12-slim bash /src/scripts/ci/backend-lint.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  test:
+    name: Test (backend)
+    runs-on: [self-hosted, windows, ai-teacher]
+    needs: [lint]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Alembic + pytest c Postgres/Redis
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $net = "ci-$($env:GITHUB_RUN_ID)-test"
+          try {
+            docker network create $net | Out-Null
+            docker run -d --name "$net-pg" --network $net --network-alias postgres `
+              -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_pass `
+              -e POSTGRES_DB=test_db pgvector/pgvector:pg17 | Out-Null
+            docker run -d --name "$net-redis" --network $net --network-alias redis `
+              redis:7-alpine | Out-Null
+            docker run --rm --network $net `
+              -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+              -v ai-teacher-pip-cache:/root/.cache/pip `
+              -v ai-teacher-wheelhouse:/wheelhouse:ro `
+              -e POSTGRES_HOST=postgres -e POSTGRES_PORT=5432 `
+              -e POSTGRES_USER=test_user -e POSTGRES_PASSWORD=test_pass `
+              -e POSTGRES_DB=test_db -e REDIS_HOST=redis -e REDIS_PORT=6379 `
+              -e SECRET_KEY=ci_secret_key_do_not_use_in_production `
+              -e RATE_LIMIT_ENABLED=false -e PYTHONUNBUFFERED=1 `
+              python:3.12-slim bash /src/scripts/ci/backend-test.sh
+            if ($LASTEXITCODE -ne 0) { throw "backend-test.sh exit $LASTEXITCODE" }
+          }
+          finally {
+            docker rm -f "$net-pg" "$net-redis" 2>$null | Out-Null
+            docker network rm $net 2>$null | Out-Null
+          }
+
+  frontend:
+    name: Frontend
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: typecheck / lint / test / build в node:22-alpine
+        run: |
+          # pnpm-store — named volume: npm-реестр тоже нестабилен, а без кэша
+          # каждый прогон качает ~100 МБ зависимостей заново.
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pnpm-store:/workspace/frontend/.pnpm-store `
+            node:22-alpine sh /src/scripts/ci/frontend.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  security:
+    name: Security
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: pip-audit (backend)
+        run: |
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
+            -v ai-teacher-pip-cache:/root/.cache/pip `
+            -v ai-teacher-wheelhouse:/wheelhouse:ro `
+            python:3.12-slim bash /src/scripts/ci/security-backend.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: pnpm audit (frontend)
+        run: |
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" node:22-alpine `
+            sh /src/scripts/ci/security-frontend.sh
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: gitleaks (история)
+        run: |
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" --entrypoint "" `
+            zricethezav/gitleaks:latest `
+            gitleaks git /src --config /src/.gitleaks.toml --redact --verbose
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  e2e:
+    name: E2E (Playwright)
+    runs-on: [self-hosted, windows, ai-teacher]
+    needs: [lint, test]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Playwright e2e на Windows-хосте
+        env:
+          E2E_PYTHON: ${{ vars.E2E_PYTHON }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          # Порты локального compose-кластера (KI-001: канон 5434/6381 занят
+          # чужими контейнерами). Пустые значения → дефолты скрипта.
+          E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
+          E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
+          E2E_POSTGRES_USER: ${{ vars.E2E_POSTGRES_USER }}
+          E2E_POSTGRES_DB: ${{ vars.E2E_POSTGRES_DB }}
+        run: pwsh -NoProfile -File ./scripts/ci/e2e.ps1
+      - name: Загрузить Playwright-отчёт
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  docker:
+    name: Docker build
+    runs-on: [self-hosted, windows, ai-teacher]
+    needs: [lint, test]
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Сборка образов и проверка prod-compose
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        run: pwsh -NoProfile -File ./scripts/ci/docker.ps1
+
+  # Perf-smoke песочницы (S23-003, KI-022): быстрый прогон submit на 0.5 RPS.
+  # Ночной прогон 2 RPS — отдельный workflow perf-nightly.yml.
+  perf:
+    name: Perf smoke (submit)
+    runs-on: [self-hosted, windows, ai-teacher]
+    needs: [lint]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: submit 0.5 RPS, p95 ≤ 2000 мс
+        env:
+          E2E_PYTHON: ${{ vars.E2E_PYTHON }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
+          E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
+        run: pwsh -NoProfile -File ./scripts/ci/perf.ps1 -Rps 0.5 -Duration 20

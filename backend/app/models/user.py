@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, Index, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -46,6 +46,11 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    #: Мягкое удаление (S26-004): аккаунт анонимизирован и не может войти;
+    #: жёсткая чистка — по расписанию/вручную (PRIVACY.md)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
     # values_callable: в БД хранятся значения ('student'), а не имена членов ('STUDENT')
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, values_callable=lambda enum_cls: [e.value for e in enum_cls]),

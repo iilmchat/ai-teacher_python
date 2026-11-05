@@ -4,13 +4,17 @@ Admin API (S10-004): пользователи, задачи, аналитика.
 Все маршруты требуют роль администратора (`require_role(UserRole.ADMIN)`).
 """
 
-from typing import Annotated
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.core.security import require_role
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
@@ -31,8 +35,11 @@ from app.schemas.admin import (
     AnalyticsUsers,
     DeleteResponse,
 )
+from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
+from app.services.audit_service import list_audit, record_audit
 from app.services.cache import cache_metrics
+from app.services.export_service import stream_csv, stream_json
 from app.services.llm.metrics import llm_metrics
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -79,6 +86,7 @@ async def update_user(
     payload: AdminUserUpdate,
     admin: AdminUser,
     db: DbSession,
+    request: Request,
 ) -> AdminUserItem:
     """Изменить роль или уровень пользователя"""
     repo = UserRepository(db)
@@ -100,6 +108,15 @@ async def update_user(
     updated = await repo.update(user_id, **data)
     if updated is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    await record_audit(
+        db,
+        actor=admin,
+        action="user.updated",
+        entity_type="user",
+        entity_id=user_id,
+        payload={key: str(value) for key, value in data.items()},
+        request=request,
+    )
     return AdminUserItem.model_validate(updated)
 
 
@@ -108,6 +125,7 @@ async def delete_user(
     user_id: UUID,
     admin: AdminUser,
     db: DbSession,
+    request: Request,
 ) -> DeleteResponse:
     """Удалить пользователя со всеми его данными"""
     if user_id == admin.id:
@@ -120,7 +138,40 @@ async def delete_user(
     deleted = await repo.delete(user_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    await record_audit(
+        db,
+        actor=admin,
+        action="user.deleted",
+        entity_type="user",
+        entity_id=user_id,
+        request=request,
+    )
     return DeleteResponse(deleted=True)
+
+
+@router.get("/audit", response_model=AuditLogListResponse)
+async def list_audit_log(
+    _: AdminUser,
+    db: DbSession,
+    action: str | None = Query(default=None, max_length=64),
+    entity_type: str | None = Query(default=None, max_length=64),
+    actor_id: UUID | None = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> AuditLogListResponse:
+    """Журнал действий teacher/admin (S25-004), новые сверху"""
+    items, total = await list_audit(
+        db,
+        action=action,
+        entity_type=entity_type,
+        actor_id=actor_id,
+        skip=skip,
+        limit=limit,
+    )
+    return AuditLogListResponse(
+        items=[AuditLogItem.model_validate(item) for item in items],
+        total=total,
+    )
 
 
 @router.get("/tasks", response_model=AdminTaskListResponse)
@@ -164,3 +215,46 @@ async def get_analytics(_: AdminUser, db: DbSession) -> AnalyticsResponse:
         cache=AnalyticsCache(**cache_metrics.snapshot()),
         generated_at=str(raw["generated_at"]),
     )
+
+
+@router.get("/analytics/export")
+async def export_analytics(
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+    dataset: Literal["users", "tasks", "attempts", "activity"] = "users",
+    format_: Literal["csv", "json"] = Query(default="csv", alias="format"),
+) -> StreamingResponse:
+    """Экспорт аналитики CSV/JSON (S26-001), потоково, с лимитом строк.
+
+    Стрим открывает **свою** сессию: сессия запроса закрывается вместе с
+    ответом, а генератор живёт дольше — общая сессия ломала бы выгрузку.
+    """
+    limit = max(0, settings.export_max_rows)
+    await record_audit(
+        db,
+        actor=admin,
+        action="analytics.exported",
+        entity_type="analytics",
+        payload={"dataset": dataset, "format": format_, "limit": limit},
+        request=request,
+    )
+
+    async def body() -> AsyncIterator[bytes]:
+        stream = (
+            stream_csv(db, dataset, limit=limit)
+            if format_ == "csv"
+            else stream_json(db, dataset, limit=limit)
+        )
+        async for chunk in stream:
+            yield chunk
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    media_type = "text/csv; charset=utf-8" if format_ == "csv" else "application/json"
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="export-{dataset}-{stamp}.{format_}"'
+        ),
+        "X-Export-Limit": str(limit),
+    }
+    return StreamingResponse(body(), media_type=media_type, headers=headers)

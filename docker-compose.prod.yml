@@ -56,13 +56,17 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
       DEBUG: "false"
+      # Встроенный retention-планировщик (KI-025): раз в сутки удаляет данные
+      # старше RETENTION_*_DAYS, внешний cron на хосте больше не обязателен.
+      RETENTION_SCHEDULER_ENABLED: "true"
+      RETENTION_SCHEDULER_AT: ${RETENTION_SCHEDULER_AT:-03:30}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health/ready')"]
       interval: 30s
       timeout: 5s
       retries: 3

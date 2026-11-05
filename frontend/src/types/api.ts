@@ -67,6 +67,21 @@ export interface ChatTurn {
   assistant_message: ChatMessage;
 }
 
+export interface ChatSearchItem {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
+  score?: number;
+}
+
+export interface ChatSearchResponse {
+  query: string;
+  mode: 'semantic' | 'ilike';
+  items: ChatSearchItem[];
+  total: number;
+}
 export type TaskDifficulty = 'easy' | 'medium' | 'hard';
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed';
 
@@ -431,4 +446,38 @@ export interface AppNotification {
 export interface NotificationsResponse {
   items: AppNotification[];
   unread: number;
+}
+
+export interface BulkAssignmentResult {
+  created: string[];
+  skipped: string[];
+  unknown: string[];
+}
+
+export interface GradebookCell {
+  student_id: string;
+  task_id: string;
+  status: TaskStatus;
+  attempts: number;
+  completed_at: string | null;
+}
+
+export interface GradebookResponse {
+  students: { id: string; username: string }[];
+  tasks: { id: string; title: string }[];
+  cells: GradebookCell[];
+  completion_rate: number;
+  overdue: number;
+}
+
+export interface AssignmentTemplateItem {
+  id: string;
+  name: string;
+  task_ids: string[];
+  created_at: string;
+}
+
+export interface AssignmentTemplateList {
+  items: AssignmentTemplateItem[];
+  total: number;
 }

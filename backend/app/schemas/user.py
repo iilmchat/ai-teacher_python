@@ -39,6 +39,12 @@ class LevelUpdateRequest(BaseModel):
     level: UserLevel
 
 
+class DeleteAccountRequest(BaseModel):
+    """Подтверждение удаления аккаунта паролем (S26-004)"""
+
+    password: str = Field(..., min_length=1, max_length=72)
+
+
 class UserResponse(UserBase):
     """Схема ответа с пользователем"""
 
