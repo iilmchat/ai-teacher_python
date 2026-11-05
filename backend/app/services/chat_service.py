@@ -7,11 +7,13 @@
 """
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.repositories.chat import ChatMessageRepository, ChatSessionRepository
 from app.db.repositories.task import TaskRepository
@@ -40,7 +42,16 @@ from app.services.rag import (
 
 logger = structlog.get_logger(__name__)
 
-__all__ = ["ChatService", "extract_code_blocks", "parse_level"]
+__all__ = ["ChatService", "build_session_title", "extract_code_blocks", "parse_level"]
+
+#: Сколько символов первого вопроса попадает в авто-заголовок сессии (S43-001)
+AUTO_TITLE_CHARS = 60
+
+
+def build_session_title(content: str) -> str:
+    """Заголовок из первого вопроса: одна строка, не длиннее 60 символов."""
+    normalized = " ".join(content.split())
+    return normalized[:AUTO_TITLE_CHARS].strip()
 
 
 def parse_level(value: str | UserLevel) -> UserLevel:
@@ -114,6 +125,37 @@ class ChatService:
         """Удалить сессию с проверкой владельца"""
         await self.get_session(session_id, user)
         await self.sessions.delete(session_id)
+
+    async def update_session(
+        self,
+        session_id: UUID,
+        user: User,
+        title: str | None = None,
+        pinned: bool | None = None,
+    ) -> ChatSession:
+        """Переименовать и/или закрепить сессию (S43-001)."""
+        session = await self.get_session(session_id, user)
+        if title is not None:
+            session.title = title
+        if pinned is not None:
+            session.pinned = pinned
+        # Переименование и закрепление не должны менять порядок «свежие сверху»:
+        # `flag_modified` явно пишет updated_at, иначе `onupdate` поднял бы
+        # сессию в начало списка.
+        flag_modified(session, "updated_at")
+        await self.db.commit()
+        await self.db.refresh(session)
+        return session
+
+    async def _remember_user_message(
+        self, session: ChatSession, content: str
+    ) -> None:
+        """Обновить updated_at и, если нужно, авто-заголовок (S43-001)."""
+        session.updated_at = datetime.utcnow()
+        if not session.title:
+            session.title = build_session_title(content)
+        await self.db.commit()
+        await self.db.refresh(session)
 
     async def get_history(self, session_id: UUID) -> list[ChatMessage]:
         """Сообщения сессии в хронологическом порядке"""
@@ -202,6 +244,7 @@ class ChatService:
             metadata=metadata,
             embedding=user_embedding,
         )
+        await self._remember_user_message(session, text)
         # Последнее сообщение истории — только что сохранённый вопрос,
         # его передаём в build_messages отдельно, чтобы не дублировать
         history = await self.get_history(session.id)
@@ -251,6 +294,7 @@ class ChatService:
             metadata=metadata,
             embedding=user_embedding,
         )
+        await self._remember_user_message(session, text)
         history = await self.get_history(session.id)
         level = resolve_level(parse_level(session.level))
         llm_messages = build_messages(

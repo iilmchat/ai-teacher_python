@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
@@ -6,6 +6,7 @@ import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel';
 import { LevelSelector } from '@/components/chat/LevelSelector';
 import { MessageInput } from '@/components/chat/MessageInput';
 import { MessageList } from '@/components/chat/MessageList';
+import { SessionList } from '@/components/chat/SessionList';
 import { TaskContextBanner } from '@/components/chat/TaskContextBanner';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -29,6 +30,8 @@ export function ChatPage() {
   const createSession = useChatStore((state) => state.createSession);
   const openSession = useChatStore((state) => state.openSession);
   const deleteSession = useChatStore((state) => state.deleteSession);
+  const renameSession = useChatStore((state) => state.renameSession);
+  const togglePin = useChatStore((state) => state.togglePin);
   const loadTaskContext = useChatStore((state) => state.loadTaskContext);
   const clearTaskContext = useChatStore((state) => state.clearTaskContext);
 
@@ -62,11 +65,6 @@ export function ChatPage() {
     next.delete('task');
     setSearchParams(next, { replace: true });
   }
-
-  const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.created_at.localeCompare(a.created_at)),
-    [sessions],
-  );
 
   async function handleCreate() {
     setCreating(true);
@@ -123,37 +121,21 @@ export function ChatPage() {
           {t('chat.newSession')}
         </Button>
 
-        <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
-          {sortedSessions.map((session) => (
-            <li key={session.id} className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => {
-                  void openSession(session.id);
-                  setSessionsOpen(false);
-                }}
-                aria-current={active?.id === session.id ? 'true' : undefined}
-                className={`flex-1 truncate rounded-lg px-2 py-1.5 text-left text-xs ${
-                  active?.id === session.id
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'text-slate-600 hover:bg-slate-100'
-                }`}
-              >
-                {t(`levels.${session.level === 'advanced' ? 'advanced' : session.level}`)}
-                {' · '}
-                {new Date(session.created_at).toLocaleString('ru-RU')}
-              </button>
-              <button
-                type="button"
-                aria-label={t('chat.deleteSession')}
-                onClick={() => void deleteSession(session.id)}
-                className="rounded px-1 text-xs text-slate-400 hover:text-rose-600"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="max-h-72 overflow-y-auto">
+          <SessionList
+            sessions={sessions}
+            activeId={active?.id ?? null}
+            onOpen={(sessionId) => {
+              void openSession(sessionId);
+              setSessionsOpen(false);
+            }}
+            onRename={(sessionId, title) => void renameSession(sessionId, title)}
+            onTogglePin={(sessionId, pinned) =>
+              void togglePin(sessionId, pinned)
+            }
+            onDelete={(sessionId) => void deleteSession(sessionId)}
+          />
+        </div>
       </aside>
 
       <section className="flex h-[70vh] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -169,8 +151,10 @@ export function ChatPage() {
             >
               ☰
             </button>
-            <h2 className="text-sm font-semibold text-slate-700">
-              {active ? t('chat.title') : t('chat.noSession')}
+            <h2 className="min-w-0 truncate text-sm font-semibold text-slate-700">
+              {active
+                ? (active.title ?? t('chat.title'))
+                : t('chat.noSession')}
             </h2>
           </div>
           {active && (

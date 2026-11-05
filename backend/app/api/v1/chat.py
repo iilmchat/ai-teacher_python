@@ -22,6 +22,7 @@ from app.schemas.chat import (
     ChatSearchResponse,
     ChatSessionCreate,
     ChatSessionResponse,
+    ChatSessionUpdate,
     ChatSessionWithMessages,
     ChatTurnResponse,
 )
@@ -162,12 +163,31 @@ async def get_session(
         id=session.id,
         user_id=session.user_id,
         level=session.level,
+        title=session.title,
+        pinned=session.pinned,
         created_at=session.created_at,
         updated_at=session.updated_at,
         messages=[
             ChatMessageResponse.from_message(message) for message in session.messages
         ],
     )
+
+
+@router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_session(
+    session_id: UUID,
+    payload: ChatSessionUpdate,
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+) -> ChatSessionResponse:
+    """Переименовать и/или закрепить сессию (S43-001)"""
+    session = await service.update_session(
+        session_id,
+        current_user,
+        title=payload.title,
+        pinned=payload.pinned,
+    )
+    return ChatSessionResponse.model_validate(session)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -7,7 +7,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,14 +29,29 @@ class ChatSession(Base):
     """Модель сессии чата"""
 
     __tablename__ = "chat_sessions"
-    # Индексы совпадают с миграцией 001 (иначе `alembic check` падает)
-    __table_args__ = (Index("idx_chat_sessions_user", "user_id"),)
+    # Индексы совпадают с миграциями 001 и 016 (иначе `alembic check` падает)
+    __table_args__ = (
+        Index("idx_chat_sessions_user", "user_id"),
+        # S43-001: список сессий — закреплённые сверху, затем по updated_at
+        Index(
+            "idx_chat_sessions_user_pinned_updated",
+            "user_id",
+            "pinned",
+            "updated_at",
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     level: Mapped[str] = mapped_column(String(20), default="basic", nullable=False)
+    #: Заголовок сессии (S43-001): auto из первого вопроса или задан вручную
+    title: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Закреплённая сессия всегда выше остальных в списке (S43-001)
+    pinned: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=text("false"), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
     )

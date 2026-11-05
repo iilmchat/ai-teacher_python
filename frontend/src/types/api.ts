@@ -39,6 +39,10 @@ export interface ChatSession {
   id: string;
   user_id: string;
   level: string;
+  /** Заголовок сессии (S43-001); null — ещё нет первого вопроса */
+  title: string | null;
+  /** Закреплённая сессия в списке выше остальных (S43-001) */
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }

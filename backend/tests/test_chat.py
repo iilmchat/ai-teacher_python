@@ -141,6 +141,128 @@ async def test_list_and_delete_sessions(
     assert after.json() == []
 
 
+async def test_first_message_sets_auto_title(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Первое сообщение задаёт заголовок сессии; второе его не меняет (S43-001)"""
+    token = await _register_and_login(client, username="autotitle")
+    session = await _create_session(client, token)
+    assert session["title"] is None
+    assert session["pinned"] is False
+
+    first = "  Почему   мой код " + "не работает? " * 20
+    response = await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": first},
+        headers=_auth(token),
+    )
+    assert response.status_code == 201, response.text
+
+    listed = await client.get("/api/v1/chat/sessions", headers=_auth(token))
+    title = listed.json()[0]["title"]
+    assert title.startswith("Почему мой код не работает?")
+    assert len(title) <= 60
+
+    await client.post(
+        f"/api/v1/chat/sessions/{session['id']}/messages",
+        json={"content": "Второй вопрос"},
+        headers=_auth(token),
+    )
+    listed_again = await client.get("/api/v1/chat/sessions", headers=_auth(token))
+    assert listed_again.json()[0]["title"] == title
+
+
+async def test_rename_session(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Переименование сессии сохраняется и возвращается в детали (S43-001)"""
+    token = await _register_and_login(client, username="renamer")
+    session = await _create_session(client, token)
+
+    response = await client.patch(
+        f"/api/v1/chat/sessions/{session['id']}",
+        json={"title": "  Мой разбор задачи  "},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["title"] == "Мой разбор задачи"
+    detail = await client.get(
+        f"/api/v1/chat/sessions/{session['id']}", headers=_auth(token)
+    )
+    assert detail.json()["title"] == "Мой разбор задачи"
+
+
+async def test_pinned_sessions_go_first(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Закреплённая сессия поднимается над более свежими (S43-001)"""
+    token = await _register_and_login(client, username="pinner")
+    older = await _create_session(client, token)
+    newer = await _create_session(client, token)
+
+    pinned = await client.patch(
+        f"/api/v1/chat/sessions/{older['id']}",
+        json={"pinned": True},
+        headers=_auth(token),
+    )
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["pinned"] is True
+
+    listed = await client.get("/api/v1/chat/sessions", headers=_auth(token))
+    assert [item["id"] for item in listed.json()][:2] == [older["id"], newer["id"]]
+
+    unpinned = await client.patch(
+        f"/api/v1/chat/sessions/{older['id']}",
+        json={"pinned": False},
+        headers=_auth(token),
+    )
+    assert unpinned.json()["pinned"] is False
+    listed_again = await client.get("/api/v1/chat/sessions", headers=_auth(token))
+    assert [item["id"] for item in listed_again.json()][:2] == [
+        newer["id"],
+        older["id"],
+    ]
+
+
+async def test_message_updates_session_order(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Новое сообщение поднимает сессию в списке по updated_at (S43-001)"""
+    token = await _register_and_login(client, username="updatedorder")
+    first = await _create_session(client, token)
+    second = await _create_session(client, token)
+
+    await client.post(
+        f"/api/v1/chat/sessions/{first['id']}/messages",
+        json={"content": "Сообщение в старую сессию"},
+        headers=_auth(token),
+    )
+
+    listed = await client.get("/api/v1/chat/sessions", headers=_auth(token))
+    assert listed.json()[0]["id"] == first["id"]
+    assert listed.json()[1]["id"] == second["id"]
+
+
+async def test_invalid_session_update_rejected(
+    client: AsyncClient, fake_provider: FakeProvider
+) -> None:
+    """Пустой заголовок и запрос без полей отклоняются (422, S43-001)"""
+    token = await _register_and_login(client, username="badtitles")
+    session = await _create_session(client, token)
+    url = f"/api/v1/chat/sessions/{session['id']}"
+
+    empty = await client.patch(url, json={"title": "   "}, headers=_auth(token))
+    missing = await client.patch(url, json={}, headers=_auth(token))
+    too_long = await client.patch(
+        url, json={"title": "x" * 121}, headers=_auth(token)
+    )
+
+    assert empty.status_code == 422
+    assert missing.status_code == 422
+    assert too_long.status_code == 422
+
+
 async def test_send_message_returns_pair_and_extracts_code(
     client: AsyncClient, fake_provider: FakeProvider
 ) -> None:
@@ -286,10 +408,16 @@ async def test_other_user_session_forbidden(
     delete_response = await client.delete(
         f"/api/v1/chat/sessions/{session['id']}", headers=_auth(other_token)
     )
+    patch_response = await client.patch(
+        f"/api/v1/chat/sessions/{session['id']}",
+        json={"title": "чужой заголовок"},
+        headers=_auth(other_token),
+    )
 
     assert get_response.status_code == 403
     assert post_response.status_code == 403
     assert delete_response.status_code == 403
+    assert patch_response.status_code == 403
 
 
 async def test_missing_session_returns_404(

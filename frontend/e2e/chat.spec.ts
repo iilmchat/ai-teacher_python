@@ -18,9 +18,12 @@ test.describe('Чат', () => {
     await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
       timeout: 30_000,
     });
-    // Вопрос ученика есть в переписке (в ответе echo он тоже цитируется)
+    // Вопрос ученика есть в переписке (в ответе echo он тоже цитируется).
+    // Заголовок сессии теперь тоже содержит этот текст, поэтому ищем в списке.
     await expect(
-      page.getByText('Как работает цикл for?', { exact: true }),
+      page
+        .getByTestId('message-list')
+        .getByText('Как работает цикл for?', { exact: true }),
     ).toBeVisible();
   });
 
@@ -85,6 +88,42 @@ test.describe('Чат', () => {
     // Контекст можно снять — плашка исчезает
     await page.getByRole('button', { name: 'Убрать' }).click();
     await expect(page.getByText(/Контекст задачи/)).not.toBeVisible();
+  });
+
+  test('переименовывает и закрепляет чат', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Почему цикл for не завершается?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Авто-заголовок из первого сообщения (S43-001)
+    await expect(
+      page.getByRole('heading', { name: 'Почему цикл for не завершается?' }),
+    ).toBeVisible();
+
+    // Переименование
+    await page.getByRole('button', { name: /Переименовать чат/ }).first().click();
+    const titleInput = page.getByLabel('Название чата');
+    await titleInput.fill('Мой разбор цикла');
+    await titleInput.press('Enter');
+    await expect(
+      page.getByRole('heading', { name: 'Мой разбор цикла' }),
+    ).toBeVisible();
+
+    // Закрепление
+    await page
+      .getByRole('button', { name: 'Закрепить чат: Мой разбор цикла' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Открепить чат: Мой разбор цикла' }),
+    ).toBeVisible();
   });
 
   test('уровень выбирается при создании сессии', async ({ page }) => {

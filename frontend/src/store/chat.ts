@@ -40,6 +40,8 @@ interface ChatState {
   openSession: (sessionId: string) => Promise<void>;
   closeSession: () => void;
   deleteSession: (sessionId: string) => Promise<void>;
+  renameSession: (sessionId: string, title: string) => Promise<void>;
+  togglePin: (sessionId: string, pinned: boolean) => Promise<void>;
   loadTaskContext: (taskId: string) => Promise<void>;
   clearTaskContext: () => void;
 
@@ -55,6 +57,21 @@ interface ChatState {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Авто-заголовок из первого вопроса: одна строка, до 60 символов (S43-001) */
+function autoTitle(content: string): string {
+  return content.trim().split(/\s+/).join(' ').slice(0, 60).trim();
+}
+
+/** Порядок списка: закреплённые сверху, затем по времени обновления */
+function sortSessions(sessions: ChatSession[]): ChatSession[] {
+  return [...sessions].sort((a, b) => {
+    if (a.pinned !== b.pinned) {
+      return a.pinned ? -1 : 1;
+    }
+    return b.updated_at.localeCompare(a.updated_at);
+  });
 }
 
 function localMessage(
@@ -99,7 +116,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       '/chat/sessions',
       level ? { level } : {},
     );
-    set((state) => ({ sessions: [session, ...state.sessions] }));
+    set((state) => ({ sessions: sortSessions([session, ...state.sessions]) }));
     return session;
   },
 
@@ -127,6 +144,50 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
+  async renameSession(sessionId, title) {
+    try {
+      const updated = await api.patch<ChatSession>(
+        `/chat/sessions/${sessionId}`,
+        { title },
+      );
+      set((state) => ({
+        sessions: sortSessions(
+          state.sessions.map((item) =>
+            item.id === sessionId ? { ...item, ...updated } : item,
+          ),
+        ),
+        active:
+          state.active?.id === sessionId
+            ? { ...state.active, ...updated }
+            : state.active,
+      }));
+    } catch {
+      set({ error: i18n.t('errors.chatUpdate') });
+    }
+  },
+
+  async togglePin(sessionId, pinned) {
+    try {
+      const updated = await api.patch<ChatSession>(
+        `/chat/sessions/${sessionId}`,
+        { pinned },
+      );
+      set((state) => ({
+        sessions: sortSessions(
+          state.sessions.map((item) =>
+            item.id === sessionId ? { ...item, ...updated } : item,
+          ),
+        ),
+        active:
+          state.active?.id === sessionId
+            ? { ...state.active, ...updated }
+            : state.active,
+      }));
+    } catch {
+      set({ error: i18n.t('errors.chatUpdate') });
+    }
+  },
+
   async loadTaskContext(taskId) {
     try {
       const task = await api.get<TaskDetail>(`/tasks/${taskId}`);
@@ -146,12 +207,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!active) {
       return;
     }
-    set({
+    // Первое сообщение задаёт заголовок и в списке сессий (S43-001),
+    // чтобы не делать лишний запрос: логика совпадает с backend.
+    const title = active.title ?? autoTitle(content);
+    const updatedAt = nowIso();
+    set((state) => ({
       active: {
         ...active,
+        title,
+        updated_at: updatedAt,
         messages: [...active.messages, localMessage(active.id, 'user', content)],
       },
-    });
+      sessions: sortSessions(
+        state.sessions.map((item) =>
+          item.id === active.id
+            ? { ...item, title, updated_at: updatedAt }
+            : item,
+        ),
+      ),
+    }));
   },
 
   startAssistantDraft() {

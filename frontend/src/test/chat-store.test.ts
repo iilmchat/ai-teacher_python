@@ -8,6 +8,8 @@ const SESSION: ChatSession = {
   id: '55555555-5555-5555-5555-555555555555',
   user_id: '11111111-1111-1111-1111-111111111111',
   level: 'basic',
+  title: null,
+  pinned: false,
   created_at: '2026-10-29T10:00:00',
   updated_at: '2026-10-29T10:00:00',
 };
@@ -170,6 +172,79 @@ describe('chat store', () => {
     const messages = useChatStore.getState().active?.messages ?? [];
     expect(messages).toHaveLength(2);
     expect(messages.at(-1)?.content).toBe('ответ');
+  });
+
+  it('первое сообщение задаёт авто-заголовок до 60 символов (S43-001)', () => {
+    useChatStore.setState({
+      sessions: [SESSION],
+      active: { ...SESSION_WITH_MESSAGES, title: null, messages: [] },
+    });
+
+    useChatStore
+      .getState()
+      .addUserMessage('  Почему   мой код не работает? ' + 'очень длинный вопрос '.repeat(5));
+
+    const state = useChatStore.getState();
+    expect(state.active?.title).toMatch(/^Почему мой код не работает\?/);
+    expect(state.active?.title?.length).toBeLessThanOrEqual(60);
+    expect(state.sessions[0].title).toBe(state.active?.title);
+  });
+
+  it('не перезаписывает заголовок вторым сообщением (S43-001)', () => {
+    useChatStore.setState({
+      sessions: [SESSION],
+      active: { ...SESSION_WITH_MESSAGES, title: 'Ручной заголовок', messages: [] },
+    });
+
+    useChatStore.getState().addUserMessage('Другой вопрос');
+
+    expect(useChatStore.getState().active?.title).toBe('Ручной заголовок');
+    expect(useChatStore.getState().sessions[0].title).toBe('Ручной заголовок');
+  });
+
+  it('переименовывает сессию через PATCH (S43-001)', async () => {
+    const renamed = { ...SESSION, title: 'Разбор цикла for' };
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue(renamed);
+    useChatStore.setState({ sessions: [SESSION], active: SESSION_WITH_MESSAGES });
+
+    await useChatStore.getState().renameSession(SESSION.id, 'Разбор цикла for');
+
+    expect(patch).toHaveBeenCalledWith(`/chat/sessions/${SESSION.id}`, {
+      title: 'Разбор цикла for',
+    });
+    expect(useChatStore.getState().sessions[0].title).toBe('Разбор цикла for');
+    expect(useChatStore.getState().active?.title).toBe('Разбор цикла for');
+  });
+
+  it('закрепляет сессию и поднимает её в начало списка (S43-001)', async () => {
+    const other: ChatSession = {
+      ...SESSION,
+      id: '66666666-6666-6666-6666-666666666666',
+      title: 'Свежий чат',
+      updated_at: '2026-10-30T10:00:00',
+    };
+    const pinned = { ...SESSION, pinned: true };
+    const patch = vi.spyOn(api, 'patch').mockResolvedValue(pinned);
+    useChatStore.setState({ sessions: [other, SESSION] });
+
+    await useChatStore.getState().togglePin(SESSION.id, true);
+
+    expect(patch).toHaveBeenCalledWith(`/chat/sessions/${SESSION.id}`, {
+      pinned: true,
+    });
+    expect(useChatStore.getState().sessions.map((item) => item.id)).toEqual([
+      SESSION.id,
+      other.id,
+    ]);
+  });
+
+  it('показывает ошибку, если не удалось обновить сессию (S43-001)', async () => {
+    vi.spyOn(api, 'patch').mockRejectedValue(new Error('boom'));
+    useChatStore.setState({ sessions: [SESSION] });
+
+    await useChatStore.getState().renameSession(SESSION.id, 'Новое имя');
+
+    expect(useChatStore.getState().error).toBe('Не удалось обновить чат');
   });
 
   it('удаляет сессию из списка и сбрасывает активную', async () => {

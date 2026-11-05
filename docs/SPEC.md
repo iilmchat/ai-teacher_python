@@ -89,6 +89,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | POST | `/chat/sessions` | `{level?}` | 201 `ChatSession` |
 | GET | `/chat/sessions?skip&limit` | — | `ChatSession[]` |
 | GET | `/chat/sessions/{id}` | — | `ChatSessionWithMessages` |
+| PATCH | `/chat/sessions/{id}` | `{title?, pinned?}` | 200 `ChatSession` (S43-001) |
 | DELETE | `/chat/sessions/{id}` | — | 204 |
 | POST | `/chat/sessions/{id}/messages` | `{content, task_id?}` | 201 `{user_message, assistant_message}` |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
@@ -107,6 +108,24 @@ server → {"type":"start"} | {"type":"token","content":"…"} |
 
 `ChatMessage`: `{id, session_id, role, content, code_blocks, created_at,
 metadata, warnings}`.
+
+`ChatSession`: `{id, user_id, level, title, pinned, created_at, updated_at}`.
+
+**Заголовки и закрепление сессий (S43-001).**
+
+- `title` — nullable, до 120 символов. Если заголовка нет, он берётся из
+  первого сообщения ученика: текст схлопывается в одну строку и
+  обрезается до 60 символов. Ручное переименование заменяет авто-заголовок
+  и больше не перезаписывается следующими сообщениями.
+- `pinned` — булев флаг закрепления. Закреплённые сессии идут в
+  `GET /chat/sessions` первыми, остальные — по `updated_at` (новые сверху).
+  Обслуживается индексом `(user_id, pinned, updated_at)`.
+- `PATCH /chat/sessions/{id}` принимает `{title?, pinned?}`; хотя бы одно
+  поле обязательно. `title: null` означает «не менять», а не «очистить».
+  Пустой заголовок после trim — 422, длиннее 120 символов — 422.
+- `updated_at` обновляется при появлении нового сообщения в сессии.
+  Переименование и закрепление порядок списка не меняют.
+- Права: своя сессия — 200; чужая — 403; несуществующая — 404.
 
 - `metadata.prompt_version` — версия промпта уровня (S12-006);
 - `metadata.provider` / `metadata.model` — фактический провайдер ответа;
@@ -421,7 +440,12 @@ users(id, email*, username*, hashed_password, role, level,
       created_at, last_active, settings JSONB)
    role ∈ {student, teacher, admin} · level ∈ {basic, intermediate, advanced}
 
-chat_sessions(id, user_id→users, level, created_at, updated_at, metadata JSONB)
+chat_sessions(id, user_id→users, level, title, pinned, created_at, updated_at,
+              metadata JSONB)
+   title — nullable, до 120 символов (S43-001): авто-заголовок из первого
+   вопроса (до 60 символов) или имя, заданное пользователем
+   pinned — bool not null default false (S43-001): закреплённая сессия
+   всегда выше остальных в списке
 chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
               metadata JSONB, embedding VECTOR(1536), created_at)
    role ∈ {user, assistant, system}
@@ -468,6 +492,7 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 Удаление задачи с прогрессом → мягкое (`is_active=false`).
 
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
+`chat_sessions(user_id, pinned, updated_at)` (S43-001),
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
 `user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,

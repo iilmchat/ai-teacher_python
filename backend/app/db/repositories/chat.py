@@ -30,11 +30,11 @@ class ChatSessionRepository(BaseRepository[ChatSession]):
     async def get_user_sessions(
         self, user_id: UUID, skip: int = 0, limit: int = 100
     ) -> list[ChatSession]:
-        """Получить сессии пользователя"""
+        """Получить сессии пользователя: закреплённые сверху, затем свежие."""
         result = await self.session.execute(
             select(ChatSession)
             .where(ChatSession.user_id == user_id)
-            .order_by(ChatSession.created_at.desc())
+            .order_by(ChatSession.pinned.desc(), ChatSession.updated_at.desc())
             .offset(skip)
             .limit(limit)
         )
