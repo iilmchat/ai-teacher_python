@@ -173,6 +173,29 @@ test.describe('Чат', () => {
     await expect(page.getByRole('button', { name: 'Комментарий' }).first()).toBeVisible();
   });
 
+  test('подставляет шаблон промпта и выгружает диалог', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+
+    // Шаблон промпта подставляется в поле ввода (S43-004), но не отправляется
+    await page.getByRole('button', { name: 'Объясни код' }).click();
+    await expect(input).toHaveValue(/Объясни/);
+
+    await input.fill('Как работает цикл for?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // У открытого чата есть кнопки выгрузки диалога
+    await expect(page.getByRole('button', { name: /Скачать .md/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Копировать/ })).toBeVisible();
+  });
+
   test('уровень выбирается при создании сессии', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/chat');

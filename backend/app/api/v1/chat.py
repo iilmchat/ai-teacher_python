@@ -5,10 +5,11 @@ Chat API endpoints (S4-005).
 в тестах он подменяется на фейковый без обращения к сети.
 """
 
-from typing import Annotated, Any
+import json
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -29,6 +30,11 @@ from app.schemas.chat import (
     MessageFeedbackResponse,
 )
 from app.services.cache import cache_get_json, cache_set_json, levels_cache_key
+from app.services.chat_export import (
+    content_disposition,
+    render_transcript_markdown,
+    transcript_filename,
+)
 from app.services.chat_service import ChatService
 from app.services.feedback_service import FeedbackService
 from app.services.levels import list_levels
@@ -124,6 +130,54 @@ async def regenerate_message(
     session = await service.get_session(session_id, current_user)
     message = await service.regenerate_reply(session, message_id)
     return ChatMessageResponse.from_message(message)
+
+
+@router.get("/sessions/{session_id}/export")
+async def export_session(
+    session_id: UUID,
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+    format_: Literal["md", "json"] = Query(default="md", alias="format"),
+) -> Response:
+    """Выгрузка диалога (S43-004).
+
+    `format=md` — Markdown-транскрипт для чтения, `format=json` — данные в том
+    же виде, что и `GET /chat/sessions/{id}`. Чужая сессия — 403.
+    """
+    session = await service.get_session(session_id, current_user, with_messages=True)
+    messages = list(session.messages)
+    if format_ == "json":
+        payload = ChatSessionWithMessages(
+            id=session.id,
+            user_id=session.user_id,
+            level=session.level,
+            title=session.title,
+            pinned=session.pinned,
+            created_at=session.created_at,
+            updated_at=session.updated_at,
+            messages=[
+                ChatMessageResponse.from_message(message) for message in messages
+            ],
+        )
+        return Response(
+            json.dumps(payload.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            media_type="application/json; charset=utf-8",
+            headers={
+                "Content-Disposition": content_disposition(
+                    transcript_filename(session, "json")
+                )
+            },
+        )
+    markdown = render_transcript_markdown(session, messages)
+    return Response(
+        markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": content_disposition(
+                transcript_filename(session, "md")
+            )
+        },
+    )
 
 
 @router.post(

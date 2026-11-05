@@ -39,6 +39,17 @@ class LevelUpdateRequest(BaseModel):
     level: UserLevel
 
 
+class UserSettingsUpdate(BaseModel):
+    """Обновление личных настроек пользователя (S43-004).
+
+    Список настроек закрытый: в `users.settings` попадают только известные
+    ключи, чтобы клиент не мог записать в профиль произвольные данные.
+    `prompt_template` — id выбранного шаблона промпта; `null` — сброс.
+    """
+
+    prompt_template: str | None = Field(default=None, max_length=64)
+
+
 class DeleteAccountRequest(BaseModel):
     """Подтверждение удаления аккаунта паролем (S26-004)"""
 

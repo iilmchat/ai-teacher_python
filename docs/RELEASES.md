@@ -2434,6 +2434,50 @@ GitHub Release через release-workflow
 - `docs/CHANGELOG.md` — запись в `[Unreleased]`.
 
 ---
+## Шаг 04 / спринт 43: выгрузка и шаблоны промптов (S43-004)
+
+**Дата:** 2026-11-06  
+**Спринт:** 43 (v0.5.0 «Learning Experience & Teaching Workflow»)  
+**Задача:** S43-004 — экспорт и шаблоны промптов  
+**Статус:** реализовано
+
+### Что сделано
+
+1. **Выгрузка диалога.** `GET /chat/sessions/{id}/export?format=md|json`:
+   Markdown-транскрипт (роли, код-блоки, спецсимволы без экранирования) или
+   JSON в том же виде, что и `GET /chat/sessions/{id}`. Ответ — вложение с
+   ASCII-именем и UTF-8-версией в `Content-Disposition`.
+2. **Кнопки в списке чатов.** «Скачать .md» и «Копировать» у открытого чата.
+3. **Шаблоны промптов.** `frontend/src/lib/promptTemplates.ts` — шесть
+   заготовок по уровням помощи; чипы над полем ввода подставляют текст в
+   поле (без автоотправки).
+4. **Выбор шаблона сохраняется.** `PATCH /users/me/settings` с закрытым
+   списком ключей; настройки дополняются, а не заменяются.
+
+### Проверки
+
+| Проверка | Результат |
+|----------|-----------|
+| Ruff (`ruff check app tests scripts`) | **0** |
+| MyPy strict (`mypy app`) | **0**, 95 файлов |
+| Backend targeted (`test_chat_export`, `test_chat`, `test_feedback`) | **51 passed** |
+| Backend полный локально | **614 passed, 1 skipped** (+1 известный флак sandbox-теста) |
+| Frontend `typecheck` / `lint` | **0 / 0** |
+| Frontend unit (vitest) | **179 passed** (было 171) |
+| Frontend `build` | **OK** |
+| i18n-аудит | **OK**, 411 ключей в ru/en |
+| E2E (полный набор) | **27 passed**, 1 skipped (было 26) |
+
+### Документация
+
+- `docs/reports/sprint-43/STEP-04_EXPORT_TEMPLATES.md` — отчёт по шагу.
+- `docs/SPEC.md` §3.2 и §3.3 — выгрузка и личные настройки.
+- `docs/USER_GUIDE.md` §3 — кнопки выгрузки и чипы шаблонов.
+- `docs/RULES.md` §11.38 — правила выгрузки и шаблонов.
+- `TODO_V0.5.md` — S43-004 `[x]`, журнал плана.
+- `docs/CHANGELOG.md` — запись в `[Unreleased]`.
+
+---
 ## Шаблон отчёта по спринту
 
 ```

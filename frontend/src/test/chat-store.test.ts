@@ -368,6 +368,28 @@ describe('chat store', () => {
     expect(useChatStore.getState().error).toBe('Не удалось сохранить оценку');
   });
 
+  it('выгружает диалог в Markdown (S43-004)', async () => {
+    const download = vi
+      .spyOn(api, 'download')
+      .mockResolvedValue(new Blob(['# Диалог\n'], { type: 'text/markdown' }));
+
+    const text = await useChatStore.getState().exportMarkdown(SESSION.id);
+
+    expect(download).toHaveBeenCalledWith(
+      `/chat/sessions/${SESSION.id}/export?format=md`,
+    );
+    expect(text).toContain('# Диалог');
+  });
+
+  it('сообщает об ошибке выгрузки (S43-004)', async () => {
+    vi.spyOn(api, 'download').mockRejectedValue(new Error('boom'));
+
+    const text = await useChatStore.getState().exportMarkdown(SESSION.id);
+
+    expect(text).toBeNull();
+    expect(useChatStore.getState().error).toBe('Не удалось выгрузить диалог');
+  });
+
   it('удаляет сессию из списка и сбрасывает активную', async () => {
     useChatStore.setState({ sessions: [SESSION], active: SESSION_WITH_MESSAGES });
     vi.spyOn(api, 'delete').mockResolvedValue(undefined);
