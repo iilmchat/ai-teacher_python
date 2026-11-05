@@ -14,6 +14,7 @@
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
+| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.4.md](../TODO_V0.4.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -39,6 +40,9 @@
   патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
 - [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41):
   детальный план задач `S33-001`…`S41-005`, зависимости, оценки, DoD и риски
+- [../TODO_V0.5.md](../TODO_V0.5.md) — **следующий этап v0.5.0** «Learning Experience &
+  Teaching Workflow» (спринты 42–50): аудит продукта по 7 срезам, план задач
+  `S42-001`…`S50-003`, зависимости, оценки, DoD, риски и границы этапа
 - [CI.md](CI.md) — CI-платформа: self-hosted runner, гейты, релиз, эксплуатация
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
@@ -74,7 +78,7 @@
 | Миграции | head 013 (`alembic check` чист) |
 | Размер фронтенда | entry 78.71 kB gzip (лимит 80) |
 | Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
-| Активные проблемы | 3 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
+| Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 
 ---
 
