@@ -52,7 +52,7 @@ pyjwt==2.15.1
 restrictedpython==8.5
 
 # LLM
-openai==3.40.0
+openai==3.42.1
 httpx==0.28.1
 
 # Task import/export (S14-001)
@@ -66,8 +66,8 @@ prometheus-client==0.26.0
 # S22-003 (KI-016): pytest 8.3.3 → 9.2.0 + плагины (asyncio 1.4.1, cov 7.1.0,
 # env 1.8.3). Закрыт dev-only advisory PYSEC-2026-1845, поэтому из CI
 # pip-audit больше нет ни одного --ignore-vuln.
-ruff==0.8.1
-mypy==2.4.0
+ruff==0.17.3
+mypy==2.4.1
 pytest==9.2.0
 pytest-asyncio==1.4.1
 pytest-cov==7.1.0
