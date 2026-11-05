@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.chat import ChatMessage, MessageRole
 from app.models.user import UserLevel
@@ -32,10 +32,42 @@ class ChatSessionResponse(ChatSessionBase):
 
     id: UUID
     user_id: UUID
+    #: Заголовок (S43-001): auto из первого вопроса или задан вручную
+    title: str | None = None
+    #: Закреплённая сессия в списке выше остальных (S43-001)
+    pinned: bool = False
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ChatSessionUpdate(BaseModel):
+    """Переименование и закрепление сессии (S43-001).
+
+    Оба поля необязательны, но хотя бы одно должно быть передано. Пустой
+    заголовок после trim отклоняется: заголовок либо есть, либо его нет
+    (``None`` означает «не менять», а не «очистить»).
+    """
+
+    title: str | None = Field(default=None, min_length=1, max_length=120)
+    pinned: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def _normalize_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Заголовок не может быть пустым")
+        return normalized
+
+    @model_validator(mode="after")
+    def _require_change(self) -> "ChatSessionUpdate":
+        if self.title is None and self.pinned is None:
+            raise ValueError("Нужно передать title или pinned")
+        return self
 
 
 class ChatMessageBase(BaseModel):
@@ -93,9 +125,15 @@ class ChatSessionWithMessages(ChatSessionResponse):
 
 
 class ChatMessageRequest(BaseModel):
-    """Запрос на отправку сообщения в чат"""
+    """Запрос на отправку сообщения в чат.
+
+    `task_id` (S42-006) — задача, условие которой ассистент получает
+    отдельным системным сообщением. В `content` по-прежнему только текст
+    вопроса: идентификатор не подмешивается в историю ученика.
+    """
 
     content: str = Field(..., min_length=1, max_length=4000)
+    task_id: UUID | None = None
 
 
 class ChatTurnResponse(BaseModel):
@@ -124,4 +162,34 @@ class ChatSearchResponse(BaseModel):
     mode: Literal["semantic", "ilike"]
     items: list[ChatSearchItem] = Field(default_factory=list)
     total: int
+
+
+class MessageFeedbackCreate(BaseModel):
+    """Оценка ответа ассистента (S43-003).
+
+    `value`: 1 — ответ помог, −1 — не помог. `comment` — необязательный
+    комментарий ученика до 500 символов.
+    """
+
+    value: Literal[1, -1]
+    comment: str | None = Field(default=None, max_length=500)
+
+    @field_validator("comment")
+    @classmethod
+    def _normalize_comment(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
+class MessageFeedbackResponse(BaseModel):
+    """Оценка ответа ассистента"""
+
+    message_id: UUID
+    value: int
+    comment: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
 

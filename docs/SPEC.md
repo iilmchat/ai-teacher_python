@@ -89,8 +89,13 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | POST | `/chat/sessions` | `{level?}` | 201 `ChatSession` |
 | GET | `/chat/sessions?skip&limit` | — | `ChatSession[]` |
 | GET | `/chat/sessions/{id}` | — | `ChatSessionWithMessages` |
+| PATCH | `/chat/sessions/{id}` | `{title?, pinned?}` | 200 `ChatSession` (S43-001) |
 | DELETE | `/chat/sessions/{id}` | — | 204 |
-| POST | `/chat/sessions/{id}/messages` | `{content}` | 201 `{user_message, assistant_message}` |
+| POST | `/chat/sessions/{id}/messages` | `{content, task_id?}` | 201 `{user_message, assistant_message}` |
+| POST | `/chat/sessions/{id}/messages/{message_id}/regenerate` | — | 201 `ChatMessage` (S43-002) |
+| POST | `/chat/messages/{id}/feedback` | `{value, comment?}` | 201 `MessageFeedback` (S43-003) |
+| DELETE | `/chat/messages/{id}/feedback` | — | 204 (S43-003) |
+| GET | `/chat/sessions/{id}/feedback` | — | `MessageFeedback[]` (S43-003) |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
 
 `GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
@@ -99,19 +104,93 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 WebSocket: `/api/v1/chat/ws/{session_id}?token=<access>`
 
 ```
-client → {"type":"chat","content":"..."} | {"type":"ping"}
+client → {"type":"chat","content":"...","task_id":"<uuid>"?} |
+         {"type":"stop"} | {"type":"ping"}
 server → {"type":"start"} | {"type":"token","content":"…"} |
          {"type":"done","content":"полный текст","warnings":[...]} |
+         {"type":"stopped","content":"частичный текст","warnings":[...]} |
          {"type":"error","detail":"…"} | {"type":"pong"}
 ```
 
 `ChatMessage`: `{id, session_id, role, content, code_blocks, created_at,
 metadata, warnings}`.
 
+`ChatSession`: `{id, user_id, level, title, pinned, created_at, updated_at}`.
+
+**Заголовки и закрепление сессий (S43-001).**
+
+- `title` — nullable, до 120 символов. Если заголовка нет, он берётся из
+  первого сообщения ученика: текст схлопывается в одну строку и
+  обрезается до 60 символов. Ручное переименование заменяет авто-заголовок
+  и больше не перезаписывается следующими сообщениями.
+- `pinned` — булев флаг закрепления. Закреплённые сессии идут в
+  `GET /chat/sessions` первыми, остальные — по `updated_at` (новые сверху).
+  Обслуживается индексом `(user_id, pinned, updated_at)`.
+- `PATCH /chat/sessions/{id}` принимает `{title?, pinned?}`; хотя бы одно
+  поле обязательно. `title: null` означает «не менять», а не «очистить».
+  Пустой заголовок после trim — 422, длиннее 120 символов — 422.
+- `updated_at` обновляется при появлении нового сообщения в сессии.
+  Переименование и закрепление порядок списка не меняют.
+- Права: своя сессия — 200; чужая — 403; несуществующая — 404.
+
 - `metadata.prompt_version` — версия промпта уровня (S12-006);
 - `metadata.provider` / `metadata.model` — фактический провайдер ответа;
+- `metadata.task_context` — `{task_id, title}` для вопроса, отправленного с
+  контекстом задачи (S42-006); самого условия и кода ученика в метаданных нет;
+- `metadata.stopped` — ответ прерван учеником (S43-002);
+- `metadata.replaced` / `metadata.replaced_by` — ответ заменён
+  перегенерацией (S43-002);
 - `warnings` — коды нарушений политики уровня (S12-005), например
   `basic_full_solution`; ответ при этом не блокируется.
+
+**Остановка и регенерация (S43-002).**
+
+- `{"type":"stop"}` — клиент просит прервать генерацию. Сервер останавливает
+  поток на ближайшей дельте, сохраняет полученный текст как ответ ассистента
+  с пометкой `metadata.stopped = true` и присылает
+  `{"type":"stopped","content":"<частичный текст>"}`. Соединение остаётся
+  живым: после остановки можно отправить новое сообщение.
+- Если клиент закрыл соединение во время генерации, сервер тоже сохраняет
+  частичный ответ — с тем же признаком `stopped`.
+- `POST /chat/sessions/{id}/messages/{message_id}/regenerate` — новый ответ
+  ассистента на тот же вопрос с тем же уровнем. Вопрос ученика не
+  дублируется, прежний ответ в LLM не попадает.
+- Прежний ответ остаётся в истории, но помечается в `message_metadata`:
+  `replaced = true` и `replaced_by = <id нового ответа>`.
+- Ошибки: чужая сессия — 403; сообщение не найдено — 404; попытка
+  перегенерировать вопрос ученика — 422.
+
+**Оценка ответов (S43-003).**
+
+- `POST /chat/messages/{message_id}/feedback` — оценка ответа ассистента:
+  `value` — `1` (помог) или `-1` (не помог), `comment` — необязательный
+  комментарий до 500 символов. Оценка на пару «сообщение × ученик» всегда
+  одна: повторная оценка меняет значение, а не добавляет строку.
+- `DELETE /chat/messages/{message_id}/feedback` — снять свою оценку (204).
+- `GET /chat/sessions/{session_id}/feedback` — мои оценки по сообщениям сессии.
+- Оценивать можно только ответ ассистента в своей сессии: чужое сообщение —
+  403, неизвестное — 404, вопрос ученика — 422.
+- `GET /admin/quality` (только администратор) — сводка качества:
+  `{total, positive, negative, approval_rate, by_provider[], by_model[],
+  negative_samples[]}`. Провайдер и модель берутся из `metadata` ответа,
+  `negative_samples` — последние негативные оценки с текстом ответа и
+  комментарием: это вход для LLM-as-judge (см. `docs/LLM_EVAL.md`).
+
+**Контекст задачи (S42-006).**
+
+`POST /chat/sessions/{id}/messages` (REST) и сообщение WebSocket
+`{"type":"chat", ...}` принимают необязательный `task_id` (UUID). Клиент
+передаёт **только идентификатор**: сервер сам загружает активную задачу и
+добавляет её условие отдельным `system`-сообщением сразу после промпта
+уровня. В контекст входят название, сложность, категория, описание и
+входные данные тест-кейсов; эталонное решение (`solution_template`),
+ожидаемые выводы (`expected_output`) и подсказки (`hints`) не передаются.
+Условие обрезается до 4000 символов, перечисляется не более 20 кейсов.
+
+В `content` сообщения остаётся только текст вопроса — условие задачи не
+дублируется в истории ученика. В `metadata` сообщения ученика сохраняется
+`task_context: {task_id, title}`. Неизвестный или неактивный `task_id` —
+404 (REST) или событие `error` без закрытия сокета (WebSocket).
 
 Права: своя сессия — 200; чужая — 403; несуществующая — 404.
 Недоступность LLM: 503 `{detail}` (S12-002).
@@ -403,13 +482,24 @@ users(id, email*, username*, hashed_password, role, level,
       created_at, last_active, settings JSONB)
    role ∈ {student, teacher, admin} · level ∈ {basic, intermediate, advanced}
 
-chat_sessions(id, user_id→users, level, created_at, updated_at, metadata JSONB)
+chat_sessions(id, user_id→users, level, title, pinned, created_at, updated_at,
+              metadata JSONB)
+   title — nullable, до 120 символов (S43-001): авто-заголовок из первого
+   вопроса (до 60 символов) или имя, заданное пользователем
+   pinned — bool not null default false (S43-001): закреплённая сессия
+   всегда выше остальных в списке
 chat_messages(id, session_id→chat_sessions, role, content, code_blocks JSONB,
               metadata JSONB, embedding VECTOR(1536), created_at)
    role ∈ {user, assistant, system}
    metadata: {provider, model, prompt_version, warnings?}
    embedding — nullable: заполняется best-effort при сохранении, только если
    RAG_ENABLED=true и провайдер доступен; HNSW-индекс `vector_cosine_ops`
+
+message_feedback(id, message_id→chat_messages, user_id→users, value, comment,
+                 created_at)
+   value ∈ {1, -1} — CHECK `ck_message_feedback_value`
+   comment — nullable, до 500 символов
+   уникальность (message_id, user_id): `uq_message_feedback_message_user`
 
 code_executions(id, user_id→users, code, output, error, success, execution_time,
                 created_at)
@@ -450,6 +540,8 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 Удаление задачи с прогрессом → мягкое (`is_active=false`).
 
 Индексы: `users(email)`, `users(username)`, `chat_sessions(user_id)`,
+`chat_sessions(user_id, pinned, updated_at)` (S43-001),
+`message_feedback(message_id)` (S43-003),
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
 `tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
 `user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,

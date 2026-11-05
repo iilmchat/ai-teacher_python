@@ -1,16 +1,37 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageFeedbackButtons } from '@/components/chat/MessageFeedback';
 import { RichText } from '@/components/chat/RichText';
-import type { ChatMessage } from '@/types/api';
+import { isStoppedMessage } from '@/lib/chatMessages';
+import type { ChatMessage, MessageFeedback } from '@/types/api';
 
 interface MessageListProps {
   messages: ChatMessage[];
   draft?: string;
   streaming?: boolean;
+  /** Перегенерировать ответ ассистента (S43-002) */
+  onRegenerate?: (messageId: string) => void;
+  /** Мои оценки ответов: id сообщения → оценка (S43-003) */
+  feedback?: Record<string, MessageFeedback>;
+  /** Поставить оценку ответа */
+  onRate?: (messageId: string, value: 1 | -1) => void;
+  /** Сохранить комментарий к оценке */
+  onComment?: (messageId: string, comment: string) => void;
+  /** Снять оценку */
+  onClearFeedback?: (messageId: string) => void;
 }
 
-export function MessageList({ messages, draft = '', streaming = false }: MessageListProps) {
+export function MessageList({
+  messages,
+  draft = '',
+  streaming = false,
+  onRegenerate,
+  feedback,
+  onRate,
+  onComment,
+  onClearFeedback,
+}: MessageListProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -43,6 +64,30 @@ export function MessageList({ messages, draft = '', streaming = false }: Message
             <p className="mt-2 rounded bg-amber-100 px-2 py-1 text-xs text-amber-800" role="status">
               {t('chat.policyWarning')}
             </p>
+          )}
+          {message.role === 'assistant' && isStoppedMessage(message) && (
+            <p className="mt-2 rounded bg-slate-200 px-2 py-1 text-xs text-slate-700" role="status">
+              {t('chat.stopped')}
+            </p>
+          )}
+          {message.role === 'assistant' && onRegenerate && (
+            <button
+              type="button"
+              onClick={() => onRegenerate(message.id)}
+              aria-label={t('chat.regenerate')}
+              className="mt-2 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-white hover:text-indigo-700"
+            >
+              {t('chat.regenerate')}
+            </button>
+          )}
+          {message.role === 'assistant' && onRate && onComment && (
+            <MessageFeedbackButtons
+              messageId={message.id}
+              feedback={feedback?.[message.id]}
+              onRate={onRate}
+              onComment={onComment}
+              onClear={onClearFeedback}
+            />
           )}
         </article>
       ))}

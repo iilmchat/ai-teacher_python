@@ -21,6 +21,7 @@ from app.db.repositories.user import UserRepository
 from app.models.task import Task
 from app.models.user import User, UserRole
 from app.schemas.admin import (
+    AdminQualityResponse,
     AdminTaskItem,
     AdminTaskListResponse,
     AdminUserItem,
@@ -40,6 +41,7 @@ from app.services.analytics_service import AnalyticsService
 from app.services.audit_service import list_audit, record_audit
 from app.services.cache import cache_metrics
 from app.services.export_service import stream_csv, stream_json
+from app.services.feedback_service import FeedbackService
 from app.services.llm.metrics import llm_metrics
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
@@ -200,6 +202,17 @@ async def list_tasks(
         for task in result.scalars().all()
     ]
     return AdminTaskListResponse(total=total, items=items)
+
+
+@router.get("/quality", response_model=AdminQualityResponse)
+async def get_quality(_: AdminUser, db: DbSession) -> AdminQualityResponse:
+    """Сводка качества ответов ассистента по оценкам учеников (S43-003).
+
+    Негативные оценки с текстом ответа — вход для LLM-as-judge
+    (см. `docs/LLM_EVAL.md`).
+    """
+    summary = await FeedbackService(db).quality_summary()
+    return AdminQualityResponse.model_validate(summary)
 
 
 @router.get("/analytics", response_model=AnalyticsResponse)

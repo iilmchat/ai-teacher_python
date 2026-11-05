@@ -2,9 +2,16 @@
  * Клиент WebSocket чата со стримингом ответа ассистента.
  *
  * Протокол backend:
- *   client → {"type":"chat","content":"..."} | {"type":"ping"}
- *   server → {"type":"start"|"token"|"done"|"error"|"pong", content?, detail?,
- *             warnings?}
+ *   client → {"type":"chat","content":"...","task_id"?:"<uuid>"} |
+ *            {"type":"stop"} | {"type":"ping"}
+ *   server → {"type":"start"|"token"|"done"|"stopped"|"error"|"pong",
+ *             content?, detail?, warnings?}
+ *
+ * `task_id` (S42-006) — контекст задачи: backend кладёт условие в отдельное
+ * системное сообщение, а в историю — только метаданные вопроса.
+ *
+ * `stop` (S43-002) — остановка генерации: сервер прерывает поток и
+ * присылает `stopped` с частичным ответом.
  */
 
 import i18n from '@/i18n';
@@ -13,14 +20,19 @@ import { getAccessToken } from '@/lib/token';
 export interface ChatSocketHandlers {
   onStart?: () => void;
   onToken?: (delta: string) => void;
-  onDone?: (full: string, warnings: string[]) => void;
+  /** Ответ сохранён сервером; `messageId` — его настоящий id (S43-003) */
+  onDone?: (full: string, warnings: string[], messageId?: string) => void;
+  /** Генерация остановлена: сервер прислал частичный ответ (S43-002) */
+  onStopped?: (partial: string, warnings: string[], messageId?: string) => void;
   onError?: (detail: string) => void;
   onOpen?: () => void;
   onClose?: () => void;
 }
 
 export interface ChatSocket {
-  send: (content: string) => boolean;
+  send: (content: string, taskId?: string | null) => boolean;
+  /** Остановить генерацию (S43-002) */
+  stop: () => boolean;
   close: () => void;
   readonly ready: boolean;
 }
@@ -61,6 +73,7 @@ export function openChatSocket(
       content?: string;
       detail?: string;
       warnings?: unknown;
+      message_id?: string | null;
     };
     try {
       payload = JSON.parse(event.data) as typeof payload;
@@ -81,7 +94,20 @@ export function openChatSocket(
               (item): item is string => typeof item === 'string',
             )
           : [];
-        handlers.onDone?.(payload.content ?? '', warnings);
+        handlers.onDone?.(payload.content ?? '', warnings, payload.message_id ?? undefined);
+        break;
+      }
+      case 'stopped': {
+        const warnings = Array.isArray(payload.warnings)
+          ? payload.warnings.filter(
+              (item): item is string => typeof item === 'string',
+            )
+          : [];
+        handlers.onStopped?.(
+          payload.content ?? '',
+          warnings,
+          payload.message_id ?? undefined,
+        );
         break;
       }
       case 'error':
@@ -103,11 +129,21 @@ export function openChatSocket(
   };
 
   return {
-    send(content: string): boolean {
+    send(content: string, taskId?: string | null): boolean {
       if (!ready || socket.readyState !== WebSocket.OPEN) {
         return false;
       }
-      socket.send(JSON.stringify({ type: 'chat', content }));
+      const payload = taskId
+        ? { type: 'chat', content, task_id: taskId }
+        : { type: 'chat', content };
+      socket.send(JSON.stringify(payload));
+      return true;
+    },
+    stop(): boolean {
+      if (!ready || socket.readyState !== WebSocket.OPEN) {
+        return false;
+      }
+      socket.send(JSON.stringify({ type: 'stop' }));
       return true;
     },
     close() {

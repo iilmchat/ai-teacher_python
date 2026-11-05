@@ -22,11 +22,15 @@ from app.schemas.chat import (
     ChatSearchResponse,
     ChatSessionCreate,
     ChatSessionResponse,
+    ChatSessionUpdate,
     ChatSessionWithMessages,
     ChatTurnResponse,
+    MessageFeedbackCreate,
+    MessageFeedbackResponse,
 )
 from app.services.cache import cache_get_json, cache_set_json, levels_cache_key
 from app.services.chat_service import ChatService
+from app.services.feedback_service import FeedbackService
 from app.services.levels import list_levels
 from app.services.llm import LLMProvider, create_llm_provider
 from app.services.llm.embeddings import (
@@ -68,6 +72,14 @@ def get_chat_service(
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]
 
 
+def get_feedback_service(db: DbSession) -> FeedbackService:
+    """Сервис оценок ответов ассистента (S43-003)"""
+    return FeedbackService(db)
+
+
+FeedbackServiceDep = Annotated[FeedbackService, Depends(get_feedback_service)]
+
+
 @router.get("/levels")
 async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
     """Информация об уровнях ассистента (S5-004, кэш S19-003)"""
@@ -90,6 +102,74 @@ async def get_chat_levels() -> dict[str, list[dict[str, Any]]]:
     }
     await cache_set_json(key, payload)
     return payload
+
+
+@router.post(
+    "/sessions/{session_id}/messages/{message_id}/regenerate",
+    response_model=ChatMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def regenerate_message(
+    session_id: UUID,
+    message_id: UUID,
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+) -> ChatMessageResponse:
+    """Перегенерировать ответ ассистента (S43-002).
+
+    Вопрос ученика не дублируется: ассистент отвечает заново на тот же
+    вопрос с тем же уровнем. Прежний ответ остаётся в истории, но
+    помечается в метаданных как заменённый.
+    """
+    session = await service.get_session(session_id, current_user)
+    message = await service.regenerate_reply(session, message_id)
+    return ChatMessageResponse.from_message(message)
+
+
+@router.post(
+    "/messages/{message_id}/feedback",
+    response_model=MessageFeedbackResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def set_message_feedback(
+    message_id: UUID,
+    payload: MessageFeedbackCreate,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> MessageFeedbackResponse:
+    """Оценить ответ ассистента (S43-003).
+
+    Повторная оценка меняет значение: на пару «сообщение × ученик» оценка
+    всегда одна.
+    """
+    feedback = await service.set_feedback(
+        message_id, current_user, payload.value, payload.comment
+    )
+    return MessageFeedbackResponse.model_validate(feedback)
+
+
+@router.delete("/messages/{message_id}/feedback", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_message_feedback(
+    message_id: UUID,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> None:
+    """Снять свою оценку ответа ассистента (S43-003)"""
+    await service.remove_feedback(message_id, current_user)
+
+
+@router.get(
+    "/sessions/{session_id}/feedback",
+    response_model=list[MessageFeedbackResponse],
+)
+async def list_session_feedback(
+    session_id: UUID,
+    current_user: CurrentUser,
+    service: FeedbackServiceDep,
+) -> list[MessageFeedbackResponse]:
+    """Мои оценки по сообщениям сессии (S43-003)"""
+    items = await service.list_for_session(session_id, current_user)
+    return [MessageFeedbackResponse.model_validate(item) for item in items]
 
 
 @router.get("/search", response_model=ChatSearchResponse)
@@ -162,12 +242,31 @@ async def get_session(
         id=session.id,
         user_id=session.user_id,
         level=session.level,
+        title=session.title,
+        pinned=session.pinned,
         created_at=session.created_at,
         updated_at=session.updated_at,
         messages=[
             ChatMessageResponse.from_message(message) for message in session.messages
         ],
     )
+
+
+@router.patch("/sessions/{session_id}", response_model=ChatSessionResponse)
+async def update_session(
+    session_id: UUID,
+    payload: ChatSessionUpdate,
+    current_user: CurrentUser,
+    service: ChatServiceDep,
+) -> ChatSessionResponse:
+    """Переименовать и/или закрепить сессию (S43-001)"""
+    session = await service.update_session(
+        session_id,
+        current_user,
+        title=payload.title,
+        pinned=payload.pinned,
+    )
+    return ChatSessionResponse.model_validate(session)
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -194,7 +293,7 @@ async def send_message(
     """Отправить сообщение и получить ответ ассистента за один вызов"""
     session = await service.get_session(session_id, current_user)
     user_message, assistant_message = await service.send_message(
-        session, payload.content
+        session, payload.content, payload.task_id
     )
     return ChatTurnResponse(
         user_message=ChatMessageResponse.from_message(user_message),

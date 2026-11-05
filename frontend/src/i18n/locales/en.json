@@ -56,6 +56,15 @@
     "closeSessions": "Close chat list",
     "newSession": "New chat",
     "deleteSession": "Delete chat",
+    "deleteConfirm": "Delete chat \"{{title}}\"? This cannot be undone.",
+    "renameSession": "Rename chat",
+    "pinSession": "Pin chat",
+    "unpinSession": "Unpin chat",
+    "sessionTitleLabel": "Chat title",
+    "saveTitle": "Save",
+    "cancel": "Cancel",
+    "pinned": "Pinned",
+    "untitled": "Untitled",
     "noSession": "No chat selected",
     "createFirst": "Create a chat to ask your first question",
     "emptyState": "Ask anything about Python — for example, why your code fails",
@@ -64,6 +73,15 @@
     "send": "Send",
     "copy": "Copy",
     "copied": "Copied",
+    "stop": "Stop",
+    "stopped": "Response stopped",
+    "regenerate": "Regenerate",
+    "feedbackLike": "Helpful answer",
+    "feedbackDislike": "Answer was not helpful",
+    "feedbackComment": "Comment",
+    "feedbackCommentLabel": "What was unclear in the answer?",
+    "feedbackSave": "Save",
+    "feedbackClear": "Clear rating",
     "levelLabel": "Help level",
     "connected": "Streaming connected",
     "disconnected": "Streaming unavailable, replies arrive complete",
@@ -81,6 +99,10 @@
         "semantic": "semantic",
         "ilike": "substring"
       }
+    },
+    "taskContext": {
+      "label": "Task context",
+      "clear": "Clear"
     }
   },
   "code": {
@@ -148,7 +170,8 @@
     "found": "Tasks found: {{count}}",
     "emptyFiltered": "Nothing matches your filters. Try changing the conditions or reset the filters.",
     "recommendedTitle": "Recommended next",
-    "recommendedEmpty": "Nothing to recommend yet — solve an introductory task and we will pick the next one by topic and difficulty."
+    "recommendedEmpty": "Nothing to recommend yet — solve an introductory task and we will pick the next one by topic and difficulty.",
+    "askAssistant": "Ask the assistant"
   },
   "progress": {
     "title": "Progress",
@@ -205,6 +228,13 @@
     "llmTokens": "Tokens",
     "llmFallback": "Fallbacks",
     "llmEmpty": "No calls yet",
+    "qualityTitle": "Assistant answer quality",
+    "qualityTotal": "Ratings",
+    "qualityPositive": "Helpful",
+    "qualityNegative": "Not helpful",
+    "qualityApproval": "Approval rate",
+    "qualityProvider": "Provider",
+    "qualityEmpty": "No ratings yet — students have not rated any answer",
     "generatedAt": "Data as of",
     "usersTitle": "Users",
     "search": "Search",
@@ -402,6 +432,9 @@
     "chatList": "Could not load chat list",
     "chatOpen": "Could not open chat",
     "chatSend": "Could not send the message",
+    "chatUpdate": "Could not update the chat",
+    "chatRegenerate": "Could not regenerate the answer",
+    "chatFeedback": "Could not save the rating",
     "tasksLoad": "Could not load tasks",
     "taskNotFound": "Task not found",
     "progressLoad": "Could not load progress",

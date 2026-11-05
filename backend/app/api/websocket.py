@@ -1,16 +1,24 @@
 """
-WebSocket-эндпоинт чата со стримингом ответа LLM (S4-006, S11-004).
+WebSocket-эндпоинт чата со стримингом ответа LLM (S4-006, S11-004, S43-002).
 
 Протокол (JSON-сообщения):
 
 Клиент → сервер:
-    {"type": "chat", "content": "текст вопроса"}
+    {"type": "chat", "content": "текст вопроса", "task_id": "<uuid>"}
+    {"type": "stop"}
     {"type": "ping"}
+
+`task_id` необязателен (S42-006): условие задачи уходит в LLM отдельным
+системным сообщением, а в историю — только как метаданные вопроса.
+
+`stop` (S43-002) — остановка генерации: сервер прерывает поток и
+фиксирует частичный ответ.
 
 Сервер → клиент:
     {"type": "start"}
     {"type": "token", "content": "дельта"}
     {"type": "done", "content": "полный ответ"}
+    {"type": "stopped", "content": "частичный ответ"}
     {"type": "error", "detail": "текст ошибки"}
     {"type": "pong"}
 
@@ -21,6 +29,7 @@ WebSocket-эндпоинт чата со стримингом ответа LLM (
 реального сокета (см. `tests/test_websocket_stream.py`).
 """
 
+import asyncio
 import json
 from typing import Any, Protocol
 from uuid import UUID
@@ -33,7 +42,7 @@ from app.api.v1.chat import get_embedding_provider, get_llm_provider
 from app.core.security import decode_token
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
-from app.errors import AccessDeniedError, AppError, NotFoundError
+from app.errors import AccessDeniedError, AppError, NotFoundError, ValidationError
 from app.models.chat import ChatSession
 from app.models.user import User
 from app.services.chat_service import ChatService
@@ -43,6 +52,9 @@ from app.services.llm.embeddings import EmbeddingProvider
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["Chat WebSocket"])
+
+#: Сколько ждём завершения стрима при закрытии соединения (S43-002)
+STREAM_DRAIN_TIMEOUT = 10.0
 
 
 class WebSocketLike(Protocol):
@@ -58,6 +70,80 @@ async def _send(ws: WebSocketLike, payload: dict[str, Any]) -> None:
     await ws.send_text(json.dumps(payload, ensure_ascii=False))
 
 
+async def _send_safe(ws: WebSocketLike, payload: dict[str, Any]) -> None:
+    """Отправить сообщение, не падая на закрытом соединении (S43-002)"""
+    try:
+        await _send(ws, payload)
+    except (WebSocketDisconnect, RuntimeError, ConnectionError):
+        logger.info("ws_send_failed_closed")
+
+
+async def _stream_message(
+    ws: WebSocketLike,
+    service: ChatService,
+    session: ChatSession,
+    content: str,
+    task_id: UUID | None,
+    stop_event: asyncio.Event,
+) -> None:
+    """Отдать ответ ассистента дельтами и сохранить его (S43-002).
+
+    Остановка (`stop_event`) прерывает поток на ближайшей дельте; частичный
+    ответ сохраняется с пометкой `stopped` в метаданных.
+    """
+    chunks: list[str] = []
+    stream = service.stream_reply(session, content, task_id, stop_event=stop_event)
+    try:
+        try:
+            async for delta in stream:
+                chunks.append(delta)
+                await _send(ws, {"type": "token", "content": delta})
+        except LLMUnavailableError as exc:
+            logger.warning("llm_stream_failed", error=str(exc))
+            await _send_safe(ws, {"type": "error", "detail": str(exc)})
+            return
+        except AppError as exc:
+            await _send_safe(ws, {"type": "error", "detail": exc.detail})
+            return
+        except (WebSocketDisconnect, RuntimeError, ConnectionError):
+            # Клиент отключился — частичный ответ всё равно фиксируем.
+            stop_event.set()
+            logger.info("ws_client_disconnected_mid_stream", session_id=str(session.id))
+    finally:
+        # Закрываем генератор: соединение с провайдером не должна висеть.
+        await stream.aclose()
+
+    answer = "".join(chunks).strip()
+    stopped = stop_event.is_set()
+    message_id: str | None = None
+    if answer:
+        message = await service.save_reply(session, answer, stopped=stopped)
+        # Клиенту нужен настоящий id сообщения: локальный не подойдёт для
+        # оценки ответа (S43-003).
+        message_id = str(message.id)
+    if stopped:
+        await _send_safe(
+            ws,
+            {
+                "type": "stopped",
+                "content": answer,
+                "warnings": list(service.last_warnings),
+                "message_id": message_id,
+            },
+        )
+    else:
+        await _send_safe(
+            ws,
+            {
+                "type": "done",
+                "content": answer,
+                # Нарушения политики уровня (S12-005) — клиент показывает плашку
+                "warnings": list(service.last_warnings),
+                "message_id": message_id,
+            },
+        )
+
+
 async def serve_chat_socket(
     ws: WebSocketLike,
     service: ChatService,
@@ -65,50 +151,76 @@ async def serve_chat_socket(
 ) -> None:
     """Цикл обработки сообщений чата.
 
+    Генерация идёт в отдельной задаче: только так можно принять команду
+    `stop` во время стриминга (S43-002).
+
     Бросает `WebSocketDisconnect`, когда клиент закрыл соединение.
     """
-    while True:
-        raw = await ws.receive_text()
-        try:
-            message: dict[str, Any] = json.loads(raw)
-        except json.JSONDecodeError:
-            await _send(ws, {"type": "error", "detail": "Ожидается JSON"})
-            continue
+    stop_event = asyncio.Event()
+    stream_task: asyncio.Task[None] | None = None
 
-        message_type = message.get("type")
-        if message_type == "ping":
-            await _send(ws, {"type": "pong"})
-            continue
+    try:
+        while True:
+            raw = await ws.receive_text()
+            try:
+                message: dict[str, Any] = json.loads(raw)
+            except json.JSONDecodeError:
+                await _send(ws, {"type": "error", "detail": "Ожидается JSON"})
+                continue
 
-        if message_type != "chat":
-            await _send(ws, {"type": "error", "detail": "Неизвестный тип сообщения"})
-            continue
+            message_type = message.get("type")
+            if message_type == "ping":
+                await _send(ws, {"type": "pong"})
+                continue
 
-        content = str(message.get("content", ""))
-        await _send(ws, {"type": "start"})
+            if message_type == "stop":
+                # Остановка текущей генерации (S43-002)
+                stop_event.set()
+                continue
 
-        chunks: list[str] = []
-        try:
-            async for delta in service.stream_reply(session, content):
-                chunks.append(delta)
-                await _send(ws, {"type": "token", "content": delta})
-        except LLMUnavailableError as exc:
-            logger.warning("llm_stream_failed", error=str(exc))
-            await _send(ws, {"type": "error", "detail": str(exc)})
-            continue
-        except AppError as exc:
-            await _send(ws, {"type": "error", "detail": exc.detail})
-            continue
+            if message_type != "chat":
+                await _send(ws, {"type": "error", "detail": "Неизвестный тип сообщения"})
+                continue
 
-        await _send(
-            ws,
-            {
-                "type": "done",
-                "content": "".join(chunks),
-                # Нарушения политики уровня (S12-005) — клиент показывает плашку
-                "warnings": list(service.last_warnings),
-            },
-        )
+            if stream_task is not None and not stream_task.done():
+                await _send(
+                    ws, {"type": "error", "detail": "Генерация уже выполняется"}
+                )
+                continue
+
+            content = str(message.get("content", ""))
+            try:
+                task_id = _parse_task_id(message.get("task_id"))
+            except ValidationError as exc:
+                await _send(ws, {"type": "error", "detail": exc.detail})
+                continue
+
+            await _send(ws, {"type": "start"})
+            stop_event = asyncio.Event()
+            stream_task = asyncio.create_task(
+                _stream_message(ws, service, session, content, task_id, stop_event)
+            )
+    finally:
+        # Соединение закрыто: дожидаемся стрима, чтобы ответ сохранился.
+        if stream_task is not None and not stream_task.done():
+            try:
+                await asyncio.wait_for(stream_task, timeout=STREAM_DRAIN_TIMEOUT)
+            except TimeoutError:
+                stream_task.cancel()
+            except Exception:  # noqa: BLE001 — сокет уже закрыт, детали не важны
+                logger.info("ws_stream_drain_failed")
+
+
+def _parse_task_id(raw: object) -> UUID | None:
+    """Разобрать необязательный `task_id` из сообщения сокета (S42-006)."""
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise ValidationError("Некорректный идентификатор задачи")
+    try:
+        return UUID(raw)
+    except ValueError as exc:
+        raise ValidationError("Некорректный идентификатор задачи") from exc
 
 
 def _extract_user_id(token: str) -> UUID | None:

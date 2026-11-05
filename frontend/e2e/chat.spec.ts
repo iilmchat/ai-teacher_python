@@ -18,9 +18,12 @@ test.describe('Чат', () => {
     await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
       timeout: 30_000,
     });
-    // Вопрос ученика есть в переписке (в ответе echo он тоже цитируется)
+    // Вопрос ученика есть в переписке (в ответе echo он тоже цитируется).
+    // Заголовок сессии теперь тоже содержит этот текст, поэтому ищем в списке.
     await expect(
-      page.getByText('Как работает цикл for?', { exact: true }),
+      page
+        .getByTestId('message-list')
+        .getByText('Как работает цикл for?', { exact: true }),
     ).toBeVisible();
   });
 
@@ -50,6 +53,124 @@ test.describe('Чат', () => {
     // Переход к найденной сессии
     await page.locator('section[aria-label="Поиск по чату"] li button').first().click();
     await expect(page.getByLabel('Сообщение')).toBeVisible();
+  });
+
+  test('«Спросить ассистента» переносит контекст задачи в чат', async ({
+    page,
+  }) => {
+    await registerStudent(page);
+    await page.goto('/tasks');
+
+    const card = page.getByRole('listitem').filter({ hasText: 'Сумма двух чисел' });
+    await card.getByRole('link', { name: 'Открыть' }).click();
+
+    await page
+      .getByRole('link', { name: 'Спросить ассистента' })
+      .first()
+      .click();
+
+    // Deep-link: контекст задачи виден в адресе и в плашке чата
+    await expect(page).toHaveURL(/\/chat\?task=/);
+    await expect(page.getByText(/Контекст задачи/)).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(page.getByText('Сумма двух чисел')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('С чего начать?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Контекст можно снять — плашка исчезает
+    await page.getByRole('button', { name: 'Убрать' }).click();
+    await expect(page.getByText(/Контекст задачи/)).not.toBeVisible();
+  });
+
+  test('переименовывает и закрепляет чат', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Почему цикл for не завершается?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Авто-заголовок из первого сообщения (S43-001)
+    await expect(
+      page.getByRole('heading', { name: 'Почему цикл for не завершается?' }),
+    ).toBeVisible();
+
+    // Переименование
+    await page.getByRole('button', { name: /Переименовать чат/ }).first().click();
+    const titleInput = page.getByLabel('Название чата');
+    await titleInput.fill('Мой разбор цикла');
+    await titleInput.press('Enter');
+    await expect(
+      page.getByRole('heading', { name: 'Мой разбор цикла' }),
+    ).toBeVisible();
+
+    // Закрепление
+    await page
+      .getByRole('button', { name: 'Закрепить чат: Мой разбор цикла' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Открепить чат: Мой разбор цикла' }),
+    ).toBeVisible();
+  });
+
+  test('перегенерирует ответ ассистента', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Как работает цикл for?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // У ответа ассистента есть кнопка «Повторить» (S43-002)
+    const regenerate = page.getByRole('button', { name: 'Повторить' }).first();
+    await expect(regenerate).toBeVisible();
+
+    await regenerate.click();
+
+    // Новый ответ занимает место старого — диалог не разрастается
+    await expect(page.getByRole('button', { name: 'Повторить' })).toHaveCount(1);
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible();
+  });
+
+  test('оценивает ответ ассистента', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Как работает цикл for?');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Давай разберёмся вместе/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Оценка ответа (S43-003): кнопки под ответом ассистента
+    const like = page.getByRole('button', { name: 'Ответ помог' }).first();
+    await expect(like).toBeVisible();
+    await like.click();
+
+    await expect(like).toHaveAttribute('aria-pressed', 'true');
+    // После оценки появляется возможность оставить комментарий
+    await expect(page.getByRole('button', { name: 'Комментарий' }).first()).toBeVisible();
   });
 
   test('уровень выбирается при создании сессии', async ({ page }) => {

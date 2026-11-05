@@ -18,6 +18,7 @@ export function useChatSession(sessionId: string | null) {
   const failStream = useChatStore((state) => state.failStream);
   const addUserMessage = useChatStore((state) => state.addUserMessage);
   const sendViaRest = useChatStore((state) => state.sendViaRest);
+  const taskId = useChatStore((state) => state.taskContext?.id ?? null);
 
   useEffect(() => {
     if (!sessionId) {
@@ -29,7 +30,10 @@ export function useChatSession(sessionId: string | null) {
       onClose: () => setConnected(false),
       onStart: () => startAssistantDraft(),
       onToken: (delta) => appendToken(delta),
-      onDone: (full, warnings) => finishStream(full, warnings),
+      onDone: (full, warnings, messageId) => finishStream(full, warnings, false, messageId),
+      // Остановка генерации (S43-002): сервер прислал частичный ответ.
+      onStopped: (partial, warnings, messageId) =>
+        finishStream(partial, warnings, true, messageId),
       onError: (detail) => failStream(detail),
     });
 
@@ -52,16 +56,22 @@ export function useChatSession(sessionId: string | null) {
       addUserMessage(text);
 
       const socket = socketRef.current;
-      if (socket?.send(text)) {
+      if (socket?.send(text, taskId)) {
         startAssistantDraft();
         return;
       }
 
       // WebSocket недоступен — обычный REST-запрос без стриминга
-      void sendViaRest(text);
+      void sendViaRest(text, taskId);
     },
-    [addUserMessage, sendViaRest, startAssistantDraft],
+    [addUserMessage, sendViaRest, startAssistantDraft, taskId],
   );
 
-  return { send, connected };
+  const stop = useCallback(() => {
+    // Остановка генерации (S43-002): сервер прервёт поток и пришлёт
+    // частичный ответ событием `stopped`.
+    socketRef.current?.stop();
+  }, []);
+
+  return { send, stop, connected };
 }

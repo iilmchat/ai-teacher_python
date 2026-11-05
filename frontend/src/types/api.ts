@@ -39,6 +39,10 @@ export interface ChatSession {
   id: string;
   user_id: string;
   level: string;
+  /** Заголовок сессии (S43-001); null — ещё нет первого вопроса */
+  title: string | null;
+  /** Закреплённая сессия в списке выше остальных (S43-001) */
+  pinned: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +64,46 @@ export interface ChatMessage {
 
 export interface ChatSessionWithMessages extends ChatSession {
   messages: ChatMessage[];
+}
+
+/** Оценка ответа ассистента учеником (S43-003) */
+export interface MessageFeedback {
+  message_id: string;
+  /** 1 — ответ помог, −1 — не помог */
+  value: 1 | -1;
+  comment: string | null;
+  created_at: string;
+}
+
+/** Агрегат оценок по провайдеру или модели (S43-003) */
+export interface QualityBreakdown {
+  name: string;
+  total: number;
+  positive: number;
+  negative: number;
+  approval_rate: number;
+}
+
+/** Негативная оценка с текстом ответа — вход для LLM-as-judge (S43-003) */
+export interface QualityNegativeItem {
+  message_id: string;
+  comment: string | null;
+  content: string;
+  provider: string;
+  model: string;
+  created_at: string;
+}
+
+/** Сводка качества ответов для администратора (S43-003) */
+export interface AdminQualityResponse {
+  total: number;
+  positive: number;
+  negative: number;
+  approval_rate: number;
+  by_provider: QualityBreakdown[];
+  by_model: QualityBreakdown[];
+  negative_samples: QualityNegativeItem[];
+  generated_at: string;
 }
 
 export interface ChatTurn {

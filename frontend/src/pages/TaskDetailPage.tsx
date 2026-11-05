@@ -16,7 +16,27 @@ import type {
   SubmitResponse,
 } from '@/types/api';
 
-function ResultsCard({ result }: { result: SubmitResponse }) {
+/** Кнопка перехода в чат с контекстом задачи (S42-006) */
+function AskAssistantLink({ taskId }: { taskId: string }) {
+  const { t } = useTranslation();
+
+  return (
+    <Link
+      to={`/chat?task=${taskId}`}
+      className="inline-flex items-center rounded-lg border border-indigo-200 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
+    >
+      {t('tasks.askAssistant')}
+    </Link>
+  );
+}
+
+function ResultsCard({
+  result,
+  taskId,
+}: {
+  result: SubmitResponse;
+  taskId: string;
+}) {
   const { t } = useTranslation();
 
   return (
@@ -55,6 +75,10 @@ function ResultsCard({ result }: { result: SubmitResponse }) {
           </li>
         ))}
       </ul>
+
+      <div className="mt-3">
+        <AskAssistantLink taskId={taskId} />
+      </div>
     </Card>
   );
 }
@@ -291,7 +315,7 @@ export function TaskDetailPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-semibold text-slate-900">{detail.title}</h1>
         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
           {t(`tasks.difficulty.${detail.difficulty}`)}
@@ -304,6 +328,9 @@ export function TaskDetailPage() {
           {t('tasks.attempts')}: {detail.attempts} ·{' '}
           {t(`tasks.status.${detail.status}`)}
         </p>
+        <div className="mt-3">
+          <AskAssistantLink taskId={detail.id} />
+        </div>
       </Card>
 
       {detail.hints.length > 0 && (
@@ -380,8 +407,8 @@ export function TaskDetailPage() {
         onRestore={(restored) => setCode(restored)}
       />
 
-      {checkResult && <ResultsCard result={checkResult} />}
-      {submission && <ResultsCard result={submission} />}
+      {checkResult && <ResultsCard result={checkResult} taskId={detail.id} />}
+      {submission && <ResultsCard result={submission} taskId={detail.id} />}
     </div>
   );
 }
