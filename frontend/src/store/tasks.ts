@@ -24,9 +24,12 @@ interface TasksState {
   detail: TaskDetail | null;
   progress: ProgressSummary | null;
   submission: SubmitResponse | null;
+  /** Результат пробной проверки (S42-001): попытка не засчитывается */
+  checkResult: SubmitResponse | null;
   filters: TaskFilters;
   loading: boolean;
   submitting: boolean;
+  checking: boolean;
   error: string | null;
 
   loadTasks: () => Promise<void>;
@@ -34,6 +37,8 @@ interface TasksState {
   loadProgress: () => Promise<void>;
   setFilter: (filters: Partial<TaskFilters>) => void;
   submit: (taskId: string, code: string) => Promise<void>;
+  /** Пробная проверка: результат показывается, но попытка не засчитывается */
+  check: (taskId: string, code: string) => Promise<void>;
   resetSubmission: () => void;
 }
 
@@ -54,9 +59,11 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   detail: null,
   progress: null,
   submission: null,
+  checkResult: null,
   filters: { difficulty: null, category: null },
   loading: false,
   submitting: false,
+  checking: false,
   error: null,
 
   async loadTasks() {
@@ -72,7 +79,13 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
 
   async loadDetail(taskId) {
-    set({ loading: true, error: null, detail: null, submission: null });
+    set({
+      loading: true,
+      error: null,
+      detail: null,
+      submission: null,
+      checkResult: null,
+    });
     try {
       const detail = await api.get<TaskDetail>(`/tasks/${taskId}`);
       set({ detail, loading: false });
@@ -114,6 +127,19 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       void get().loadProgress();
     } catch {
       set({ submitting: false, error: i18n.t('errors.submit') });
+    }
+  },
+
+  async check(taskId, code) {
+    set({ checking: true, error: null, checkResult: null });
+    try {
+      const checkResult = await api.post<SubmitResponse>(`/tasks/${taskId}/check`, {
+        code,
+      });
+      // Пробная проверка не меняет прогресс: ни attempts, ни status.
+      set({ checking: false, checkResult });
+    } catch {
+      set({ checking: false, error: i18n.t('errors.check') });
     }
   },
 

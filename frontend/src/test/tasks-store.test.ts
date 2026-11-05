@@ -46,15 +46,28 @@ const SUBMIT: SubmitResponse = {
   message: 'Задача решена!',
 };
 
+const CHECK: SubmitResponse = {
+  passed: false,
+  passed_count: 0,
+  total_count: 2,
+  attempts: 0,
+  status: 'not_started',
+  results: [],
+  message: 'Пройдено 0 из 2 тестов. Пробная проверка — попытка не засчитывается.',
+  practice: true,
+};
+
 function resetStore(): void {
   useTasksStore.setState({
     tasks: [],
     detail: null,
     progress: null,
     submission: null,
+    checkResult: null,
     filters: { difficulty: null, category: null },
     loading: false,
     submitting: false,
+    checking: false,
     error: null,
   });
 }
@@ -138,5 +151,40 @@ describe('tasks store', () => {
     useTasksStore.getState().resetSubmission();
 
     expect(useTasksStore.getState().submission).toBeNull();
+  });
+
+  it('пробная проверка не меняет прогресс задачи', async () => {
+    useTasksStore.setState({ detail: DETAIL });
+    const post = vi.spyOn(api, 'post').mockResolvedValue(CHECK);
+
+    await useTasksStore.getState().check(TASK.id, 'print(5)');
+
+    const state = useTasksStore.getState();
+    expect(post).toHaveBeenCalledWith(`/tasks/${TASK.id}/check`, { code: 'print(5)' });
+    expect(state.checkResult?.practice).toBe(true);
+    // Попытки и статус в карточке задачи не меняются
+    expect(state.detail?.attempts).toBe(0);
+    expect(state.detail?.status).toBe('not_started');
+    expect(state.checking).toBe(false);
+  });
+
+  it('фиксирует ошибку пробной проверки', async () => {
+    useTasksStore.setState({ detail: DETAIL });
+    vi.spyOn(api, 'post').mockRejectedValue(new Error('500'));
+
+    await useTasksStore.getState().check(TASK.id, 'print(5)');
+
+    expect(useTasksStore.getState().error).toBeTruthy();
+    expect(useTasksStore.getState().checkResult).toBeNull();
+    expect(useTasksStore.getState().checking).toBe(false);
+  });
+
+  it('очищает результат пробной проверки при загрузке задачи', async () => {
+    useTasksStore.setState({ checkResult: CHECK });
+    vi.spyOn(api, 'get').mockResolvedValue(DETAIL);
+
+    await useTasksStore.getState().loadDetail(TASK.id);
+
+    expect(useTasksStore.getState().checkResult).toBeNull();
   });
 });

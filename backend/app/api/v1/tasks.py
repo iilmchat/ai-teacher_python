@@ -8,11 +8,20 @@ Task API: список задач, проверка решений, прогре
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.executor import SandboxedExecutor
+from app.core.rate_limiter import CHECK_LIMIT, WINDOW_SECONDS, is_user_limited
 from app.core.security import get_current_active_user, require_role
 from app.db.database import get_db
 from app.errors import ValidationError
@@ -20,6 +29,7 @@ from app.models.task import Task, TaskDifficulty
 from app.models.user import User, UserRole
 from app.schemas.task import (
     CategoriesResponse,
+    CheckRequest,
     HintResponse,
     ProgressSummary,
     SubmitRequest,
@@ -291,6 +301,29 @@ async def submit_solution(
 ) -> SubmitResponse:
     """Проверить решение по тест-кейсам"""
     return await service.submit_solution(task_id, current_user, payload.code)
+
+
+@router.post("/{task_id}/check", response_model=SubmitResponse)
+async def check_solution(
+    task_id: UUID,
+    payload: CheckRequest,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> SubmitResponse:
+    """Пробная проверка решения (S42-001).
+
+    Отличается от `submit` тем, что попытка не засчитывается: счётчик
+    попыток и статус задачи не меняются, достижения не начисляются.
+    Песочница запускается столько же раз, поэтому проверка ограничена
+    по частоте (429 при превышении).
+    """
+    if await is_user_limited("task_check", str(current_user.id), CHECK_LIMIT):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много пробных проверок. Попробуйте через минуту.",
+            headers={"Retry-After": str(WINDOW_SECONDS)},
+        )
+    return await service.check_solution(task_id, current_user, payload.code)
 
 
 # --- Управление задачами (преподаватель/админ) --------------------------

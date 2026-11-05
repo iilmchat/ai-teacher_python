@@ -37,6 +37,11 @@ WINDOW_SECONDS = 60
 
 PREFIX = "rate_limit"
 
+#: Лимит пробных проверок задачи на пользователя в минуту (S42-001).
+#: Проверка запускает песочницу, поэтому она ограничена отдельно от
+#: общего лимита по IP: один ученик не должен выжигать ресурсы сервера.
+CHECK_LIMIT = 20
+
 
 class RateLimiter:
     """Счётчик запросов в Redis"""
@@ -66,6 +71,32 @@ class RateLimiter:
         if current is None:
             return limit
         return max(0, limit - int(current))
+
+
+async def is_user_limited(
+    scope: str,
+    user_id: str,
+    limit: int,
+    period: int = WINDOW_SECONDS,
+) -> bool:
+    """Лимит по конкретному пользователю (не по IP).
+
+    Нужен там, где важна нагрузка одного пользователя, а не всего адреса:
+    например, пробные проверки задачи запускают песочницу (S42-001).
+    Fail-open: если Redis недоступен, запрос проходит — защита не должна
+    ронять API.
+    """
+    if not settings.rate_limit_enabled:
+        return False
+
+    from app.db.redis import get_redis
+
+    try:
+        limiter = RateLimiter(get_redis())
+        return await limiter.is_limited(f"{scope}:{user_id}", limit=limit, period=period)
+    except Exception as exc:  # noqa: BLE001 — fail-open при сбое Redis
+        logger.warning("rate_limit_user_check_failed", scope=scope, error=str(exc))
+        return False
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):

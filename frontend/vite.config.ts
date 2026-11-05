@@ -28,10 +28,19 @@ export default defineConfig({
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
-        // S19-002: vendor отдельно, entry остаётся маленьким
+        // S19-002: vendor отдельно, entry остаётся маленьким.
+        // S42-001: сторы вынесены отдельным чанком — иначе рост состояния
+        // (черновики, история попыток) двигает entry к лимиту 80 kB gzip,
+        // зафиксированному в docs/ARCHITECTURE.md.
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
           i18n: ['i18next', 'react-i18next'],
+          stores: [
+            './src/store/auth.ts',
+            './src/store/chat.ts',
+            './src/store/tasks.ts',
+            './src/store/theme.ts',
+          ],
         },
       },
     },

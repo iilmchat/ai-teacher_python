@@ -117,10 +117,18 @@ class TaskAdminDetail(TaskDetail):
     is_active: bool
 
 
-class SubmitRequest(BaseModel):
-    """Отправка решения на проверку"""
+class SolutionCode(BaseModel):
+    """Код решения (общая часть для отправки и пробной проверки)"""
 
     code: str = Field(..., min_length=1, max_length=20_000)
+
+
+class SubmitRequest(SolutionCode):
+    """Отправка решения на проверку (попытка засчитывается)"""
+
+
+class CheckRequest(SolutionCode):
+    """Пробная проверка решения (S42-001): попытка не засчитывается"""
 
 
 class TestCaseResult(BaseModel):
@@ -145,6 +153,8 @@ class SubmitResponse(BaseModel):
     status: TaskStatus
     results: list[TestCaseResult]
     message: str
+    #: `True` для пробной проверки (S42-001): попытка не засчитывается
+    practice: bool = False
 
 
 class ProgressItem(BaseModel):

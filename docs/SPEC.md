@@ -179,6 +179,7 @@ violations, memory_limit_enforced, output_truncated}`.
 | GET | `/tasks/{id}` | — | `TaskDetail` |
 | GET | `/tasks/{id}/hints/{index}` | — | `{index, hint, total}` |
 | POST | `/tasks/{id}/submit` | `{code}` | `SubmitResponse` |
+| POST | `/tasks/{id}/check` | `{code}` | `SubmitResponse` (S42-001, `practice: true`) |
 | POST | `/tasks` | `TaskCreate` | 201 `TaskAdminDetail` (teacher/admin) |
 | PATCH | `/tasks/{id}` | `TaskUpdate` | `TaskAdminDetail` (teacher/admin) |
 | DELETE | `/tasks/{id}` | — | 204 (teacher/admin) |
@@ -192,7 +193,17 @@ violations, memory_limit_enforced, output_truncated}`.
 | GET | `/tasks/{id}/versions` | — | `{items[]}` (teacher/admin) |
 | POST | `/tasks/{id}/versions/{v}/restore` | — | `TaskAdminDetail` (teacher/admin) |
 
-`SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message}`.
+`SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message, practice}`.
+`practice` — `false` для `submit`, `true` для `check`.
+
+`POST /tasks/{id}/check` (S42-001) — пробная проверка: тест-кейсы
+выполняются в песочнице, но попытка **не засчитывается** — счётчик `attempts`
+и статус задачи не меняются, запись прогресса не создаётся, достижения не
+начисляются. Разбор по кейсам возвращается тот же, что и у `submit`
+(в ответе `attempts`/`status` — текущие значения прогресса ученика). Лимит:
+не более 20 пробных проверок в минуту на пользователя, при превышении —
+429 с `Retry-After: 60` (fail-open: при недоступном Redis проверка
+проходит).
 
 Пагинация каталога (S19-004) — additive: `skip` (default `0`), `limit`
 (default `100`); клиенты без параметров получают прежний ответ. Кэш списка

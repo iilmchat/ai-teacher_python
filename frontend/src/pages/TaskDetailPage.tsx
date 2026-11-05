@@ -8,17 +8,64 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { useTasksStore } from '@/store/tasks';
+import type { SubmitResponse } from '@/types/api';
+
+function ResultsCard({ result }: { result: SubmitResponse }) {
+  const { t } = useTranslation();
+
+  return (
+    <Card title={result.practice ? t('tasks.checkResults') : t('tasks.results')}>
+      <Alert tone={result.passed ? 'success' : 'warning'}>{result.message}</Alert>
+      <p className="mt-2 text-sm text-slate-600">
+        {t('tasks.passedOf', {
+          passed: result.passed_count,
+          total: result.total_count,
+        })}
+      </p>
+
+      <ul className="mt-3 flex flex-col gap-2">
+        {result.results.map((item) => (
+          <li
+            key={item.index}
+            className={`rounded-lg border px-3 py-2 text-xs ${
+              item.passed
+                ? 'border-emerald-200 bg-emerald-50'
+                : 'border-rose-200 bg-rose-50'
+            }`}
+          >
+            <p className="font-medium">
+              {t('tasks.case')} {item.index}:{' '}
+              {item.passed ? t('tasks.casePassed') : t('tasks.caseFailed')}
+              {item.description ? ` — ${item.description}` : ''}
+            </p>
+            {!item.passed && (
+              <div className="mt-1 grid gap-1 font-mono">
+                <span>in: {JSON.stringify(item.input)}</span>
+                <span>expected: {JSON.stringify(item.expected_output)}</span>
+                <span>actual: {JSON.stringify(item.actual_output)}</span>
+                {item.error && <span className="text-rose-700">{item.error}</span>}
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
 
 export function TaskDetailPage() {
   const { t } = useTranslation();
   const { taskId = '' } = useParams<{ taskId: string }>();
   const detail = useTasksStore((state) => state.detail);
   const submission = useTasksStore((state) => state.submission);
+  const checkResult = useTasksStore((state) => state.checkResult);
   const loading = useTasksStore((state) => state.loading);
   const submitting = useTasksStore((state) => state.submitting);
+  const checking = useTasksStore((state) => state.checking);
   const error = useTasksStore((state) => state.error);
   const loadDetail = useTasksStore((state) => state.loadDetail);
   const submit = useTasksStore((state) => state.submit);
+  const check = useTasksStore((state) => state.check);
 
   const [code, setCode] = useState('');
   const [hintsShown, setHintsShown] = useState(0);
@@ -91,7 +138,7 @@ export function TaskDetailPage() {
 
       <Card title={t('tasks.solution')}>
         <CodeEditor value={code} onChange={setCode} height="280px" />
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
             onClick={() => void submit(detail.id, code)}
             loading={submitting}
@@ -99,54 +146,25 @@ export function TaskDetailPage() {
           >
             {t('tasks.submit')}
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => void check(detail.id, code)}
+            loading={checking}
+            disabled={!code.trim()}
+          >
+            {t('tasks.check')}
+          </Button>
           <Link to="/tasks" className="text-sm text-slate-600 hover:text-indigo-700">
             {t('tasks.backToList')}
           </Link>
         </div>
+        <p className="mt-2 text-xs text-slate-500">{t('tasks.checkHint')}</p>
       </Card>
 
       {error && <Alert tone="error">{error}</Alert>}
 
-      {submission && (
-        <Card title={t('tasks.results')}>
-          <Alert tone={submission.passed ? 'success' : 'warning'}>
-            {submission.message}
-          </Alert>
-          <p className="mt-2 text-sm text-slate-600">
-            {t('tasks.passedOf', {
-              passed: submission.passed_count,
-              total: submission.total_count,
-            })}
-          </p>
-
-          <ul className="mt-3 flex flex-col gap-2">
-            {submission.results.map((result) => (
-              <li
-                key={result.index}
-                className={`rounded-lg border px-3 py-2 text-xs ${
-                  result.passed
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-rose-200 bg-rose-50'
-                }`}
-              >
-                <p className="font-medium">
-                  {t('tasks.case')} {result.index}:{' '}
-                  {result.passed ? t('tasks.casePassed') : t('tasks.caseFailed')}
-                  {result.description ? ` — ${result.description}` : ''}
-                </p>
-                {!result.passed && (
-                  <div className="mt-1 grid gap-1 font-mono">
-                    <span>in: {JSON.stringify(result.input)}</span>
-                    <span>expected: {JSON.stringify(result.expected_output)}</span>
-                    <span>actual: {JSON.stringify(result.actual_output)}</span>
-                    {result.error && <span className="text-rose-700">{result.error}</span>}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+      {checkResult && <ResultsCard result={checkResult} />}
+      {submission && <ResultsCard result={submission} />}
     </div>
   );
 }

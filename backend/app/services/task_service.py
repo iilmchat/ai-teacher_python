@@ -148,10 +148,7 @@ class TaskService:
     ) -> SubmitResponse:
         """Проверить решение, обновить попытки и статус"""
         task = await self._get_task_or_404(task_id)
-        if not task.test_cases:
-            raise ValidationError("У задачи нет тест-кейсов для проверки")
-
-        outcome = await run_test_cases(self.executor, code, list(task.test_cases))
+        outcome = await self._run_cases(task, code)
 
         record = await self.progress.get_by_user_and_task(user.id, task.id)
         if record is None:
@@ -190,6 +187,53 @@ class TaskService:
                     "achievement_evaluation_failed", user_id=str(user.id)
                 )
 
+        return SubmitResponse(
+            passed=outcome.passed,
+            passed_count=outcome.passed_count,
+            total_count=outcome.total_count,
+            attempts=record.attempts,
+            status=record.status,
+            results=self._to_results(outcome),
+            message=self._build_message(outcome),
+            practice=False,
+        )
+
+    async def check_solution(
+        self, task_id: UUID, user: User, code: str
+    ) -> SubmitResponse:
+        """Пробная проверка (S42-001): попытка не засчитывается.
+
+        Отличается от `submit_solution` только учётом прогресса: счётчик
+        попыток и статус задачи не меняются, достижения не начисляются.
+        Результат тот же — ученик видит тот же разбор по тест-кейсам.
+        """
+        task = await self._get_task_or_404(task_id)
+        outcome = await self._run_cases(task, code)
+
+        record = await self.progress.get_by_user_and_task(user.id, task.id)
+        attempts = record.attempts if record else 0
+        status = record.status if record else TaskStatus.NOT_STARTED
+
+        return SubmitResponse(
+            passed=outcome.passed,
+            passed_count=outcome.passed_count,
+            total_count=outcome.total_count,
+            attempts=attempts,
+            status=status,
+            results=self._to_results(outcome),
+            message=self._build_message(outcome, practice=True),
+            practice=True,
+        )
+
+    async def _run_cases(self, task: Task, code: str) -> CaseRunOutcome:
+        """Прогнать код по тест-кейсам задачи"""
+        if not task.test_cases:
+            raise ValidationError("У задачи нет тест-кейсов для проверки")
+        return await run_test_cases(self.executor, code, list(task.test_cases))
+
+    @staticmethod
+    def _build_message(outcome: CaseRunOutcome, *, practice: bool = False) -> str:
+        """Человекочитаемый итог проверки"""
         if outcome.passed:
             message = (
                 "Задача решена! Все тесты пройдены "
@@ -202,16 +246,9 @@ class TaskService:
                 f"Пройдено {outcome.passed_count} из {outcome.total_count} тестов. "
                 "Посмотрите, на каком вводе расходится вывод."
             )
-
-        return SubmitResponse(
-            passed=outcome.passed,
-            passed_count=outcome.passed_count,
-            total_count=outcome.total_count,
-            attempts=record.attempts,
-            status=record.status,
-            results=self._to_results(outcome),
-            message=message,
-        )
+        if practice:
+            return f"{message} Пробная проверка — попытка не засчитывается."
+        return message
 
     # --- Прогресс -------------------------------------------------------
 

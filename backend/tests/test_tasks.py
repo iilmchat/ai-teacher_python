@@ -7,6 +7,7 @@
 
 from collections.abc import Iterator
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -351,6 +352,164 @@ async def test_submit_requires_auth(
     )
 
     assert response.status_code in (401, 403)
+
+
+# --- Пробная проверка без траты попытки (S42-001) -------------------------
+
+
+async def test_check_does_not_count_attempt(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Пробная проверка не увеличивает счётчик попыток и не меняет статус"""
+    from app.api.v1.tasks import get_executor
+
+    fake = CaseAwareExecutor({"2\n3\n": "5\n", "-5\n5\n": "0\n"}, correct=False)
+    app.dependency_overrides[get_executor] = lambda: fake
+    try:
+        task = await _create_task(client, db_session)
+        token = await _register_and_login(client, "checker1")
+
+        response = await client.post(
+            f"{TASKS_URL}/{task['id']}/check",
+            json={"code": "print('неверно')"},
+            headers=_auth(token),
+        )
+    finally:
+        app.dependency_overrides.pop(get_executor, None)
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["practice"] is True
+    assert data["passed"] is False
+    assert data["attempts"] == 0
+    assert data["status"] == "not_started"
+
+    progress = await client.get(f"{TASKS_URL}/progress", headers=_auth(token))
+    item = next(
+        entry
+        for entry in progress.json()["items"]
+        if entry["task_id"] == task["id"]
+    )
+    assert item["attempts"] == 0
+    assert item["status"] == "not_started"
+
+
+async def test_check_does_not_create_progress_record(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не создаёт запись прогресса (иначе задача «начата»)"""
+    from app.db.repositories.task import ProgressRepository
+    from app.db.repositories.user import UserRepository
+
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker2")
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    user = await UserRepository(db_session).get_by_username("checker2")
+    assert user is not None
+    record = await ProgressRepository(db_session).get_by_user_and_task(
+        user.id, task["id"]
+    )
+    assert record is None
+
+
+async def test_check_keeps_existing_attempts(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка не меняет уже набранные попытки"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker3")
+
+    for _ in range(2):
+        await client.post(
+            f"{TASKS_URL}/{task['id']}/submit",
+            json={"code": "print(1)"},
+            headers=_auth(token),
+        )
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["attempts"] == 2
+
+
+async def test_check_result_matches_submit(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Результат пробы совпадает с результатом отправки того же кода"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker4")
+    code = "a = int(input())\nb = int(input())\nprint(a + b)"
+
+    checked = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": code}, headers=_auth(token)
+    )
+    submitted = await client.post(
+        f"{TASKS_URL}/{task['id']}/submit", json={"code": code}, headers=_auth(token)
+    )
+
+    assert checked.status_code == 200
+    assert submitted.status_code == 200
+    checked_data = checked.json()
+    submitted_data = submitted.json()
+
+    assert checked_data["passed"] == submitted_data["passed"]
+    assert checked_data["passed_count"] == submitted_data["passed_count"]
+    assert checked_data["total_count"] == submitted_data["total_count"]
+    assert checked_data["results"] == submitted_data["results"]
+    assert checked_data["practice"] is True
+    assert submitted_data["practice"] is False
+
+
+async def test_check_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена пробная проверка недоступна"""
+    task = await _create_task(client, db_session)
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": "print(1)"}
+    )
+
+    assert response.status_code in (401, 403)
+
+
+async def test_check_unknown_task_returns_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пробная проверка несуществующей задачи — 404"""
+    token = await _register_and_login(client, "checker5")
+
+    response = await client.post(
+        f"{TASKS_URL}/{uuid4()}/check",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_check_rejects_empty_code(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пустой код отклоняется валидацией"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "checker6")
+
+    response = await client.post(
+        f"{TASKS_URL}/{task['id']}/check", json={"code": ""}, headers=_auth(token)
+    )
+
+    assert response.status_code == 422
 
 
 async def test_teacher_updates_and_deletes_task(

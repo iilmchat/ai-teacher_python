@@ -127,6 +127,8 @@ export interface SubmitResponse {
   status: TaskStatus;
   results: TestCaseResult[];
   message: string;
+  /** `true` для пробной проверки: попытка не засчитывается (S42-001) */
+  practice?: boolean;
 }
 
 export interface ProgressItem {

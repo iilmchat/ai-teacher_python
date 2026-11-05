@@ -119,12 +119,15 @@
     "showHint": "Show hint",
     "allHintsShown": "All hints are shown",
     "solution": "Your solution",
-    "submit": "Check solution",
+    "submit": "Submit solution",
     "results": "Check results",
     "passedOf": "Tests passed: {{passed}} of {{total}}",
     "case": "Test",
     "casePassed": "passed",
-    "caseFailed": "failed"
+    "caseFailed": "failed",
+    "check": "Trial run",
+    "checkHint": "A trial run shows the test breakdown but does not count as an attempt.",
+    "checkResults": "Trial run results"
   },
   "progress": {
     "title": "Progress",
@@ -381,7 +384,8 @@
     "tasksLoad": "Could not load tasks",
     "taskNotFound": "Task not found",
     "progressLoad": "Could not load progress",
-    "submit": "Could not check the solution"
+    "submit": "Could not check the solution",
+    "check": "Could not run the trial check"
   },
   "common": {
     "loading": "Loading…",
