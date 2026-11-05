@@ -67,7 +67,7 @@ prometheus-client==0.26.0
 # env 1.8.3). Закрыт dev-only advisory PYSEC-2026-1845, поэтому из CI
 # pip-audit больше нет ни одного --ignore-vuln.
 ruff==0.8.1
-mypy==1.13.0
+mypy==2.4.0
 pytest==9.2.0
 pytest-asyncio==1.4.1
 pytest-cov==7.1.0
