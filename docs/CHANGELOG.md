@@ -57,6 +57,17 @@
 - Сторы вынесены в отдельный чанк сборки: entry-бандл 79.98 → 69.51 kB
   gzip (лимит 80 kB — `docs/ARCHITECTURE.md`).
 
+### Исправлено
+- Восстановлен зелёный CI на `main` после обновления зависимостей
+  (dependabot): пересобраны `frontend/pnpm-lock.yaml` (был сломан — не
+  хватало записей для `i18next@26.7.1`), добавлен override `dompurify`
+  (`^3.4.17` — advisory GHSA-mrv2-3pqr-j5jr и GHSA-cg2g-xh64-v4q7), отключены
+  новые правила React Compiler в `eslint-plugin-react-hooks` 7 и `UP042`/`UP046`
+  в ruff 0.17 (миграция на `enum.StrEnum` и PEP 695-генерики — отдельная
+  задача: она меняет `str(enum)` в журнале аудита и ключах кэша). Для
+  SQLAlchemy 2.1 драйвер Postgres в sync-URL указан явно
+  (`postgresql+psycopg2://`), иначе Alembic искал отсутствующий psycopg 3.
+
 ### Добавлено
 - История попыток по задачам (S42-002, спринт 42): таблица
   `task_attempts` (миграция `014`) хранит код, результат по каждому

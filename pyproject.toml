@@ -26,6 +26,12 @@ select = [
 ignore = [
     # FastAPI: Depends() в значениях по умолчанию — штатный паттерн фреймворка
     "B008",
+    # ruff 0.17 добавил правила, требующие миграции кода:
+    # UP042 — `class X(str, Enum)` → `enum.StrEnum`: меняет `str(enum)` и
+    # f-строки (журнал аудита, ключи кэша), поэтому перенос отдельной задачей;
+    # UP046 — PEP 695-генерики вместо `Generic[T]`: тот же по духу рефакторинг.
+    "UP042",
+    "UP046",
 ]
 
 [tool.ruff.lint.isort]
@@ -44,8 +50,8 @@ warn_redundant_casts = true
 warn_unused_configs = true
 
 [[tool.mypy.overrides]]
-# pgvector, jose и RestrictedPython не поставляют py.typed-маркеров
-module = ["redis.*", "pgvector.*", "jose.*", "RestrictedPython.*", "yaml", "yaml.*"]
+# pgvector, redis, RestrictedPython и yaml не поставляют py.typed-маркеров
+module = ["redis.*", "pgvector.*", "RestrictedPython.*", "yaml"]
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]
 

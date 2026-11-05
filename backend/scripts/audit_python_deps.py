@@ -490,7 +490,7 @@ def render_table(findings: list[Finding]) -> str:
 
 
 def write_json(path: Path, result: AuditResult, args: argparse.Namespace) -> None:
-    summary = {key: 0 for key in ("critical", "high", "moderate", "low", "unknown")}
+    summary = dict.fromkeys(("critical", "high", "moderate", "low", "unknown"), 0)
     for item in result.findings:
         summary[item.severity] = summary.get(item.severity, 0) + 1
     payload = {

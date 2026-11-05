@@ -74,7 +74,7 @@ async def build_class_report(
 
     progress: dict[tuple[UUID, UUID], UserTaskProgress] = {}
     if students and task_ids:
-        rows = await db.execute(
+        progress_rows = await db.execute(
             select(UserTaskProgress).where(
                 UserTaskProgress.user_id.in_(
                     [member.user_id for member in students]
@@ -83,7 +83,8 @@ async def build_class_report(
             )
         )
         progress = {
-            (item.user_id, item.task_id): item for item in rows.scalars().all()
+            (item.user_id, item.task_id): item
+            for item in progress_rows.scalars().all()
         }
 
     now = datetime.utcnow()
