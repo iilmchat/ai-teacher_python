@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 
@@ -12,6 +12,8 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useChatSession } from '@/hooks/useChatSession';
+import { saveBlob } from '@/lib/download';
+import { templatesForLevel } from '@/lib/promptTemplates';
 import { useAuthStore } from '@/store/auth';
 import { useChatStore } from '@/store/chat';
 import type { UserLevel } from '@/types/api';
@@ -19,6 +21,8 @@ import type { UserLevel } from '@/types/api';
 export function ChatPage() {
   const { t } = useTranslation();
   const userLevel = useAuthStore((state) => state.user?.level ?? 'basic');
+  const settings = useAuthStore((state) => state.user?.settings);
+  const setPromptTemplate = useAuthStore((state) => state.setPromptTemplate);
   const sessions = useChatStore((state) => state.sessions);
   const active = useChatStore((state) => state.active);
   const draft = useChatStore((state) => state.draft);
@@ -33,6 +37,8 @@ export function ChatPage() {
   const renameSession = useChatStore((state) => state.renameSession);
   const togglePin = useChatStore((state) => state.togglePin);
   const regenerate = useChatStore((state) => state.regenerate);
+  const exportMarkdown = useChatStore((state) => state.exportMarkdown);
+  const reportError = useChatStore((state) => state.reportError);
   const feedback = useChatStore((state) => state.feedback);
   const setFeedback = useChatStore((state) => state.setFeedback);
   const clearFeedback = useChatStore((state) => state.clearFeedback);
@@ -77,6 +83,31 @@ export function ChatPage() {
       await openSession(session.id);
     } finally {
       setCreating(false);
+    }
+  }
+
+  // Шаблоны промптов — по уровню открытой сессии (или выбранному уровню).
+  const activeLevel = (active?.level as UserLevel | undefined) ?? level;
+  const templates = useMemo(() => templatesForLevel(activeLevel), [activeLevel]);
+  const selectedTemplateId =
+    typeof settings?.prompt_template === 'string' ? settings.prompt_template : null;
+
+  async function handleDownloadMarkdown(sessionId: string) {
+    const text = await exportMarkdown(sessionId);
+    if (text !== null) {
+      saveBlob(new Blob([text], { type: 'text/markdown;charset=utf-8' }), `chat-${sessionId.slice(0, 8)}.md`);
+    }
+  }
+
+  async function handleCopyMarkdown(sessionId: string) {
+    const text = await exportMarkdown(sessionId);
+    if (text === null) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      reportError(t('errors.chatExport'));
     }
   }
 
@@ -138,6 +169,8 @@ export function ChatPage() {
               void togglePin(sessionId, pinned)
             }
             onDelete={(sessionId) => void deleteSession(sessionId)}
+            onDownloadMarkdown={(sessionId) => void handleDownloadMarkdown(sessionId)}
+            onCopyMarkdown={(sessionId) => void handleCopyMarkdown(sessionId)}
           />
         </div>
       </aside>
@@ -219,7 +252,13 @@ export function ChatPage() {
                 onClearFeedback={(messageId) => void clearFeedback(messageId)}
               />
             </div>
-            <MessageInput onSend={send} disabled={streaming} />
+            <MessageInput
+              onSend={send}
+              disabled={streaming}
+              templates={templates}
+              selectedTemplateId={selectedTemplateId}
+              onSelectTemplate={(templateId) => void setPromptTemplate(templateId)}
+            />
           </>
         )}
       </section>

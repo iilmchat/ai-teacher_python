@@ -14,12 +14,16 @@ mkdir -p "$WORKSPACE"
 cd /src
 # Копируем и файлы, которые читают тесты инструментов релиза (S21-005):
 # docs/RELEASES.md (заметки) и frontend/package.json (сверка версий).
+# Dockerfile'ы и compose-файлы нужны тесту пинов образов (S33-001) —
+# без них check_tree падает с FileNotFoundError.
 tar --exclude=backend/venv \
     --exclude=backend/.mypy_cache \
     --exclude=backend/.pytest_cache \
     --exclude=backend/.ruff_cache \
     --exclude=backend/.coverage \
-    -cf - backend pyproject.toml docs/RELEASES.md frontend/package.json | tar -xf - -C "$WORKSPACE"
+    -cf - backend pyproject.toml docs/RELEASES.md frontend/package.json \
+    frontend/Dockerfile docker-compose.yml docker-compose.prod.yml \
+    | tar -xf - -C "$WORKSPACE"
 cd "$WORKSPACE"
 
 # Адреса сервисов фиксируем явно: переменная проекта с тем же именем иначе

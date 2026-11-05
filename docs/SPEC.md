@@ -76,6 +76,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | GET | `/users/me` | любой | `User` |
 | GET | `/users/me/level` | любой | `{level, title, description, audience, gives_ready_code}` |
 | PATCH | `/users/me/level` | любой | `User` |
+| PATCH | `/users/me/settings` | любой | `User` (S43-004) |
 | GET | `/users/levels` | любой | `{levels: [...]}` |
 | POST | `/users/me/activity` | любой | `{status}` |
 | GET | `/users/{id}` | admin | `User` |
@@ -96,6 +97,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | POST | `/chat/messages/{id}/feedback` | `{value, comment?}` | 201 `MessageFeedback` (S43-003) |
 | DELETE | `/chat/messages/{id}/feedback` | — | 204 (S43-003) |
 | GET | `/chat/sessions/{id}/feedback` | — | `MessageFeedback[]` (S43-003) |
+| GET | `/chat/sessions/{id}/export?format=md\|json` | — | файл (S43-004) |
 | GET | `/chat/search?q&limit` | — | `{query, mode, items[], total}` (S19-005) |
 
 `GET /chat/levels` кэшируется в Redis на 60 с (S19-003); контракт ответа не
@@ -175,6 +177,25 @@ metadata, warnings}`.
   negative_samples[]}`. Провайдер и модель берутся из `metadata` ответа,
   `negative_samples` — последние негативные оценки с текстом ответа и
   комментарием: это вход для LLM-as-judge (см. `docs/LLM_EVAL.md`).
+
+**Выгрузка диалога (S43-004).**
+
+- `GET /chat/sessions/{id}/export?format=md|json` — файл с диалогом:
+  `md` — Markdown-транскрипт (`text/markdown`), `json` — данные в том же виде,
+  что и `GET /chat/sessions/{id}` (`application/json`). Ответ отдаётся как
+  вложение: `Content-Disposition` с ASCII-именем и UTF-8-версией
+  (`filename*=UTF-8''…`), потому что заголовки HTTP ограничены latin-1.
+- Транскрипт состоит из заголовка с метаданными сессии и разделов
+  `## Ученик` / `## Ассистент`; текст сообщений вставляется как есть —
+  блоки кода и спецсимволы не экранируются.
+- Права: своя сессия — 200, чужая — 403, несуществующая — 404.
+
+**Личные настройки (S43-004).**
+
+- `PATCH /users/me/settings` — обновление `users.settings`. Список ключей
+  закрытый: сейчас только `prompt_template` (id выбранного шаблона промпта,
+  до 64 символов). Настройки **дополняются**, а не заменяются; `null`
+  удаляет ключ. Ошибка: значение длиннее 64 символов — 422.
 
 **Контекст задачи (S42-006).**
 

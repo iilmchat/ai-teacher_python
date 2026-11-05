@@ -53,6 +53,10 @@ interface ChatState {
   setFeedback: (messageId: string, value: 1 | -1, comment?: string | null) => Promise<void>;
   /** Снять свою оценку ответа (S43-003) */
   clearFeedback: (messageId: string) => Promise<void>;
+  /** Текст диалога в Markdown (S43-004) */
+  exportMarkdown: (sessionId: string) => Promise<string | null>;
+  /** Показать ошибку в чате (S43-004) */
+  reportError: (message: string) => void;
 
   /** Добавить вопрос ученика локально (оптимистично) */
   addUserMessage: (content: string) => void;
@@ -264,6 +268,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } catch {
       set({ error: i18n.t('errors.chatFeedback') });
     }
+  },
+
+  async exportMarkdown(sessionId) {
+    try {
+      const blob = await api.download(`/chat/sessions/${sessionId}/export?format=md`);
+      return await blob.text();
+    } catch {
+      set({ error: i18n.t('errors.chatExport') });
+      return null;
+    }
+  },
+
+  reportError(message) {
+    set({ error: message });
   },
 
   addUserMessage(content) {

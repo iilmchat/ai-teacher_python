@@ -32,7 +32,7 @@ echo "    'Cannot find implementation ... fastapi/sqlalchemy' — найдено
 # wheelhouse -> PyPI (см. install-python-deps.sh): на self-hosted runner'е PyPI
 # нестабилен (KI-017), колеса приходят из named volume /wheelhouse.
 bash /src/scripts/ci/install-python-deps.sh "$WORKSPACE/backend/requirements.txt"
-# ruff/mypy закреплены в requirements.txt (dev): ruff==0.8.1, mypy==1.13.0
+# ruff/mypy закреплены в requirements.txt (dev) — версии обновляются там же
 
 cd "$WORKSPACE/backend"
 echo "==> ruff check app tests scripts"

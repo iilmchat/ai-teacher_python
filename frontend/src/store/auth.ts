@@ -22,6 +22,8 @@ interface AuthState {
   logout: () => void;
   loadMe: () => Promise<void>;
   setLevel: (level: UserLevel) => Promise<void>;
+  /** Сохранить выбранный шаблон промпта в личных настройках (S43-004) */
+  setPromptTemplate: (templateId: string | null) => Promise<void>;
   clearError: () => void;
 }
 
@@ -109,6 +111,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async setLevel(level) {
     const user = await api.patch<User>('/users/me/level', { level });
+    cacheUser(user);
+    set({ user });
+  },
+
+  async setPromptTemplate(templateId) {
+    const user = await api.patch<User>('/users/me/settings', {
+      prompt_template: templateId,
+    });
     cacheUser(user);
     set({ user });
   },

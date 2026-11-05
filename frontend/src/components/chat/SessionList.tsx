@@ -10,6 +10,10 @@ interface SessionListProps {
   onRename: (sessionId: string, title: string) => void;
   onTogglePin: (sessionId: string, pinned: boolean) => void;
   onDelete: (sessionId: string) => void;
+  /** Скачать диалог в Markdown (S43-004) */
+  onDownloadMarkdown?: (sessionId: string) => void;
+  /** Скопировать диалог в Markdown (S43-004) */
+  onCopyMarkdown?: (sessionId: string) => void;
 }
 
 /** Список сессий чата: заголовки, переименование, закрепление, удаление (S43-001) */
@@ -20,6 +24,8 @@ export function SessionList({
   onRename,
   onTogglePin,
   onDelete,
+  onDownloadMarkdown,
+  onCopyMarkdown,
 }: SessionListProps) {
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -166,6 +172,30 @@ export function SessionList({
                 >
                   ✕
                 </button>
+              </div>
+            )}
+            {isActive && (onDownloadMarkdown || onCopyMarkdown) && (
+              <div className="flex items-center gap-2 pl-1 pt-1 text-[11px]">
+                {onDownloadMarkdown && (
+                  <button
+                    type="button"
+                    onClick={() => onDownloadMarkdown(session.id)}
+                    aria-label={`${t('chat.downloadMarkdown')}: ${title}`}
+                    className="rounded px-1 text-slate-500 hover:text-indigo-700"
+                  >
+                    {t('chat.downloadMarkdown')}
+                  </button>
+                )}
+                {onCopyMarkdown && (
+                  <button
+                    type="button"
+                    onClick={() => onCopyMarkdown(session.id)}
+                    aria-label={`${t('chat.copyMarkdown')}: ${title}`}
+                    className="rounded px-1 text-slate-500 hover:text-indigo-700"
+                  >
+                    {t('chat.copyMarkdown')}
+                  </button>
+                )}
               </div>
             )}
           </li>
