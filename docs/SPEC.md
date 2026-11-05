@@ -182,6 +182,8 @@ violations, memory_limit_enforced, output_truncated}`.
 | POST | `/tasks/{id}/check` | `{code}` | `SubmitResponse` (S42-001, `practice: true`) |
 | GET | `/tasks/{id}/attempts?skip&limit` | — | `AttemptList` (S42-002) |
 | GET | `/tasks/{id}/attempts/{attempt_id}` | — | `AttemptDetail` (S42-002) |
+| PATCH | `/tasks/{id}/draft` | `{code}` | `DraftStatus` (S42-003) |
+| DELETE | `/tasks/{id}/draft` | — | `DraftStatus` (S42-003) |
 | POST | `/tasks` | `TaskCreate` | 201 `TaskAdminDetail` (teacher/admin) |
 | PATCH | `/tasks/{id}` | `TaskUpdate` | `TaskAdminDetail` (teacher/admin) |
 | DELETE | `/tasks/{id}` | — | 204 (teacher/admin) |
@@ -199,6 +201,7 @@ violations, memory_limit_enforced, output_truncated}`.
 `AttemptItem`: `{id, task_id, passed, passed_count, total_count, created_at}`;
 `AttemptDetail` — дополнительно `code` и `results[]` (разбор по кейсам);
 `AttemptList`: `{items[], total}`.
+`DraftStatus`: `{has_draft, updated_at}`.
 `practice` — `false` для `submit`, `true` для `check`.
 
 `POST /tasks/{id}/check` (S42-001) — пробная проверка: тест-кейсы
@@ -236,6 +239,20 @@ max `100`). `GET /tasks/{id}/attempts/{attempt_id}` — детальная по�
 (404) — по идентификатору нельзя проверить существование чужой записи.
 Таблица попадает под retention: `RETENTION_TASK_ATTEMPTS_DAYS` (default
 90, `0` — не удалять).
+
+Черновик решения (S42-003): колонки `draft_code` и `draft_updated_at` в
+`user_task_progress` (миграция `015`). `PATCH /tasks/{id}/draft` сохраняет
+черновик, `DELETE /tasks/{id}/draft` удаляет его; пустой код тоже удаляет
+черновик. Лимит — 20 000 символов (как и код решения).
+
+Черновик **не является решением**: счётчик попыток и статус задачи не
+меняются, запись в историю попыток (`task_attempts`) не создаётся,
+в `best_solution` не попадает. Он лежит в той же строке прогресса, поэтому
+задача, у которой есть черновик, удаляется мягко (`is_active=false`) —
+работа ученика сохраняется. При успешной отправке черновик очищается:
+решение уже в истории. `TaskDetail` возвращает `draft_code` и
+`draft_updated_at`, чтобы интерфейс восстановил черновик приоритетнее
+шаблона.
 
 ### 3.6 Админка
 
@@ -389,8 +406,10 @@ task_versions(id, task_id→tasks, version, snapshot JSONB, created_by→users,
    UNIQUE(task_id, version) · snapshot — полное состояние задачи до правки
 
 user_task_progress(id, user_id→users, task_id→tasks, status, attempts,
-                   best_solution, completed_at, updated_at)
+                   best_solution, completed_at, updated_at,
+                   draft_code, draft_updated_at)
    status ∈ {not_started, in_progress, completed} · UNIQUE(user_id, task_id)
+   draft_code — незавершённый код ученика (S42-003), не решение
 
 task_attempts(id, user_id→users, task_id→tasks, code, passed,
                passed_count, total_count, results JSONB, created_at)

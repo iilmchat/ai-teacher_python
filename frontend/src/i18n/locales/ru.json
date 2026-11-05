@@ -133,7 +133,10 @@
     "attemptFailed": "Не решено:",
     "attemptDetails": "Подробнее",
     "attemptRestore": "Вернуть код в редактор",
-    "attemptScore": "{{passed}} из {{total}}"
+    "attemptScore": "{{passed}} из {{total}}",
+    "draftSaving": "Сохраняю черновик…",
+    "draftSavedAt": "Черновик сохранён в {{time}}",
+    "draftDiscard": "Удалить черновик"
   },
   "progress": {
     "title": "Прогресс",

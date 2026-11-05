@@ -107,6 +107,10 @@ export interface TaskDetail {
   status: TaskStatus;
   attempts: number;
   tags?: string[];
+  /** Сохранённый черновик решения (S42-003) */
+  draft_code?: string | null;
+  /** Когда черновик сохранён (S42-003) */
+  draft_updated_at?: string | null;
 }
 
 export interface TestCaseResult {
@@ -129,6 +133,11 @@ export interface SubmitResponse {
   message: string;
   /** `true` для пробной проверки: попытка не засчитывается (S42-001) */
   practice?: boolean;
+}
+
+export interface DraftStatus {
+  has_draft: boolean;
+  updated_at: string | null;
 }
 
 export interface AttemptItem {

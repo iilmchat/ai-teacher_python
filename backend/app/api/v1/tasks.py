@@ -33,6 +33,8 @@ from app.schemas.task import (
     AttemptList,
     CategoriesResponse,
     CheckRequest,
+    DraftRequest,
+    DraftStatus,
     HintResponse,
     ProgressSummary,
     SubmitRequest,
@@ -359,6 +361,31 @@ async def get_attempt(
     Попытка принадлежит ученику: чужая недоступна (404).
     """
     return await service.get_attempt(task_id, attempt_id, current_user)
+
+@router.patch("/{task_id}/draft", response_model=DraftStatus)
+async def save_draft(
+    task_id: UUID,
+    payload: DraftRequest,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> DraftStatus:
+    """Сохранить черновик решения (S42-003).
+
+    Черновик не является решением: счётчик попыток и статус задачи
+    не меняются, в историю попыток запись не попадает. Пустой код
+    удаляет черновик.
+    """
+    return await service.save_draft(task_id, current_user, payload.code)
+
+
+@router.delete("/{task_id}/draft", response_model=DraftStatus)
+async def clear_draft(
+    task_id: UUID,
+    current_user: CurrentUser,
+    service: TaskServiceDep,
+) -> DraftStatus:
+    """Очистить черновик решения (S42-003)."""
+    return await service.clear_draft(task_id, current_user)
 
 
 # --- Управление задачами (преподаватель/админ) --------------------------

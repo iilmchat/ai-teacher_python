@@ -269,6 +269,7 @@ GET /api/v1/chat/search?q=<текст>&limit=<1..50>
 | `code_executions` | история запусков кода |
 | `tasks` / `user_task_progress` | задачи и прогресс |
 | `task_attempts` | история засчитанных попыток по задачам (S42-002) |
+| `user_task_progress.draft_code` | незавершённый код ученика, автосохранение (S42-003) |
 | `task_versions` | история правок задач |
 | `classrooms` / `classroom_members` | классы и участники |
 | `assignments` | назначения задач классам |

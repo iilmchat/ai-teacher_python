@@ -108,6 +108,9 @@ class TaskDetail(BaseModel):
     status: TaskStatus
     attempts: int
     tags: list[str] = Field(default_factory=list)
+    #: Сохранённый черновик решения (S42-003); `None`, если черновика нет
+    draft_code: str | None = None
+    draft_updated_at: datetime | None = None
 
 
 class TaskAdminDetail(TaskDetail):
@@ -115,6 +118,21 @@ class TaskAdminDetail(TaskDetail):
 
     test_cases: list[TestCase]
     is_active: bool
+
+
+class DraftRequest(BaseModel):
+    """Сохранение черновика решения (S42-003)"""
+
+    code: str = Field(..., max_length=20_000)
+
+
+class DraftStatus(BaseModel):
+    """Состояние черновика (S42-003)"""
+
+    #: Есть ли сохранённый черновик
+    has_draft: bool = False
+    #: Когда черновик сохранён
+    updated_at: datetime | None = None
 
 
 class SolutionCode(BaseModel):

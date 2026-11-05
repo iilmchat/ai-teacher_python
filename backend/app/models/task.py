@@ -188,6 +188,14 @@ class UserTaskProgress(Base):
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     best_solution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Незавершённый код ученика (S42-003). Хранится между сессиями,
+    #: чтобы работа не терялась при перезагрузке страницы. Не является
+    #: решением: в попытки не попадает и в `best_solution` не пишется.
+    draft_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Когда черновик сохранён в последний раз
+    draft_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False

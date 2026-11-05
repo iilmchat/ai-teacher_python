@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 
@@ -57,6 +57,48 @@ function ResultsCard({ result }: { result: SubmitResponse }) {
     </Card>
   );
 }
+
+function DraftIndicator({
+  savedAt,
+  saving,
+  onClear,
+}: {
+  savedAt: string | null;
+  saving: boolean;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation();
+
+  if (saving) {
+    return (
+      <p className="mt-2 text-xs text-slate-500" role="status">
+        {t('tasks.draftSaving')}
+      </p>
+    );
+  }
+
+  if (!savedAt) {
+    return null;
+  }
+
+  return (
+    <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+      <span role="status">
+        {t('tasks.draftSavedAt', {
+          time: new Date(savedAt).toLocaleTimeString('ru-RU'),
+        })}
+      </span>
+      <button
+        type="button"
+        className="text-indigo-700 hover:underline"
+        onClick={onClear}
+      >
+        {t('tasks.draftDiscard')}
+      </button>
+    </p>
+  );
+}
+
 
 function AttemptsHistory({
   attempts,
@@ -171,9 +213,16 @@ export function TaskDetailPage() {
   const check = useTasksStore((state) => state.check);
   const loadAttempts = useTasksStore((state) => state.loadAttempts);
   const loadAttempt = useTasksStore((state) => state.loadAttempt);
+  const draftSavedAt = useTasksStore((state) => state.draftSavedAt);
+  const draftSaving = useTasksStore((state) => state.draftSaving);
+  const saveDraft = useTasksStore((state) => state.saveDraft);
+  const clearDraft = useTasksStore((state) => state.clearDraft);
 
   const [code, setCode] = useState('');
   const [hintsShown, setHintsShown] = useState(0);
+  /** Код в редакторе отличается от сохранённого — нужен автосейв */
+  const [dirty, setDirty] = useState(false);
+  const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function handleSubmit() {
     await submit(detail?.id ?? taskId, code);
@@ -188,10 +237,41 @@ export function TaskDetailPage() {
 
   useEffect(() => {
     if (detail) {
-      setCode(detail.solution_template ?? '');
+      // Черновик важнее шаблона: работа ученика не должна теряться.
+      setCode(detail.draft_code ?? detail.solution_template ?? '');
       setHintsShown(0);
+      setDirty(false);
     }
   }, [detail]);
+
+  // Автосохранение черновика: пауза в наборе 800 мс (S42-003).
+  useEffect(() => {
+    if (!dirty || !detail) {
+      return;
+    }
+    if (draftTimer.current) {
+      clearTimeout(draftTimer.current);
+    }
+    draftTimer.current = setTimeout(() => {
+      void saveDraft(detail.id, code);
+    }, 800);
+    return () => {
+      if (draftTimer.current) {
+        clearTimeout(draftTimer.current);
+      }
+    };
+  }, [code, dirty, detail, saveDraft]);
+
+  // Уход со страницы не должен терять последние правки.
+  useEffect(() => {
+    const flush = () => {
+      if (dirty && detail) {
+        void saveDraft(detail.id, code);
+      }
+    };
+    window.addEventListener('beforeunload', flush);
+    return () => window.removeEventListener('beforeunload', flush);
+  }, [code, dirty, detail, saveDraft]);
 
   if (loading && !detail) {
     return <Spinner />;
@@ -249,7 +329,14 @@ export function TaskDetailPage() {
       )}
 
       <Card title={t('tasks.solution')}>
-        <CodeEditor value={code} onChange={setCode} height="280px" />
+        <CodeEditor
+          value={code}
+          onChange={(value) => {
+            setCode(value);
+            setDirty(true);
+          }}
+          height="280px"
+        />
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <Button
             onClick={() => void handleSubmit()}
@@ -271,6 +358,14 @@ export function TaskDetailPage() {
           </Link>
         </div>
         <p className="mt-2 text-xs text-slate-500">{t('tasks.checkHint')}</p>
+        <DraftIndicator
+          savedAt={draftSavedAt}
+          saving={draftSaving}
+          onClear={() => {
+            setDirty(false);
+            void clearDraft(detail.id);
+          }}
+        />
       </Card>
 
       {error && <Alert tone="error">{error}</Alert>}

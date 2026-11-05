@@ -29,6 +29,7 @@ from app.schemas.task import (
     AttemptDetail,
     AttemptItem,
     AttemptList,
+    DraftStatus,
     ProgressItem,
     ProgressSummary,
     SubmitResponse,
@@ -121,6 +122,8 @@ class TaskService:
             status=record.status if record else TaskStatus.NOT_STARTED,
             attempts=record.attempts if record else 0,
             tags=list(task.tags or []),
+            draft_code=record.draft_code if record else None,
+            draft_updated_at=record.draft_updated_at if record else None,
         )
 
     async def get_hint(self, task_id: UUID, index: int) -> tuple[str, int]:
@@ -168,6 +171,9 @@ class TaskService:
 
         record.attempts += 1
         record.updated_at = datetime.utcnow()
+        # Отправка засчитана — черновик больше не нужен (S42-003).
+        record.draft_code = None
+        record.draft_updated_at = None
 
         if outcome.passed:
             record.status = TaskStatus.COMPLETED
@@ -287,6 +293,56 @@ class TaskService:
             code=attempt.code,
             results=results,
         )
+
+    async def save_draft(
+        self, task_id: UUID, user: User, code: str
+    ) -> DraftStatus:
+        """Сохранить черновик решения (S42-003).
+
+        Черновик не является решением: счётчик попыток и статус задачи
+        не меняются, в историю попыток запись не попадает. Пустой код
+        удаляет черновик.
+        """
+        task = await self._get_task_or_404(task_id)
+
+        record = await self.progress.get_by_user_and_task(user.id, task.id)
+        if record is None:
+            record = UserTaskProgress(
+                user_id=user.id,
+                task_id=task.id,
+                status=TaskStatus.NOT_STARTED,
+                attempts=0,
+            )
+            self.db.add(record)
+
+        if not code.strip():
+            record.draft_code = None
+            record.draft_updated_at = None
+        else:
+            record.draft_code = code
+            record.draft_updated_at = datetime.utcnow()
+
+        await self.db.commit()
+        await self.db.refresh(record)
+
+        return DraftStatus(
+            has_draft=record.draft_code is not None,
+            updated_at=record.draft_updated_at,
+        )
+
+    async def clear_draft(self, task_id: UUID, user: User) -> DraftStatus:
+        """Очистить черновик решения (S42-003)."""
+        await self._get_task_or_404(task_id)
+
+        record = await self.progress.get_by_user_and_task(user.id, task_id)
+        if record is None:
+            return DraftStatus(has_draft=False, updated_at=None)
+
+        record.draft_code = None
+        record.draft_updated_at = None
+        await self.db.commit()
+
+        return DraftStatus(has_draft=False, updated_at=None)
 
     async def _run_cases(self, task: Task, code: str) -> CaseRunOutcome:
         """Прогнать код по тест-кейсам задачи"""

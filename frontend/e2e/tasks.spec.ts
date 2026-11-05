@@ -41,6 +41,28 @@ test.describe('Задачи', () => {
     await expect(page.getByRole('button', { name: 'Показать подсказку' })).toBeVisible();
   });
 
+  test('черновик сохраняется и восстанавливается', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/tasks');
+
+    const card = page.getByRole('listitem').filter({ hasText: 'Сумма двух чисел' });
+    await card.getByRole('link', { name: 'Открыть' }).click();
+
+    await page.getByTestId('code-input').fill('print("черновик")');
+
+    // Индикатор автосохранения
+    await expect(page.getByText(/Черновик сохранён в/)).toBeVisible({
+      timeout: 20_000,
+    });
+
+    // После перезагрузки страницы черновик на месте
+    await page.reload();
+    await expect(page.getByTestId('code-input')).toHaveValue(
+      'print("черновик")',
+      { timeout: 20_000 },
+    );
+  });
+
   test('история попыток сохраняется и показывает разбор', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/tasks');

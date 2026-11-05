@@ -354,6 +354,251 @@ async def test_submit_requires_auth(
     assert response.status_code in (401, 403)
 
 
+# --- Автосохранение черновика (S42-003) ---------------------------------
+
+
+async def test_draft_is_saved_and_returned(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик сохраняется и возвращается в карточке задачи"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft1")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "a = int(input())"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["has_draft"] is True
+    assert data["updated_at"] is not None
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] == "a = int(input())"
+    assert detail.json()["draft_updated_at"] is not None
+
+
+async def test_draft_does_not_count_attempt(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик не тратит попытку и не меняет статус задачи"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft2")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["attempts"] == 0
+    assert detail.json()["status"] == "not_started"
+
+    progress = await client.get(f"{TASKS_URL}/progress", headers=_auth(token))
+    item = next(
+        entry
+        for entry in progress.json()["items"]
+        if entry["task_id"] == task["id"]
+    )
+    assert item["attempts"] == 0
+    assert item["status"] == "not_started"
+
+
+async def test_draft_is_not_an_attempt_in_history(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик не попадает в историю попыток"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft3")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    attempts = await client.get(
+        f"{TASKS_URL}/{task['id']}/attempts", headers=_auth(token)
+    )
+    assert attempts.json()["total"] == 0
+
+
+async def test_submit_clears_draft(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """После отправки черновик очищается: решение уже в истории"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft4")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    await client.post(
+        f"{TASKS_URL}/{task['id']}/submit",
+        json={"code": "a = int(input())\nb = int(input())\nprint(a + b)"},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+    assert detail.json()["draft_updated_at"] is None
+
+
+async def test_draft_can_be_cleared(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик можно удалить явным действием"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft5")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    response = await client.delete(
+        f"{TASKS_URL}/{task['id']}/draft", headers=_auth(token)
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["has_draft"] is False
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_empty_draft_clears_stored_draft(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Пустой код удаляет черновик"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft6")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "   "},
+        headers=_auth(token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_draft_is_private_to_user(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик ученика не виден другому ученику"""
+    task = await _create_task(client, db_session)
+    owner_token = await _register_and_login(client, "draft_owner")
+    other_token = await _register_and_login(client, "draft_other")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print('mine')"},
+        headers=_auth(owner_token),
+    )
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(other_token)
+    )
+    assert detail.json()["draft_code"] is None
+
+
+async def test_draft_requires_auth(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Без токена черновик недоступен"""
+    task = await _create_task(client, db_session)
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft", json={"code": "print(1)"}
+    )
+
+    assert response.status_code in (401, 403)
+
+
+async def test_draft_of_unknown_task_returns_404(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Черновик несуществующей задачи — 404"""
+    token = await _register_and_login(client, "draft7")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{uuid4()}/draft",
+        json={"code": "print(1)"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 404
+
+
+async def test_draft_rejects_too_long_code(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Слишком длинный черновик отклоняется валидацией"""
+    task = await _create_task(client, db_session)
+    token = await _register_and_login(client, "draft8")
+
+    response = await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "x" * 20_001},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 422
+
+
+async def test_task_with_only_draft_is_soft_deleted(
+    client: AsyncClient, db_session: AsyncSession, executor: CaseAwareExecutor
+) -> None:
+    """Задача с черновиком удаляется мягко: работа ученика сохраняется"""
+    task = await _create_task(client, db_session)
+    teacher_token = await _create_teacher_token(client, db_session, "draftteacher")
+    token = await _register_and_login(client, "draft9")
+
+    await client.patch(
+        f"{TASKS_URL}/{task['id']}/draft",
+        json={"code": "print('черновик')"},
+        headers=_auth(token),
+    )
+
+    deleted = await client.delete(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(teacher_token)
+    )
+    assert deleted.status_code == 204
+
+    # Задача скрыта из каталога, но остаётся в базе вместе с черновиком
+    catalog = await client.get(f"{TASKS_URL}", headers=_auth(token))
+    assert all(item["id"] != task["id"] for item in catalog.json())
+
+    detail = await client.get(
+        f"{TASKS_URL}/{task['id']}", headers=_auth(token)
+    )
+    assert detail.json()["draft_code"] == "print('черновик')"
+
+
 # --- История попыток (S42-002) -------------------------------------------
 
 

@@ -133,7 +133,10 @@
     "attemptFailed": "Not solved:",
     "attemptDetails": "Details",
     "attemptRestore": "Restore code in the editor",
-    "attemptScore": "{{passed}} of {{total}}"
+    "attemptScore": "{{passed}} of {{total}}",
+    "draftSaving": "Saving draft…",
+    "draftSavedAt": "Draft saved at {{time}}",
+    "draftDiscard": "Discard draft"
   },
   "progress": {
     "title": "Progress",

@@ -1,5 +1,5 @@
 /**
- * Стор задач: каталог, детали, отправка решения, прогресс.
+ * Стор задач: каталог, детали, отправка решения, черновик, прогресс.
  */
 
 import i18n from '@/i18n';
@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import type {
   AttemptDetail,
   AttemptList,
+  DraftStatus,
   ProgressSummary,
   SubmitResponse,
   TaskDetail,
@@ -32,6 +33,10 @@ interface TasksState {
   attempts: AttemptList | null;
   /** Детальная попытка (S42-002) */
   attemptDetail: AttemptDetail | null;
+  /** Когда черновик сохранён в последний раз (S42-003) */
+  draftSavedAt: string | null;
+  /** Идёт ли сохранение черновика (S42-003) */
+  draftSaving: boolean;
   filters: TaskFilters;
   loading: boolean;
   submitting: boolean;
@@ -49,6 +54,10 @@ interface TasksState {
   loadAttempts: (taskId: string) => Promise<void>;
   /** Загрузить детальную попытку (S42-002) */
   loadAttempt: (taskId: string, attemptId: string) => Promise<void>;
+  /** Сохранить черновик решения (S42-003) */
+  saveDraft: (taskId: string, code: string) => Promise<void>;
+  /** Очистить черновик решения (S42-003) */
+  clearDraft: (taskId: string) => Promise<void>;
   resetSubmission: () => void;
 }
 
@@ -72,6 +81,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   checkResult: null,
   attempts: null,
   attemptDetail: null,
+  draftSavedAt: null,
+  draftSaving: false,
   filters: { difficulty: null, category: null },
   loading: false,
   submitting: false,
@@ -99,10 +110,15 @@ export const useTasksStore = create<TasksState>((set, get) => ({
       checkResult: null,
       attempts: null,
       attemptDetail: null,
+      draftSavedAt: null,
     });
     try {
       const detail = await api.get<TaskDetail>(`/tasks/${taskId}`);
-      set({ detail, loading: false });
+      set({
+        detail,
+        loading: false,
+        draftSavedAt: detail.draft_updated_at ?? null,
+      });
     } catch {
       set({ loading: false, error: i18n.t('errors.taskNotFound') });
     }
@@ -135,9 +151,13 @@ export const useTasksStore = create<TasksState>((set, get) => ({
             ...detail,
             status: submission.status,
             attempts: submission.attempts,
+            // Решение засчитано — сервер очистил черновик.
+            draft_code: null,
+            draft_updated_at: null,
           },
         });
       }
+      set({ draftSavedAt: null });
       void get().loadProgress();
     } catch {
       set({ submitting: false, error: i18n.t('errors.submit') });
@@ -177,6 +197,29 @@ export const useTasksStore = create<TasksState>((set, get) => ({
     } catch {
       set({ error: i18n.t('errors.attemptLoad') });
     }
+  },
+
+  async saveDraft(taskId, code) {
+    set({ draftSaving: true });
+    try {
+      const status = await api.patch<DraftStatus>(`/tasks/${taskId}/draft`, {
+        code,
+      });
+      set({ draftSaving: false, draftSavedAt: status.updated_at });
+    } catch {
+      // Черновик вспомогателен: ошибка сохранения не должна прерывать
+      // работу над решением.
+      set({ draftSaving: false });
+    }
+  },
+
+  async clearDraft(taskId) {
+    try {
+      await api.delete<DraftStatus>(`/tasks/${taskId}/draft`);
+    } catch {
+      // Ошибка очистки не критична: сервер тоже очищает черновик при отправке.
+    }
+    set({ draftSavedAt: null });
   },
 
   resetSubmission() {
