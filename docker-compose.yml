@@ -1,7 +1,7 @@
 services:
   postgres:
     # Официальный образ с предустановленным pgvector (нужен для VECTOR-колонок)
-    image: pgvector/pgvector:pg17
+    image: pgvector/pgvector:pg17@sha256:7d0a41464797aeb9862dfdc0bbf1526b82cfd324cdd8036df19e3545f4a9ccb8
     container_name: ai_teacher_postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7-alpine
+    image: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
     container_name: ai_teacher_redis
     ports:
       # Внешний порт задаётся через ENV (KI-001): 6379 занят чужим контейнером workflow-builder-redis

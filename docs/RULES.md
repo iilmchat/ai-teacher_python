@@ -212,8 +212,12 @@ tests/
 - **`Design.md`** — единственный источник истины по архитектуре.
 - **`docs/SPEC.md`** — контракты: API, схема БД, статусы, критерии приёмки.
 - **`TODO.md`** — план завершённого этапа v0.1.0 (спринты 1–10).
-- **`TODO_V0.2.md`** — план текущего этапа v0.2.0 (спринты 11–20); следующий
-  этап получает свой файл `TODO_VX.Y.md`.
+- **`TODO_V0.2.md`** — план завершённого этапа v0.2.0 (спринты 11–20).
+- **`TODO_V0.3.md`** — план завершённого этапа v0.3.0 (спринты 21–30).
+- **`TODO_V0.4.md`** — план текущего этапа v0.4.0 (спринты 33–41).
+- **`TODO_V0.5.md`** — план следующего этапа v0.5.0 (спринты 42–48).
+- **`TODO_V0.6.md`** — план этапа после v0.5.0 (спринты 49–52);
+  следующий этап получает свой файл `TODO_VX.Y.md`.
 - **`docs/RULES.md`** — этот документ.
 - **`docs/GETTING_STARTED.md`** — как развернуть за 20 минут.
 - **`docs/USER_GUIDE.md`** — как пользоваться.
@@ -985,6 +989,34 @@ tests/
 5. **e2e a11y терпимы к данным, но не к регрессиям.** Если данных нет (пустой
    список), тест `skip`; структурные проверки (skip-link, меню, карточки)
    обязательны.
+
+---
+
+### 11.27. Supply chain: digest и non-root (S33)
+
+1. **Образ закрепляется по digest, тег — только для читаемости.**
+   `python:3.12-slim@sha256:…`; тег без digest перезаписывается upstream и делает
+   сборку невоспроизводимой. Digest обязателен для `FROM` в Dockerfile'ах и
+   `image:` в compose-файлах.
+2. **Обновление digest — осознанное действие, а не побочный эффект сборки.**
+   `docker pull <tag>`, затем
+   `docker image inspect <tag> --format '{{index .RepoDigests 0}}'`; обновить все
+   вхождения, пересобрать затронутые образы, прогнать
+   `python backend/scripts/check_image_pins.py`. Пиннинг **не заменяет** апгрейд:
+   смена версии образа — отдельный шаг с тестами.
+3. **Guard в CI, а не память.** `backend/scripts/check_image_pins.py` проверяет
+   `FROM` и `image:` (5 файлов: backend/frontend/sandbox-runner Dockerfile'ы и
+   оба compose). Новый Dockerfile/compose добавляется в списки скрипта; вызов —
+   в `scripts/ci/backend-lint.sh` до установки зависимостей.
+4. **Backend работает под non-root.** UID/GID `10001` (`USER app`), `/app` для
+   процесса read-only, запись — только в `/tmp` (или `PROMETHEUS_MULTIPROC_DIR`).
+   `PYTHONDONTWRITEBYTECODE=1` обязателен, иначе `__pycache__` в `/app` даёт
+   предупреждения. Entrypoint и healthcheck выполняются тем же пользователем.
+5. **Non-root проверяется командой, а не глазами:** `docker run --entrypoint id`
+   (`uid=10001`), `touch /tmp/...`, `[ -w /app ]` → false, `alembic check`,
+   `/health/ready` → 200. Полный `pytest` в собранном образе — с репозиторием,
+   смонтированным read-only, и `-p no:cacheprovider` (иначе pytest пытается
+   писать кэш в `/app`).
 
 ---
 

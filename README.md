@@ -84,8 +84,8 @@ pnpm dev
 | Показатель | Значение |
 |------------|----------|
 | Версия | **v0.3.3** (2026-11-05) |
-| Спринты | 1–32 (v0.3.0 → v0.3.3; KI-024, KI-025, KI-026) |
-| Тесты backend | **531** (pytest, реальный PostgreSQL; 22 skip на Windows) |
+| Спринты | 1–32 завершены; спринт 33 (v0.4.0) в работе; планы v0.5.0 (42–48) и v0.6.0 (49–52) согласованы |
+| Тесты backend | **538** (516 passed + 22 skip в образе Python 3.12; KI-017) |
 | Миграции | Alembic head **013** (13 миграций; `chat_messages` HNSW-индекс) |
 | Тесты frontend | **94** unit + **12** e2e (Playwright; 12/12 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
@@ -115,7 +115,12 @@ pnpm dev
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
 - [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.3.3 (v0.2.0 → v0.3.0,
   v0.3.1 → v0.3.2 и v0.3.2 → v0.3.3);
-- [TODO_V0.4.md](TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41, план);
+- [TODO_V0.4.md](TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41):
+  детальный план задач, зависимостей, оценок, DoD и рисков;
+- [TODO_V0.5.md](TODO_V0.5.md) — **следующий этап v0.5.0** (спринты 42–48):
+  аудит продукта и план задач `S42-001`…`S48-003`;
+- [TODO_V0.6.md](TODO_V0.6.md) — этап v0.6.0 (спринты 49–52): траектории,
+  доступность и PWA, httpOnly-cookie (`KI-027`), релиз;
   завершённые [TODO_V0.3.md](TODO_V0.3.md) — v0.3.0, [TODO_V0.2.md](TODO_V0.2.md) — v0.2.0
   и [TODO.md](TODO.md) — v0.1.0
 - [SECURITY.md](SECURITY.md) — политика безопасности и контакт для уязвимостей;
