@@ -988,6 +988,34 @@ tests/
 
 ---
 
+### 11.27. Supply chain: digest и non-root (S33)
+
+1. **Образ закрепляется по digest, тег — только для читаемости.**
+   `python:3.12-slim@sha256:…`; тег без digest перезаписывается upstream и делает
+   сборку невоспроизводимой. Digest обязателен для `FROM` в Dockerfile'ах и
+   `image:` в compose-файлах.
+2. **Обновление digest — осознанное действие, а не побочный эффект сборки.**
+   `docker pull <tag>`, затем
+   `docker image inspect <tag> --format '{{index .RepoDigests 0}}'`; обновить все
+   вхождения, пересобрать затронутые образы, прогнать
+   `python backend/scripts/check_image_pins.py`. Пиннинг **не заменяет** апгрейд:
+   смена версии образа — отдельный шаг с тестами.
+3. **Guard в CI, а не память.** `backend/scripts/check_image_pins.py` проверяет
+   `FROM` и `image:` (5 файлов: backend/frontend/sandbox-runner Dockerfile'ы и
+   оба compose). Новый Dockerfile/compose добавляется в списки скрипта; вызов —
+   в `scripts/ci/backend-lint.sh` до установки зависимостей.
+4. **Backend работает под non-root.** UID/GID `10001` (`USER app`), `/app` для
+   процесса read-only, запись — только в `/tmp` (или `PROMETHEUS_MULTIPROC_DIR`).
+   `PYTHONDONTWRITEBYTECODE=1` обязателен, иначе `__pycache__` в `/app` даёт
+   предупреждения. Entrypoint и healthcheck выполняются тем же пользователем.
+5. **Non-root проверяется командой, а не глазами:** `docker run --entrypoint id`
+   (`uid=10001`), `touch /tmp/...`, `[ -w /app ]` → false, `alembic check`,
+   `/health/ready` → 200. Полный `pytest` в собранном образе — с репозиторием,
+   смонтированным read-only, и `-p no:cacheprovider` (иначе pytest пытается
+   писать кэш в `/app`).
+
+---
+
 ## 12. Отчёты по шагам спринта
 
 Каждый шаг спринта документируется отдельным файлом:

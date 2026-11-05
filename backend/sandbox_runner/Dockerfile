@@ -15,7 +15,7 @@
 #     --memory 128m --memory-swap 128m --pids-limit 64 \
 #     ai-teacher-sandbox-runner:latest
 # =============================================================================
-FROM python:3.12-slim
+FROM python:3.12-slim@sha256:b18b261e1b4974b4f321451ad5251ded85abb22c2b8b262da527dda1d031ab30
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

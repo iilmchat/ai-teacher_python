@@ -7,7 +7,7 @@
 **Целевая версия:** v0.4.0  
 **Создан:** 2026-11-02  
 **Базис:** v0.3.3  
-**Статус:** планирование
+**Статус:** в работе — спринт 33, шаг 01 (digest-пиннинг, non-root)
 
 ---
 
@@ -80,14 +80,14 @@ perf-smoke, миграционные тесты, `alembic check`.
 
 ## 3. Спринты 33–41 (v0.4.0)
 
-### Спринт 33: Supply chain & Repo hygiene — `[ ]`
+### Спринт 33: Supply chain & Repo hygiene — `[~]`
 
 **Цель:** воспроизводимые образы и управляемые зависимости.
 
-- [ ] Пиннинг базовых образов по digest (`python:3.12-slim@sha256:…`, `node`, `pgvector`, `nginx`)
+- [x] Пиннинг базовых образов по digest (`python:3.12-slim@sha256:…`, `node`, `pgvector`, `nginx`) — S33-001
 - [ ] `trivy` в CI: HIGH/CRITICAL в образе → fail; `hadolint` для Dockerfile
 - [ ] SBOM (CycloneDX) как артефакт релиза
-- [ ] Non-root `USER app` в `backend/Dockerfile` (с проверкой записи в `/tmp`)
+- [x] Non-root `USER app` в `backend/Dockerfile` (с проверкой записи в `/tmp`) — S33-002
 - [ ] Политика Dependabot: группировка minor/patch, авто-мерж после зелёного CI
 - [ ] Разбор 15 открытых PR (или явное закрытие с обоснованием)
 - [ ] `pre-commit`: ruff, gitleaks, i18n-аудит, `check_version`

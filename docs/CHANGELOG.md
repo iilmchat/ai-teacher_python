@@ -9,7 +9,11 @@
 
 ## [Unreleased]
 
-—
+### Безопасность
+- Supply chain (S33-001/S33-002): базовые образы (`python`, `node`, `nginx`,
+  `pgvector`, `redis`) закреплены по digest; backend работает под non-root
+  `app` (UID/GID 10001), `/app` для процесса read-only. Guard
+  `backend/scripts/check_image_pins.py` проверяет пиннинг в lint-джобе.
 
 ## [0.3.3] — 2026-11-05
 
