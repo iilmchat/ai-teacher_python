@@ -9,7 +9,7 @@ import { create } from 'zustand';
 
 import { api, ApiError, UNAUTHORIZED_EVENT } from '@/lib/api';
 import { clearTokens, getAccessToken, setTokens } from '@/lib/token';
-import type { LoginResponse, User, UserLevel } from '@/types/api';
+import type { CodeSnippet, LoginResponse, User, UserLevel } from '@/types/api';
 
 interface AuthState {
   user: User | null;
@@ -24,6 +24,8 @@ interface AuthState {
   setLevel: (level: UserLevel) => Promise<void>;
   /** Сохранить выбранный шаблон промпта в личных настройках (S43-004) */
   setPromptTemplate: (templateId: string | null) => Promise<void>;
+  /** Заменить список личных сниппетов кода (S44-003) */
+  setCodeSnippets: (snippets: CodeSnippet[]) => Promise<void>;
   clearError: () => void;
 }
 
@@ -119,6 +121,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = await api.patch<User>('/users/me/settings', {
       prompt_template: templateId,
     });
+    cacheUser(user);
+    set({ user });
+  },
+
+  async setCodeSnippets(snippets) {
+    const user = await api.patch<User>('/users/me/settings', { snippets });
     cacheUser(user);
     set({ user });
   },

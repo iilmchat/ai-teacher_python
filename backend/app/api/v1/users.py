@@ -54,7 +54,7 @@ async def update_my_settings(
     current_user: CurrentUser,
     db: DbSession,
 ) -> User:
-    """Обновить личные настройки пользователя (S43-004).
+    """Обновить личные настройки пользователя (S43-004, S44-003).
 
     Настройки дополняются, а не заменяются: так клиент может менять одну
     настройку, не присылая весь объект.
@@ -66,6 +66,13 @@ async def update_my_settings(
             current.pop("prompt_template", None)
         else:
             current["prompt_template"] = payload.prompt_template
+    if "snippets" in payload.model_fields_set:
+        if payload.snippets is None:
+            current.pop("snippets", None)
+        else:
+            current["snippets"] = [
+                snippet.model_dump() for snippet in payload.snippets
+            ]
     updated = await user_repo.update(current_user.id, settings=current)
     if updated is None:
         raise HTTPException(
