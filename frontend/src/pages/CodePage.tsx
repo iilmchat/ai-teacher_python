@@ -1,18 +1,37 @@
-import { useCallback, useEffect, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { CodeAnalysis } from '@/components/code-editor/CodeAnalysis';
 import { CodeEditor } from '@/components/code-editor/CodeEditor';
 import { CodeHistory } from '@/components/code-editor/CodeHistory';
+import { CodeSnippets } from '@/components/code-editor/CodeSnippets';
 import { OutputPanel } from '@/components/code-editor/OutputPanel';
 import { SandboxLimits } from '@/components/code-editor/SandboxLimits';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import {
+  downloadCode,
+  loadCodeFile,
+  type CodeFileError,
+} from '@/lib/codeFiles';
+import {
+  MAX_CODE_SNIPPETS,
+  newCodeSnippet,
+  parseCodeSnippets,
+} from '@/lib/codeSnippets';
 import { readCodeDraft, takeIncomingCode, writeCodeDraft } from '@/lib/codeTransfer';
+import { useAuthStore } from '@/store/auth';
 import type {
   AnalyzeResponse,
+  CodeSnippet,
   ExecutionRecord,
   ExecutionResult,
   LintResponse,
@@ -26,6 +45,14 @@ print(f"Привет, {name}!")
 
 /** Сколько записей истории показывать за один раз (S44-002) */
 const HISTORY_PAGE_SIZE = 10;
+
+/** Причина отказа при загрузке файла → ключ перевода (S44-003) */
+const FILE_ERROR_KEYS: Record<CodeFileError, string> = {
+  extension: 'code.fileErrorExtension',
+  size: 'code.fileErrorSize',
+  length: 'code.fileErrorLength',
+  read: 'code.fileErrorRead',
+};
 
 export function CodePage() {
   const { t } = useTranslation();
@@ -46,6 +73,14 @@ export function CodePage() {
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [snippetSaving, setSnippetSaving] = useState(false);
+  const [snippetError, setSnippetError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const settings = useAuthStore((state) => state.user?.settings);
+  const setCodeSnippets = useAuthStore((state) => state.setCodeSnippets);
+  const snippets = parseCodeSnippets(settings);
 
   // Запрашиваем на одну запись больше, чтобы понять, есть ли следующая
   // страница, не делая лишний пустой запрос (S44-002).
@@ -164,14 +199,88 @@ export function CodePage() {
     }
   }
 
-  function handleRestart(historyCode: string) {
-    // Возвращаем код в редактор, но не запускаем его автоматически (S44-002).
-    handleChange(historyCode);
+  /** Сбросить прошлый результат, когда в редактор приходит другой код */
+  function clearResult() {
     setResult(null);
     setLint(null);
     setAnalysis(null);
     setAnalyzeError(null);
     setError(null);
+  }
+
+  function handleRestart(historyCode: string) {
+    // Возвращаем код в редактор, но не запускаем его автоматически (S44-002).
+    handleChange(historyCode);
+    clearResult();
+  }
+
+  function handleDownload() {
+    downloadCode(code);
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Сбрасываем input: тот же файл можно выбрать повторно.
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setFileError(null);
+    const loaded = await loadCodeFile(file);
+    if (!loaded.ok) {
+      setFileError(t(FILE_ERROR_KEYS[loaded.error]));
+      return;
+    }
+
+    // Загруженный код не становится черновиком до явного действия ученика
+    // (S44-004): при первом редактировании он сохранится вместе с правкой.
+    setCode(loaded.code);
+    clearResult();
+  }
+
+  function handleApplySnippet(snippet: CodeSnippet) {
+    handleChange(snippet.code);
+    clearResult();
+  }
+
+  async function handleSaveSnippet(name: string) {
+    if (snippets.length >= MAX_CODE_SNIPPETS) {
+      setSnippetError(t('code.snippetsLimitError', { max: MAX_CODE_SNIPPETS }));
+      return;
+    }
+
+    setSnippetSaving(true);
+    setSnippetError(null);
+    try {
+      await setCodeSnippets([...snippets, newCodeSnippet(name, code)]);
+    } catch {
+      setSnippetError(t('code.snippetsSaveError'));
+    } finally {
+      setSnippetSaving(false);
+    }
+  }
+
+  async function handleDeleteSnippet(snippet: CodeSnippet) {
+    if (
+      !window.confirm(
+        t('code.snippetsDeleteConfirm', { name: snippet.name }),
+      )
+    ) {
+      return;
+    }
+
+    setSnippetSaving(true);
+    setSnippetError(null);
+    try {
+      await setCodeSnippets(
+        snippets.filter((item) => item.id !== snippet.id),
+      );
+    } catch {
+      setSnippetError(t('code.snippetsDeleteError'));
+    } finally {
+      setSnippetSaving(false);
+    }
   }
 
   function handleLoadMoreHistory() {
@@ -203,6 +312,27 @@ export function CodePage() {
 
       <p className="text-sm text-slate-600">{t('code.subtitle')}</p>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={handleDownload}>
+          {t('code.download')}
+        </Button>
+        <Button
+          variant="secondary"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          {t('code.upload')}
+        </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".py,text/x-python"
+          aria-label={t('code.upload')}
+          data-testid="code-file-input"
+          className="sr-only"
+          onChange={(event) => void handleFileChange(event)}
+        />
+      </div>
+
       {pending !== null && (
         <Alert tone="warning">
           <p>{t('code.replaceDraft')}</p>
@@ -217,7 +347,19 @@ export function CodePage() {
 
       {error && <Alert tone="error">{error}</Alert>}
 
+      {fileError && <Alert tone="error">{fileError}</Alert>}
+
       <CodeEditor value={code} onChange={handleChange} height="360px" />
+
+      <CodeSnippets
+        snippets={snippets}
+        saving={snippetSaving}
+        canSave={code.trim().length > 0}
+        error={snippetError}
+        onSave={handleSaveSnippet}
+        onApply={handleApplySnippet}
+        onDelete={handleDeleteSnippet}
+      />
 
       <div className="flex flex-col gap-1">
         <label htmlFor="code-stdin" className="text-sm font-medium text-slate-700">

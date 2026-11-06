@@ -247,6 +247,13 @@ export interface ExecutionResult {
   violations: string[];
 }
 
+/** Сниппет кода в личных настройках (S44-003) */
+export interface CodeSnippet {
+  id: string;
+  name: string;
+  code: string;
+}
+
 /** Сохранённый запуск из истории песочницы (S44-002) */
 export interface ExecutionRecord {
   id: string;

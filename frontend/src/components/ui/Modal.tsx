@@ -19,6 +19,8 @@ export function Modal({
 }: ModalProps) {
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) {
@@ -26,7 +28,7 @@ export function Modal({
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKeyDown);
@@ -39,7 +41,9 @@ export function Modal({
       document.body.style.overflow = overflow;
       previous?.focus();
     };
-  }, [open, onClose]);
+    // Зависимость только от `open`: иначе обновление родителя (например,
+    // ввод названия) перезапускало бы эффект и уводило фокус из поля.
+  }, [open]);
 
   if (!open) {
     return null;

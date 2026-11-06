@@ -49,6 +49,61 @@
         "title": "AchievementsResponse",
         "type": "object"
       },
+      "AdminQualityResponse": {
+        "description": "Сводка качества ответов ассистента по оценкам учеников (S43-003)",
+        "properties": {
+          "approval_rate": {
+            "title": "Approval Rate",
+            "type": "number"
+          },
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/QualityBreakdown"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_provider": {
+            "items": {
+              "$ref": "#/components/schemas/QualityBreakdown"
+            },
+            "title": "By Provider",
+            "type": "array"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "negative": {
+            "title": "Negative",
+            "type": "integer"
+          },
+          "negative_samples": {
+            "items": {
+              "$ref": "#/components/schemas/QualityNegativeItem"
+            },
+            "title": "Negative Samples",
+            "type": "array"
+          },
+          "positive": {
+            "title": "Positive",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "positive",
+          "negative",
+          "approval_rate",
+          "generated_at"
+        ],
+        "title": "AdminQualityResponse",
+        "type": "object"
+      },
       "AdminTaskItem": {
         "description": "Задача в админке (включая неактивные)",
         "properties": {
@@ -662,6 +717,122 @@
         "title": "AssignmentList",
         "type": "object"
       },
+      "AttemptDetail": {
+        "description": "Попытка с кодом и разбором по кейсам",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "passed_count": {
+            "title": "Passed Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TestCaseResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "passed",
+          "passed_count",
+          "total_count",
+          "created_at",
+          "code",
+          "results"
+        ],
+        "title": "AttemptDetail",
+        "type": "object"
+      },
+      "AttemptItem": {
+        "description": "Попытка ученика по задаче (S42-002)",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "passed_count": {
+            "title": "Passed Count",
+            "type": "integer"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "passed",
+          "passed_count",
+          "total_count",
+          "created_at"
+        ],
+        "title": "AttemptItem",
+        "type": "object"
+      },
+      "AttemptList": {
+        "description": "История попыток постранично",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "AttemptList",
+        "type": "object"
+      },
       "AuditLogItem": {
         "description": "Запись журнала действий",
         "properties": {
@@ -722,6 +893,7 @@
             "title": "Ip"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           }
@@ -912,13 +1084,25 @@
         "type": "object"
       },
       "ChatMessageRequest": {
-        "description": "Запрос на отправку сообщения в чат",
+        "description": "Запрос на отправку сообщения в чат.\n\n`task_id` (S42-006) — задача, условие которой ассистент получает\nотдельным системным сообщением. В `content` по-прежнему только текст\nвопроса: идентификатор не подмешивается в историю ученика.",
         "properties": {
           "content": {
             "maxLength": 4000,
             "minLength": 1,
             "title": "Content",
             "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
           }
         },
         "required": [
@@ -950,6 +1134,7 @@
             "type": "string"
           },
           "metadata": {
+            "additionalProperties": true,
             "title": "Metadata",
             "type": "object"
           },
@@ -1097,6 +1282,22 @@
             "title": "Level",
             "type": "string"
           },
+          "pinned": {
+            "default": false,
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "updated_at": {
             "format": "date-time",
             "title": "Updated At",
@@ -1115,6 +1316,37 @@
           "updated_at"
         ],
         "title": "ChatSessionResponse",
+        "type": "object"
+      },
+      "ChatSessionUpdate": {
+        "description": "Переименование и закрепление сессии (S43-001).\n\nОба поля необязательны, но хотя бы одно должно быть передано. Пустой\nзаголовок после trim отклоняется: заголовок либо есть, либо его нет\n(``None`` означает «не менять», а не «очистить»).",
+        "properties": {
+          "pinned": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ChatSessionUpdate",
         "type": "object"
       },
       "ChatSessionWithMessages": {
@@ -1142,6 +1374,22 @@
             },
             "title": "Messages",
             "type": "array"
+          },
+          "pinned": {
+            "default": false,
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
           },
           "updated_at": {
             "format": "date-time",
@@ -1178,6 +1426,22 @@
           "assistant_message"
         ],
         "title": "ChatTurnResponse",
+        "type": "object"
+      },
+      "CheckRequest": {
+        "description": "Пробная проверка решения (S42-001): попытка не засчитывается",
+        "properties": {
+          "code": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "CheckRequest",
         "type": "object"
       },
       "ClassProgress": {
@@ -1406,6 +1670,36 @@
         "title": "CodeRequest",
         "type": "object"
       },
+      "CodeSnippet": {
+        "description": "Сниппет кода в личных настройках (S44-003)",
+        "properties": {
+          "code": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "code"
+        ],
+        "title": "CodeSnippet",
+        "type": "object"
+      },
       "DeleteAccountRequest": {
         "description": "Подтверждение удаления аккаунта паролем (S26-004)",
         "properties": {
@@ -1439,6 +1733,45 @@
           "deleted"
         ],
         "title": "DeleteResponse",
+        "type": "object"
+      },
+      "DraftRequest": {
+        "description": "Сохранение черновика решения (S42-003)",
+        "properties": {
+          "code": {
+            "maxLength": 20000,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "DraftRequest",
+        "type": "object"
+      },
+      "DraftStatus": {
+        "description": "Состояние черновика (S42-003)",
+        "properties": {
+          "has_draft": {
+            "default": false,
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "title": "DraftStatus",
         "type": "object"
       },
       "ExecutionRecordResponse": {
@@ -1774,6 +2107,73 @@
         "title": "LintResponse",
         "type": "object"
       },
+      "MessageFeedbackCreate": {
+        "description": "Оценка ответа ассистента (S43-003).\n\n`value`: 1 — ответ помог, −1 — не помог. `comment` — необязательный\nкомментарий ученика до 500 символов.",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "value": {
+            "enum": [
+              1,
+              -1
+            ],
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "MessageFeedbackCreate",
+        "type": "object"
+      },
+      "MessageFeedbackResponse": {
+        "description": "Оценка ответа ассистента",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "message_id",
+          "value",
+          "created_at"
+        ],
+        "title": "MessageFeedbackResponse",
+        "type": "object"
+      },
       "MessageRole": {
         "description": "Роль в чате",
         "enum": [
@@ -1877,6 +2277,7 @@
             "type": "string"
           },
           "payload": {
+            "additionalProperties": true,
             "title": "Payload",
             "type": "object"
           },
@@ -2120,6 +2521,147 @@
         "title": "ProgressTask",
         "type": "object"
       },
+      "QualityBreakdown": {
+        "description": "Агрегат оценок по одному срезу (провайдер или модель)",
+        "properties": {
+          "approval_rate": {
+            "title": "Approval Rate",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "negative": {
+            "title": "Negative",
+            "type": "integer"
+          },
+          "positive": {
+            "title": "Positive",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "total",
+          "positive",
+          "negative",
+          "approval_rate"
+        ],
+        "title": "QualityBreakdown",
+        "type": "object"
+      },
+      "QualityNegativeItem": {
+        "description": "Негативная оценка с текстом ответа — вход для LLM-as-judge (S43-003)",
+        "properties": {
+          "comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "content",
+          "provider",
+          "model",
+          "created_at"
+        ],
+        "title": "QualityNegativeItem",
+        "type": "object"
+      },
+      "RecommendedTask": {
+        "description": "Рекомендуемая задача с объяснением выбора (S42-005)",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/TaskDifficulty"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_text": {
+            "title": "Reason Text",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "difficulty",
+          "category",
+          "reason",
+          "reason_text"
+        ],
+        "title": "RecommendedTask",
+        "type": "object"
+      },
+      "RecommendedTaskList": {
+        "description": "Список рекомендаций",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendedTask"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "RecommendedTaskList",
+        "type": "object"
+      },
       "StatsResponse": {
         "description": "Личная статистика ученика",
         "properties": {
@@ -2165,7 +2707,7 @@
         "type": "object"
       },
       "SubmitRequest": {
-        "description": "Отправка решения на проверку",
+        "description": "Отправка решения на проверку (попытка засчитывается)",
         "properties": {
           "code": {
             "maxLength": 20000,
@@ -2198,6 +2740,11 @@
           "passed_count": {
             "title": "Passed Count",
             "type": "integer"
+          },
+          "practice": {
+            "default": false,
+            "title": "Practice",
+            "type": "boolean"
           },
           "results": {
             "items": {
@@ -2243,6 +2790,29 @@
           },
           "difficulty": {
             "$ref": "#/components/schemas/TaskDifficulty"
+          },
+          "draft_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Code"
+          },
+          "draft_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Updated At"
           },
           "hints": {
             "items": {
@@ -2400,6 +2970,29 @@
           },
           "difficulty": {
             "$ref": "#/components/schemas/TaskDifficulty"
+          },
+          "draft_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Code"
+          },
+          "draft_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Updated At"
           },
           "hints": {
             "items": {
@@ -2623,6 +3216,7 @@
         "properties": {
           "tasks": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "maxItems": 100,
@@ -3466,6 +4060,7 @@
             "$ref": "#/components/schemas/UserRole"
           },
           "settings": {
+            "additionalProperties": true,
             "title": "Settings",
             "type": "object"
           },
@@ -3499,6 +4094,40 @@
         "title": "UserRole",
         "type": "string"
       },
+      "UserSettingsUpdate": {
+        "description": "Обновление личных настроек пользователя (S43-004, S44-003).\n\nСписок настроек закрытый: в `users.settings` попадают только известные\nключи, чтобы клиент не мог записать в профиль произвольные данные.\n`prompt_template` — id выбранного шаблона промпта; `null` — сброс.\n`snippets` — полный список сниппетов кода; `null` — очистить.",
+        "properties": {
+          "prompt_template": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Template"
+          },
+          "snippets": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodeSnippet"
+                },
+                "maxItems": 20,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snippets"
+          }
+        },
+        "title": "UserSettingsUpdate",
+        "type": "object"
+      },
       "UserUpdate": {
         "description": "Схема для обновления пользователя",
         "properties": {
@@ -3527,6 +4156,7 @@
           "settings": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -3603,7 +4233,7 @@
   "info": {
     "description": "AI-ассистент для обучения школьников программированию на Python",
     "title": "AI Teacher for Python",
-    "version": "0.2.0"
+    "version": "0.1.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3835,6 +4465,33 @@
           }
         ],
         "summary": "List Audit Log",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/quality": {
+      "get": {
+        "description": "Сводка качества ответов ассистента по оценкам учеников (S43-003).\n\nНегативные оценки с текстом ответа — вход для LLM-as-judge\n(см. `docs/LLM_EVAL.md`).",
+        "operationId": "get_quality_api_v1_admin_quality_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminQualityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Quality",
         "tags": [
           "Admin"
         ]
@@ -4116,6 +4773,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Login Api V1 Auth Login Post",
                   "type": "object"
                 }
@@ -4381,6 +5039,7 @@
                 "schema": {
                   "additionalProperties": {
                     "items": {
+                      "additionalProperties": true,
                       "type": "object"
                     },
                     "type": "array"
@@ -4394,6 +5053,105 @@
           }
         },
         "summary": "Get Chat Levels",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/messages/{message_id}/feedback": {
+      "delete": {
+        "description": "Снять свою оценку ответа ассистента (S43-003)",
+        "operationId": "delete_message_feedback_api_v1_chat_messages__message_id__feedback_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Message Feedback",
+        "tags": [
+          "Chat"
+        ]
+      },
+      "post": {
+        "description": "Оценить ответ ассистента (S43-003).\n\nПовторная оценка меняет значение: на пару «сообщение × ученик» оценка\nвсегда одна.",
+        "operationId": "set_message_feedback_api_v1_chat_messages__message_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageFeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageFeedbackResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Message Feedback",
         "tags": [
           "Chat"
         ]
@@ -4664,6 +5422,177 @@
         "tags": [
           "Chat"
         ]
+      },
+      "patch": {
+        "description": "Переименовать и/или закрепить сессию (S43-001)",
+        "operationId": "update_session_api_v1_chat_sessions__session_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatSessionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Session",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/sessions/{session_id}/export": {
+      "get": {
+        "description": "Выгрузка диалога (S43-004).\n\n`format=md` — Markdown-транскрипт для чтения, `format=json` — данные в том\nже виде, что и `GET /chat/sessions/{id}`. Чужая сессия — 403.",
+        "operationId": "export_session_api_v1_chat_sessions__session_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "md",
+              "enum": [
+                "md",
+                "json"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Session",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/sessions/{session_id}/feedback": {
+      "get": {
+        "description": "Мои оценки по сообщениям сессии (S43-003)",
+        "operationId": "list_session_feedback_api_v1_chat_sessions__session_id__feedback_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MessageFeedbackResponse"
+                  },
+                  "title": "Response List Session Feedback Api V1 Chat Sessions  Session Id  Feedback Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Session Feedback",
+        "tags": [
+          "Chat"
+        ]
       }
     },
     "/api/v1/chat/sessions/{session_id}/messages": {
@@ -4720,6 +5649,65 @@
           }
         ],
         "summary": "Send Message",
+        "tags": [
+          "Chat"
+        ]
+      }
+    },
+    "/api/v1/chat/sessions/{session_id}/messages/{message_id}/regenerate": {
+      "post": {
+        "description": "Перегенерировать ответ ассистента (S43-002).\n\nВопрос ученика не дублируется: ассистент отвечает заново на тот же\nвопрос с тем же уровнем. Прежний ответ остаётся в истории, но\nпомечается в метаданных как заменённый.",
+        "operationId": "regenerate_message_api_v1_chat_sessions__session_id__messages__message_id__regenerate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatMessageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Regenerate Message",
         "tags": [
           "Chat"
         ]
@@ -5667,6 +6655,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Limits Api V1 Code Limits Get",
                   "type": "object"
                 }
@@ -5732,6 +6721,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Health Check Api V1 Health Get",
                   "type": "object"
                 }
@@ -6015,6 +7005,22 @@
                 }
               ],
               "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
             }
           },
           {
@@ -6415,6 +7421,57 @@
         ]
       }
     },
+    "/api/v1/tasks/recommended": {
+      "get": {
+        "description": "Рекомендации следующих задач (S42-005).\n\nПорядок детерминированный: начатые задачи, затем совпадение тегов\nс недавно решёнными, затем близость по сложности. Каждая рекомендация\nобъясняет, почему она предложена.",
+        "operationId": "recommended_tasks_api_v1_tasks_recommended_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendedTaskList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recommended Tasks",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
     "/api/v1/tasks/stats": {
       "get": {
         "description": "Статистика задач и активности",
@@ -6583,6 +7640,302 @@
           }
         ],
         "summary": "Update Task",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task_id}/attempts": {
+      "get": {
+        "description": "История попыток ученика по задаче (S42-002), новые сверху.\n\nВ историю попадают только засчитанные отправки: пробная проверка\n(S42-001) попытку не засчитывает и сюда не пишется.",
+        "operationId": "list_attempts_api_v1_tasks__task_id__attempts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Attempts",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task_id}/attempts/{attempt_id}": {
+      "get": {
+        "description": "Детальная попытка: код и разбор по тест-кейсам.\n\nПопытка принадлежит ученику: чужая недоступна (404).",
+        "operationId": "get_attempt_api_v1_tasks__task_id__attempts__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Attempt",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task_id}/check": {
+      "post": {
+        "description": "Пробная проверка решения (S42-001).\n\nОтличается от `submit` тем, что попытка не засчитывается: счётчик\nпопыток и статус задачи не меняются, достижения не начисляются.\nПесочница запускается столько же раз, поэтому проверка ограничена\nпо частоте (429 при превышении).",
+        "operationId": "check_solution_api_v1_tasks__task_id__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Check Solution",
+        "tags": [
+          "Tasks"
+        ]
+      }
+    },
+    "/api/v1/tasks/{task_id}/draft": {
+      "delete": {
+        "description": "Очистить черновик решения (S42-003).",
+        "operationId": "clear_draft_api_v1_tasks__task_id__draft_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Draft",
+        "tags": [
+          "Tasks"
+        ]
+      },
+      "patch": {
+        "description": "Сохранить черновик решения (S42-003).\n\nЧерновик не является решением: счётчик попыток и статус задачи\nне меняются, в историю попыток запись не попадает. Пустой код\nудаляет черновик.",
+        "operationId": "save_draft_api_v1_tasks__task_id__draft_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Save Draft",
         "tags": [
           "Tasks"
         ]
@@ -7167,6 +8520,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get Levels Api V1 Users Levels Get",
                   "type": "object"
                 }
@@ -7248,6 +8602,7 @@
             "content": {
               "application/json": {
                 "schema": {
+                  "additionalProperties": true,
                   "title": "Response Get My Level Api V1 Users Me Level Get",
                   "type": "object"
                 }
@@ -7307,6 +8662,53 @@
           }
         ],
         "summary": "Update My Level",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/settings": {
+      "patch": {
+        "description": "Обновить личные настройки пользователя (S43-004).\n\nНастройки дополняются, а не заменяются: так клиент может менять одну\nнастройку, не присылая весь объект.",
+        "operationId": "update_my_settings_api_v1_users_me_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update My Settings",
         "tags": [
           "Users"
         ]
