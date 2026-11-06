@@ -2668,7 +2668,7 @@ GitHub Release через release-workflow
 | Frontend unit (vitest) | **204 passed** (было 196) |
 | Frontend `build` | **OK** (entry 69.58 kB gzip) |
 | i18n-аудит | **OK**, 476 ключей в ru/en (было 454) |
-| Полный backend-прогон | выполняется локально; результат — в отчёте шага |
+| Полный backend-прогон | **622 passed, 1 skipped** (426.69 с) |
 
 ### Документация
 
