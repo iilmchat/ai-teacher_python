@@ -247,6 +247,17 @@ export interface ExecutionResult {
   violations: string[];
 }
 
+/** Сохранённый запуск из истории песочницы (S44-002) */
+export interface ExecutionRecord {
+  id: string;
+  code: string;
+  output: string;
+  error: string | null;
+  success: boolean;
+  execution_time: number;
+  created_at: string;
+}
+
 export interface LintIssue {
   line: number;
   column: number;
