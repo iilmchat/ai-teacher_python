@@ -262,6 +262,24 @@ export interface LintResponse {
   infos: number;
 }
 
+/** Ограничения песочницы для блока «Ограничения» (S44-001) */
+export interface SandboxLimits {
+  timeout_seconds: number;
+  memory_limit_mb: number;
+  max_output_chars: number;
+  max_concurrency: number;
+  queue_timeout_seconds: number;
+  max_code_length: number;
+  allowed_modules: string[];
+}
+
+/** Разбор кода: замечания, метрики и сводка (S44-001) */
+export interface AnalyzeResponse {
+  issues: LintIssue[];
+  stats: Record<string, number>;
+  summary: string;
+}
+
 export interface HealthResponse {
   status: string;
   version: string;
