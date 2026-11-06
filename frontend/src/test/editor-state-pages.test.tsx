@@ -162,7 +162,9 @@ describe('песочница: сохранение состояния (S44-004)'
       new File(['print("file")\n'], 'task.py', { type: 'text/x-python' }),
     );
 
-    expect(await screen.findByTestId('code-input')).toHaveValue('print("file")\n');
+    await waitFor(() => {
+      expect(screen.getByTestId('code-input')).toHaveValue('print("file")\n');
+    });
     expect(readEditorState('code')).toBeNull();
   });
 
