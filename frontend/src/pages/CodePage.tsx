@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { CodeAnalysis } from '@/components/code-editor/CodeAnalysis';
 import { CodeEditor } from '@/components/code-editor/CodeEditor';
+import { CodeHistory } from '@/components/code-editor/CodeHistory';
 import { OutputPanel } from '@/components/code-editor/OutputPanel';
 import { SandboxLimits } from '@/components/code-editor/SandboxLimits';
 import { Alert } from '@/components/ui/Alert';
@@ -12,6 +13,7 @@ import { api } from '@/lib/api';
 import { readCodeDraft, takeIncomingCode, writeCodeDraft } from '@/lib/codeTransfer';
 import type {
   AnalyzeResponse,
+  ExecutionRecord,
   ExecutionResult,
   LintResponse,
   SandboxLimits as SandboxLimitsData,
@@ -21,6 +23,9 @@ const STARTER_CODE = `# Напишите код и нажмите «Запуст
 name = input("Как тебя зовут? ")
 print(f"Привет, {name}!")
 `;
+
+/** Сколько записей истории показывать за один раз (S44-002) */
+const HISTORY_PAGE_SIZE = 10;
 
 export function CodePage() {
   const { t } = useTranslation();
@@ -35,8 +40,46 @@ export function CodePage() {
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [history, setHistory] = useState<ExecutionRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Запрашиваем на одну запись больше, чтобы понять, есть ли следующая
+  // страница, не делая лишний пустой запрос (S44-002).
+  const loadHistory = useCallback(
+    async (skip: number, append: boolean) => {
+      setHistoryLoading(true);
+      setHistoryError(null);
+      try {
+        const data = await api.get<ExecutionRecord[]>(
+          `/code/history?skip=${skip}&limit=${HISTORY_PAGE_SIZE + 1}`,
+        );
+        const page = data.slice(0, HISTORY_PAGE_SIZE);
+
+        setHistory((previous) => {
+          if (!append) {
+            return page;
+          }
+          const known = new Set(previous.map((item) => item.id));
+          return [...previous, ...page.filter((item) => !known.has(item.id))];
+        });
+        setHistoryHasMore(data.length > HISTORY_PAGE_SIZE);
+      } catch {
+        setHistoryError(t('code.historyError'));
+      } finally {
+        setHistoryLoading(false);
+      }
+    },
+    [t],
+  );
+
+  // История подгружается при открытии страницы (S44-002).
+  useEffect(() => {
+    void loadHistory(0, false);
+  }, [loadHistory]);
 
   // Лимиты песочницы не зависят от кода и запрашиваются один раз (S44-001).
   useEffect(() => {
@@ -99,6 +142,8 @@ export function CodePage() {
       ]);
       setResult(execution);
       setLint(lintResult);
+      // Новый запуск сразу виден в истории (S44-002).
+      void loadHistory(0, false);
     } catch {
       setError(t('code.runError'));
     } finally {
@@ -117,6 +162,24 @@ export function CodePage() {
     } finally {
       setAnalyzing(false);
     }
+  }
+
+  function handleRestart(historyCode: string) {
+    // Возвращаем код в редактор, но не запускаем его автоматически (S44-002).
+    handleChange(historyCode);
+    setResult(null);
+    setLint(null);
+    setAnalysis(null);
+    setAnalyzeError(null);
+    setError(null);
+  }
+
+  function handleLoadMoreHistory() {
+    void loadHistory(history.length, true);
+  }
+
+  function handleRetryHistory() {
+    void loadHistory(history.length, history.length > 0);
   }
 
   function handleAskAssistant() {
@@ -182,6 +245,16 @@ export function CodePage() {
         analyzing={analyzing}
         error={analyzeError}
         onAnalyze={() => void handleAnalyze()}
+      />
+
+      <CodeHistory
+        items={history}
+        loading={historyLoading}
+        error={historyError}
+        hasMore={historyHasMore}
+        onLoadMore={handleLoadMoreHistory}
+        onRetry={handleRetryHistory}
+        onRestart={handleRestart}
       />
     </div>
   );
