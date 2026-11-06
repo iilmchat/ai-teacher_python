@@ -25,11 +25,13 @@ class FakeExecutor(SandboxedExecutor):
         super().__init__(timeout=1)
         self.result = result
         self.calls: list[str] = []
+        self.stdins: list[str] = []
 
     async def execute(  # type: ignore[override]
         self, code: str, stdin_text: str = ""
     ) -> ExecutionResult:
         self.calls.append(code)
+        self.stdins.append(stdin_text)
         return self.result
 
 
@@ -89,6 +91,22 @@ async def test_execute_returns_result_and_saves_record(
     items = history.json()
     assert len(items) == 1
     assert items[0]["success"] is True
+
+
+async def test_execute_forwards_stdin_to_executor(
+    client: AsyncClient, fake_executor: FakeExecutor
+) -> None:
+    """Данные input() доходят до песочницы (S44-001)"""
+    token = await _register_and_login(client, username="codestdin")
+
+    response = await client.post(
+        "/api/v1/code/execute",
+        json={"code": "print(input())", "stdin": "Аня\n"},
+        headers=_auth(token),
+    )
+
+    assert response.status_code == 200, response.text
+    assert fake_executor.stdins == ["Аня\n"]
 
 
 async def test_execute_rejects_empty_code(
