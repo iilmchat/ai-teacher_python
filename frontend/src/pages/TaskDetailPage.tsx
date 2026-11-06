@@ -8,13 +8,14 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
+import {
+  clearEditorState,
+  readEditorState,
+  taskEditorContext,
+  writeEditorState,
+} from '@/lib/editorState';
 import { useTasksStore } from '@/store/tasks';
-import type {
-  AttemptDetail,
-  AttemptItem,
-  AttemptList,
-  SubmitResponse,
-} from '@/types/api';
+import type { AttemptDetail, AttemptItem, AttemptList, SubmitResponse } from '@/types/api';
 
 /** Кнопка перехода в чат с контекстом задачи (S42-006) */
 function AskAssistantLink({ taskId }: { taskId: string }) {
@@ -30,13 +31,7 @@ function AskAssistantLink({ taskId }: { taskId: string }) {
   );
 }
 
-function ResultsCard({
-  result,
-  taskId,
-}: {
-  result: SubmitResponse;
-  taskId: string;
-}) {
+function ResultsCard({ result, taskId }: { result: SubmitResponse; taskId: string }) {
   const { t } = useTranslation();
 
   return (
@@ -54,9 +49,7 @@ function ResultsCard({
           <li
             key={item.index}
             className={`rounded-lg border px-3 py-2 text-xs ${
-              item.passed
-                ? 'border-emerald-200 bg-emerald-50'
-                : 'border-rose-200 bg-rose-50'
+              item.passed ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
             }`}
           >
             <p className="font-medium">
@@ -86,44 +79,52 @@ function ResultsCard({
 function DraftIndicator({
   savedAt,
   saving,
+  localSavedAt,
   onClear,
+  onClearSaved,
 }: {
   savedAt: string | null;
   saving: boolean;
+  localSavedAt: number | null;
   onClear: () => void;
+  onClearSaved: () => void;
 }) {
   const { t } = useTranslation();
 
-  if (saving) {
-    return (
-      <p className="mt-2 text-xs text-slate-500" role="status">
-        {t('tasks.draftSaving')}
-      </p>
-    );
-  }
-
-  if (!savedAt) {
+  if (!saving && !savedAt && localSavedAt === null) {
     return null;
   }
 
   return (
-    <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-      <span role="status">
-        {t('tasks.draftSavedAt', {
-          time: new Date(savedAt).toLocaleTimeString('ru-RU'),
-        })}
-      </span>
-      <button
-        type="button"
-        className="text-indigo-700 hover:underline"
-        onClick={onClear}
-      >
-        {t('tasks.draftDiscard')}
-      </button>
-    </p>
+    <div className="mt-2 flex flex-col gap-1 text-xs text-slate-500">
+      {saving && <p role="status">{t('tasks.draftSaving')}</p>}
+      {savedAt && (
+        <p className="flex items-center gap-2">
+          <span role="status">
+            {t('tasks.draftSavedAt', {
+              time: new Date(savedAt).toLocaleTimeString('ru-RU'),
+            })}
+          </span>
+          <button type="button" className="text-indigo-700 hover:underline" onClick={onClear}>
+            {t('tasks.draftDiscard')}
+          </button>
+        </p>
+      )}
+      {localSavedAt !== null && (
+        <p className="flex items-center gap-2">
+          <span>
+            {t('tasks.localSavedAt', {
+              time: new Date(localSavedAt).toLocaleTimeString('ru-RU'),
+            })}
+          </span>
+          <button type="button" className="text-indigo-700 hover:underline" onClick={onClearSaved}>
+            {t('tasks.clearSaved')}
+          </button>
+        </p>
+      )}
+    </div>
   );
 }
-
 
 function AttemptsHistory({
   attempts,
@@ -156,9 +157,7 @@ function AttemptsHistory({
             <span
               className={item.passed ? 'font-medium text-emerald-700' : 'font-medium text-rose-700'}
             >
-              {item.passed
-                ? t('tasks.attemptPassed')
-                : t('tasks.attemptFailed')}{' '}
+              {item.passed ? t('tasks.attemptPassed') : t('tasks.attemptFailed')}{' '}
               {t('tasks.attemptScore', {
                 passed: item.passed_count,
                 total: item.total_count,
@@ -178,9 +177,7 @@ function AttemptsHistory({
       {attemptDetail && (
         <div className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium text-slate-800">
-              {t('tasks.attemptDetails')}
-            </p>
+            <p className="text-sm font-medium text-slate-800">{t('tasks.attemptDetails')}</p>
             <button
               type="button"
               className="text-sm text-indigo-700 hover:underline"
@@ -197,9 +194,7 @@ function AttemptsHistory({
               <li
                 key={result.index}
                 className={`rounded border px-2 py-1 text-xs ${
-                  result.passed
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-rose-200 bg-rose-50'
+                  result.passed ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50'
                 }`}
               >
                 {t('tasks.case')} {result.index}:{' '}
@@ -219,7 +214,6 @@ function AttemptsHistory({
     </Card>
   );
 }
-
 
 export function TaskDetailPage() {
   const { t } = useTranslation();
@@ -247,10 +241,47 @@ export function TaskDetailPage() {
   const [hintsShown, setHintsShown] = useState(0);
   /** Код в редакторе отличается от сохранённого — нужен автосейв */
   const [dirty, setDirty] = useState(false);
+  /** Время локального сохранения на этом устройстве (S44-004) */
+  const [localSavedAt, setLocalSavedAt] = useState<number | null>(null);
+  /** Локальный код новее серверного черновика — предупреждаем (S44-004) */
+  const [localNewer, setLocalNewer] = useState(false);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Для какой задачи уже восстановлено состояние редактора */
+  const restoredTask = useRef<string | null>(null);
+
+  function handleCodeChange(value: string) {
+    setCode(value);
+    setDirty(true);
+    setLocalNewer(false);
+    if (detail) {
+      writeEditorState(taskEditorContext(detail.id), value);
+      setLocalSavedAt(Date.now());
+    }
+  }
+
+  function handleClearSaved() {
+    if (detail) {
+      clearEditorState(taskEditorContext(detail.id));
+    }
+    setLocalSavedAt(null);
+    setLocalNewer(false);
+  }
 
   async function handleSubmit() {
-    await submit(detail?.id ?? taskId, code);
+    const id = detail?.id ?? taskId;
+    await submit(id, code);
+    if (useTasksStore.getState().submission) {
+      // Явная отправка завершает работу с черновиком: локальная копия
+      // больше не должна восстанавливаться при следующем открытии.
+      clearEditorState(taskEditorContext(id));
+      setLocalSavedAt(null);
+      setLocalNewer(false);
+      setDirty(false);
+      if (draftTimer.current) {
+        clearTimeout(draftTimer.current);
+        draftTimer.current = null;
+      }
+    }
     // Новая попытка появилась в истории — перечитываем список.
     void loadAttempts(taskId);
   }
@@ -261,12 +292,32 @@ export function TaskDetailPage() {
   }, [loadDetail, loadAttempts, taskId]);
 
   useEffect(() => {
-    if (detail) {
-      // Черновик важнее шаблона: работа ученика не должна теряться.
-      setCode(detail.draft_code ?? detail.solution_template ?? '');
-      setHintsShown(0);
-      setDirty(false);
+    if (!detail || restoredTask.current === detail.id) {
+      return;
     }
+    restoredTask.current = detail.id;
+
+    const local = readEditorState(taskEditorContext(detail.id));
+    const serverSavedAt = detail.draft_updated_at
+      ? Date.parse(detail.draft_updated_at)
+      : Number.NaN;
+    const hasServerDraft = Boolean(detail.draft_code);
+    const localIsNewer =
+      local !== null &&
+      hasServerDraft &&
+      Number.isFinite(serverSavedAt) &&
+      local.savedAt > serverSavedAt;
+    const useLocal =
+      local !== null &&
+      (!hasServerDraft || !Number.isFinite(serverSavedAt) || local.savedAt >= serverSavedAt);
+
+    // Локальная копия важнее серверной, если она новее: ученик мог
+    // закрыть вкладку до автосохранения. Иначе черновик важнее шаблона.
+    setCode(useLocal ? local.code : (detail.draft_code ?? detail.solution_template ?? ''));
+    setLocalSavedAt(local?.savedAt ?? null);
+    setLocalNewer(useLocal && localIsNewer && local.code !== (detail.draft_code ?? ''));
+    setHintsShown(0);
+    setDirty(false);
   }, [detail]);
 
   // Автосохранение черновика: пауза в наборе 800 мс (S42-003).
@@ -325,8 +376,7 @@ export function TaskDetailPage() {
       <Card>
         <p className="whitespace-pre-wrap text-sm text-slate-700">{detail.description}</p>
         <p className="mt-3 text-xs text-slate-500">
-          {t('tasks.attempts')}: {detail.attempts} ·{' '}
-          {t(`tasks.status.${detail.status}`)}
+          {t('tasks.attempts')}: {detail.attempts} · {t(`tasks.status.${detail.status}`)}
         </p>
         <div className="mt-3">
           <AskAssistantLink taskId={detail.id} />
@@ -357,20 +407,14 @@ export function TaskDetailPage() {
       )}
 
       <Card title={t('tasks.solution')}>
-        <CodeEditor
-          value={code}
-          onChange={(value) => {
-            setCode(value);
-            setDirty(true);
-          }}
-          height="280px"
-        />
+        {localNewer && (
+          <div className="mb-3">
+            <Alert tone="warning">{t('tasks.localNewer')}</Alert>
+          </div>
+        )}
+        <CodeEditor value={code} onChange={handleCodeChange} height="280px" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <Button
-            onClick={() => void handleSubmit()}
-            loading={submitting}
-            disabled={!code.trim()}
-          >
+          <Button onClick={() => void handleSubmit()} loading={submitting} disabled={!code.trim()}>
             {t('tasks.submit')}
           </Button>
           <Button
@@ -389,10 +433,12 @@ export function TaskDetailPage() {
         <DraftIndicator
           savedAt={draftSavedAt}
           saving={draftSaving}
+          localSavedAt={localSavedAt}
           onClear={() => {
             setDirty(false);
             void clearDraft(detail.id);
           }}
+          onClearSaved={handleClearSaved}
         />
       </Card>
 
@@ -404,7 +450,7 @@ export function TaskDetailPage() {
         attempts={attempts}
         attemptDetail={attemptDetail}
         onOpen={(attemptId) => void loadAttempt(detail.id, attemptId)}
-        onRestore={(restored) => setCode(restored)}
+        onRestore={handleCodeChange}
       />
 
       {checkResult && <ResultsCard result={checkResult} taskId={detail.id} />}

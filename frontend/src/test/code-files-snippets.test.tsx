@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/i18n';
 import { CodePage } from '@/pages/CodePage';
 import { MAX_CODE_FILE_BYTES, MAX_CODE_LENGTH } from '@/lib/codeFiles';
+import { readEditorState } from '@/lib/editorState';
 import { useAuthStore } from '@/store/auth';
 import type { SandboxLimits, User } from '@/types/api';
 import { jsonResponse } from '@/test/utils';
@@ -133,15 +134,14 @@ describe('файлы песочницы (S44-003)', () => {
     renderPage();
     await screen.findByTestId('monaco-mock');
 
-    await uploadFile(
-      new File(['print(42)\n'], 'task.py', { type: 'text/x-python' }),
-    );
+    await uploadFile(new File(['print(42)\n'], 'task.py', { type: 'text/x-python' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('monaco-mock')).toHaveValue('print(42)\n');
     });
     // Загруженный файл не становится черновиком до явного действия (S44-004).
     expect(localStorage.getItem('ai-teacher.code.draft')).toBeNull();
+    expect(readEditorState('code')).toBeNull();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
@@ -184,9 +184,7 @@ describe('файлы песочницы (S44-003)', () => {
       }),
     );
 
-    expect(
-      await screen.findByText('Код длиннее 20 000 символов'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Код длиннее 20 000 символов')).toBeInTheDocument();
   });
 });
 
@@ -199,17 +197,13 @@ describe('сниппеты кода (S44-003)', () => {
     const editor = await screen.findByTestId('monaco-mock');
     fireEvent.change(editor, { target: { value: 'print("snippet")' } });
 
-    await user.click(
-      screen.getByRole('button', { name: 'Сохранить как сниппет' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Сохранить как сниппет' }));
     const dialog = await screen.findByRole('dialog');
     await user.type(within(dialog).getByLabelText('Название'), 'Печать');
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
 
     await waitFor(() => {
-      const patch = requests
-        .filter((request) => request.url.endsWith('/users/me/settings'))
-        .at(-1);
+      const patch = requests.filter((request) => request.url.endsWith('/users/me/settings')).at(-1);
       expect(patch?.body).toEqual({
         snippets: [
           {
@@ -240,9 +234,7 @@ describe('сниппеты кода (S44-003)', () => {
     });
     expect(screen.getByText(/Сниппетов пока нет/)).toBeInTheDocument();
 
-    const patches = requests.filter((request) =>
-      request.url.endsWith('/users/me/settings'),
-    );
+    const patches = requests.filter((request) => request.url.endsWith('/users/me/settings'));
     expect(patches.at(-1)?.body).toEqual({ snippets: [] });
   });
 
@@ -259,13 +251,9 @@ describe('сниппеты кода (S44-003)', () => {
     renderPage();
 
     expect(await screen.findByText('20 из 20')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Сохранить как сниппет' })).toBeDisabled();
     expect(
-      screen.getByRole('button', { name: 'Сохранить как сниппет' }),
-    ).toBeDisabled();
-    expect(
-      screen.getByText(
-        'Достигнут лимит: можно сохранить не больше 20 сниппетов.',
-      ),
+      screen.getByText('Достигнут лимит: можно сохранить не больше 20 сниппетов.'),
     ).toBeInTheDocument();
   });
 
@@ -276,8 +264,6 @@ describe('сниппеты кода (S44-003)', () => {
     const editor = await screen.findByTestId('monaco-mock');
     fireEvent.change(editor, { target: { value: '   ' } });
 
-    expect(
-      screen.getByRole('button', { name: 'Сохранить как сниппет' }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Сохранить как сниппет' })).toBeDisabled();
   });
 });

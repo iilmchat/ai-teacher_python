@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -17,17 +11,15 @@ import { SandboxLimits } from '@/components/code-editor/SandboxLimits';
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { api } from '@/lib/api';
+import { downloadCode, loadCodeFile, type CodeFileError } from '@/lib/codeFiles';
+import { MAX_CODE_SNIPPETS, newCodeSnippet, parseCodeSnippets } from '@/lib/codeSnippets';
 import {
-  downloadCode,
-  loadCodeFile,
-  type CodeFileError,
-} from '@/lib/codeFiles';
-import {
-  MAX_CODE_SNIPPETS,
-  newCodeSnippet,
-  parseCodeSnippets,
-} from '@/lib/codeSnippets';
-import { readCodeDraft, takeIncomingCode, writeCodeDraft } from '@/lib/codeTransfer';
+  clearCodeDraft,
+  readCodeDraft,
+  takeIncomingCode,
+  writeCodeDraft,
+} from '@/lib/codeTransfer';
+import { readEditorState } from '@/lib/editorState';
 import { useAuthStore } from '@/store/auth';
 import type {
   AnalyzeResponse,
@@ -59,6 +51,11 @@ export function CodePage() {
   const navigate = useNavigate();
   const [code, setCode] = useState<string>(() => readCodeDraft() ?? STARTER_CODE);
   const [pending, setPending] = useState<string | null>(null);
+  const [pendingUpload, setPendingUpload] = useState<string | null>(null);
+  /** Когда код песочницы сохранён локально; null — сохранения нет */
+  const [savedAt, setSavedAt] = useState<number | null>(
+    () => readEditorState('code')?.savedAt ?? null,
+  );
   const [stdin, setStdin] = useState('');
   const [result, setResult] = useState<ExecutionResult | null>(null);
   const [lint, setLint] = useState<LintResponse | null>(null);
@@ -151,11 +148,13 @@ export function CodePage() {
     }
     setCode(incoming);
     writeCodeDraft(incoming);
+    setSavedAt(Date.now());
   }, []);
 
   function handleChange(value: string) {
     setCode(value);
     writeCodeDraft(value);
+    setSavedAt(Date.now());
   }
 
   function acceptIncoming() {
@@ -164,7 +163,13 @@ export function CodePage() {
     }
     setCode(pending);
     writeCodeDraft(pending);
+    setSavedAt(Date.now());
     setPending(null);
+  }
+
+  function handleClearSaved() {
+    clearCodeDraft();
+    setSavedAt(null);
   }
 
   async function handleRun() {
@@ -233,10 +238,36 @@ export function CodePage() {
       return;
     }
 
-    // Загруженный код не становится черновиком до явного действия ученика
-    // (S44-004): при первом редактировании он сохранится вместе с правкой.
-    setCode(loaded.code);
+    // Локальный черновик мог быть изменён позже, чем файл. Не заменяем его
+    // молча: ученик сам решает, что важнее (S44-004).
+    const saved = readEditorState('code');
+    if (saved !== null && saved.code !== loaded.code && saved.savedAt > file.lastModified) {
+      setPendingUpload(loaded.code);
+      return;
+    }
+
+    applyUploadedCode(loaded.code);
+  }
+
+  /**
+   * Поставить код из файла в редактор. В localStorage он попадёт только
+   * после явного редактирования (S44-004).
+   */
+  function applyUploadedCode(loaded: string) {
+    setCode(loaded);
+    setPendingUpload(null);
     clearResult();
+  }
+
+  function acceptUpload() {
+    if (pendingUpload === null) {
+      return;
+    }
+    // Ученик выбрал файл вместо сохранённого черновика: старую запись
+    // убираем, но сам файл не сохраняем до первой правки.
+    clearCodeDraft();
+    setSavedAt(null);
+    applyUploadedCode(pendingUpload);
   }
 
   function handleApplySnippet(snippet: CodeSnippet) {
@@ -262,20 +293,14 @@ export function CodePage() {
   }
 
   async function handleDeleteSnippet(snippet: CodeSnippet) {
-    if (
-      !window.confirm(
-        t('code.snippetsDeleteConfirm', { name: snippet.name }),
-      )
-    ) {
+    if (!window.confirm(t('code.snippetsDeleteConfirm', { name: snippet.name }))) {
       return;
     }
 
     setSnippetSaving(true);
     setSnippetError(null);
     try {
-      await setCodeSnippets(
-        snippets.filter((item) => item.id !== snippet.id),
-      );
+      await setCodeSnippets(snippets.filter((item) => item.id !== snippet.id));
     } catch {
       setSnippetError(t('code.snippetsDeleteError'));
     } finally {
@@ -316,10 +341,7 @@ export function CodePage() {
         <Button variant="secondary" onClick={handleDownload}>
           {t('code.download')}
         </Button>
-        <Button
-          variant="secondary"
-          onClick={() => fileInputRef.current?.click()}
-        >
+        <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
           {t('code.upload')}
         </Button>
         <input
@@ -331,7 +353,24 @@ export function CodePage() {
           className="sr-only"
           onChange={(event) => void handleFileChange(event)}
         />
+        {savedAt !== null && (
+          <Button variant="secondary" onClick={handleClearSaved}>
+            {t('code.clearSaved')}
+          </Button>
+        )}
       </div>
+
+      {pendingUpload !== null && (
+        <Alert tone="warning">
+          <p>{t('code.uploadNewerSaved')}</p>
+          <div className="mt-2 flex gap-2">
+            <Button onClick={acceptUpload}>{t('code.uploadReplace')}</Button>
+            <Button variant="secondary" onClick={() => setPendingUpload(null)}>
+              {t('code.uploadKeep')}
+            </Button>
+          </div>
+        </Alert>
+      )}
 
       {pending !== null && (
         <Alert tone="warning">
