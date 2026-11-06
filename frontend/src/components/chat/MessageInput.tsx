@@ -1,10 +1,13 @@
-import { useState, type KeyboardEvent } from 'react';
+import { type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/Button';
 import type { PromptTemplate } from '@/lib/promptTemplates';
 
 interface MessageInputProps {
+  /** Текст в поле ввода (компонент управляемый — код можно передать из песочницы) */
+  value: string;
+  onChange: (value: string) => void;
   onSend: (content: string) => void;
   disabled?: boolean;
   /** Стартовые шаблоны промптов для текущего уровня (S43-004) */
@@ -16,6 +19,8 @@ interface MessageInputProps {
 }
 
 export function MessageInput({
+  value,
+  onChange,
   onSend,
   disabled = false,
   templates = [],
@@ -23,7 +28,6 @@ export function MessageInput({
   onSelectTemplate,
 }: MessageInputProps) {
   const { t } = useTranslation();
-  const [value, setValue] = useState('');
 
   function submit() {
     const text = value.trim();
@@ -31,7 +35,6 @@ export function MessageInput({
       return;
     }
     onSend(text);
-    setValue('');
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -44,7 +47,7 @@ export function MessageInput({
 
   function applyTemplate(template: PromptTemplate) {
     // Шаблон только подставляется: отправляет ученик (S43-004).
-    setValue(t(template.textKey));
+    onChange(t(template.textKey));
     onSelectTemplate?.(template.id);
   }
 
@@ -79,7 +82,7 @@ export function MessageInput({
           value={value}
           disabled={disabled}
           placeholder={t('chat.placeholder')}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
           className="max-h-40 min-h-[52px] flex-1 resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500"
         />

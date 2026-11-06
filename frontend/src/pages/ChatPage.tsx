@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { ChatSearchPanel } from '@/components/chat/ChatSearchPanel';
 import { LevelSelector } from '@/components/chat/LevelSelector';
@@ -12,6 +12,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
 import { useChatSession } from '@/hooks/useChatSession';
+import { buildCodeAttachment, putIncomingCode } from '@/lib/codeTransfer';
 import { saveBlob } from '@/lib/download';
 import { templatesForLevel } from '@/lib/promptTemplates';
 import { useAuthStore } from '@/store/auth';
@@ -47,10 +48,13 @@ export function ChatPage() {
 
   const [searchParams, setSearchParams] = useSearchParams();
   const taskParam = searchParams.get('task');
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const [level, setLevel] = useState<UserLevel>(userLevel);
   const [creating, setCreating] = useState(false);
   const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [inputText, setInputText] = useState('');
 
   const sessionId = active?.id ?? null;
   const { send, stop, connected } = useChatSession(sessionId);
@@ -75,6 +79,38 @@ export function ChatPage() {
     next.delete('task');
     setSearchParams(next, { replace: true });
   }
+
+  // Код из песочницы приходит вложением: подставляем в поле ввода, но
+  // не отправляем — отправляет ученик (S43-005).
+  const incomingCode = (location.state as { code?: string } | null)?.code;
+  useEffect(() => {
+    if (!incomingCode) {
+      return;
+    }
+    const attachment = buildCodeAttachment(incomingCode, t('chat.codeAttachment'));
+    // Убираем состояние маршрута, чтобы код не подставился повторно.
+    navigate(location.pathname, { replace: true, state: null });
+    if (active) {
+      setInputText(attachment);
+      return;
+    }
+    // Чата ещё нет — создаём его, чтобы код жил в поле ввода. Сообщение
+    // при этом не отправляется: отправляет ученик.
+    void (async () => {
+      const session = await createSession(level);
+      await openSession(session.id);
+      setInputText(attachment);
+    })();
+  }, [
+    active,
+    createSession,
+    incomingCode,
+    level,
+    location.pathname,
+    navigate,
+    openSession,
+    t,
+  ]);
 
   async function handleCreate() {
     setCreating(true);
@@ -109,6 +145,18 @@ export function ChatPage() {
     } catch {
       reportError(t('errors.chatExport'));
     }
+  }
+
+  function handleSend(text: string) {
+    setInputText('');
+    send(text);
+  }
+
+  function handleSendToSandbox(code: string) {
+    // Код уходит в песочницу через слот в localStorage: песочница спросит
+    // подтверждение, если у ученика уже есть черновик (S43-005).
+    putIncomingCode(code);
+    navigate('/code');
   }
 
   return (
@@ -250,10 +298,13 @@ export function ChatPage() {
                   )
                 }
                 onClearFeedback={(messageId) => void clearFeedback(messageId)}
+                onSendToSandbox={handleSendToSandbox}
               />
             </div>
             <MessageInput
-              onSend={send}
+              value={inputText}
+              onChange={setInputText}
+              onSend={handleSend}
               disabled={streaming}
               templates={templates}
               selectedTemplateId={selectedTemplateId}

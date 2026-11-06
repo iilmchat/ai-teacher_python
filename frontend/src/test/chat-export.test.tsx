@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import '@/i18n';
@@ -56,6 +57,19 @@ describe('шаблоны промптов (S43-004)', () => {
 });
 
 describe('MessageInput: шаблоны (S43-004)', () => {
+  function ControlledInput(props: Partial<ComponentProps<typeof MessageInput>>) {
+    const [value, setValue] = useState('');
+    return (
+      <MessageInput
+        value={value}
+        onChange={setValue}
+        onSend={props.onSend ?? vi.fn()}
+        templates={props.templates}
+        onSelectTemplate={props.onSelectTemplate}
+      />
+    );
+  }
+
   it('чип подставляет текст в поле ввода, но не отправляет его', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
@@ -63,7 +77,7 @@ describe('MessageInput: шаблоны (S43-004)', () => {
     const templates = templatesForLevel('basic');
 
     render(
-      <MessageInput
+      <ControlledInput
         onSend={onSend}
         templates={templates}
         onSelectTemplate={onSelectTemplate}
@@ -80,7 +94,7 @@ describe('MessageInput: шаблоны (S43-004)', () => {
   });
 
   it('без шаблонов чипов нет', () => {
-    render(<MessageInput onSend={vi.fn()} />);
+    render(<ControlledInput />);
 
     expect(screen.queryByRole('button', { name: 'Объясни код' })).not.toBeInTheDocument();
   });

@@ -20,6 +20,8 @@ interface MessageListProps {
   onComment?: (messageId: string, comment: string) => void;
   /** Снять оценку */
   onClearFeedback?: (messageId: string) => void;
+  /** Отправить блок кода в песочницу (S43-005) */
+  onSendToSandbox?: (code: string) => void;
 }
 
 export function MessageList({
@@ -31,6 +33,7 @@ export function MessageList({
   onRate,
   onComment,
   onClearFeedback,
+  onSendToSandbox,
 }: MessageListProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -59,7 +62,7 @@ export function MessageList({
               : 'self-start bg-slate-100 text-slate-900'
           }`}
         >
-          <RichText text={message.content} />
+          <RichText text={message.content} onSendToSandbox={onSendToSandbox} />
           {message.role === 'assistant' && (message.warnings?.length ?? 0) > 0 && (
             <p className="mt-2 rounded bg-amber-100 px-2 py-1 text-xs text-amber-800" role="status">
               {t('chat.policyWarning')}

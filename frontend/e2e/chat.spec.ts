@@ -196,6 +196,28 @@ test.describe('Чат', () => {
     await expect(page.getByRole('button', { name: /Копировать/ })).toBeVisible();
   });
 
+  test('переносит код из ответа в песочницу', async ({ page }) => {
+    await registerStudent(page);
+    await page.goto('/chat');
+
+    // Средний уровень: ответ ассистента содержит блок кода
+    await page.getByRole('button', { name: 'Средний' }).click();
+    await page.getByRole('button', { name: 'Новый чат' }).click();
+    const input = page.getByLabel('Сообщение');
+    await expect(input).toBeVisible({ timeout: 20_000 });
+    await input.fill('Покажи пример');
+    await page.getByRole('button', { name: 'Отправить' }).click();
+    await expect(page.getByText(/Причина обычно в типе данных/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // Кнопка «В песочницу» у блока кода (S43-005)
+    await page.getByRole('button', { name: 'В песочницу' }).first().click();
+
+    await expect(page).toHaveURL(/\/code$/);
+    await expect(page.getByTestId('code-input')).toHaveValue(/value = int\(input\(\)\)/);
+  });
+
   test('уровень выбирается при создании сессии', async ({ page }) => {
     await registerStudent(page);
     await page.goto('/chat');

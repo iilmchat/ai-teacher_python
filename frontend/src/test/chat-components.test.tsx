@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState, type ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import '@/i18n';
@@ -134,20 +135,32 @@ describe('MessageList', () => {
 });
 
 describe('MessageInput', () => {
+  /** Управляемый ввод: состояние держим в тесте */
+  function ControlledInput(props: Partial<ComponentProps<typeof MessageInput>>) {
+    const [value, setValue] = useState('');
+    return (
+      <MessageInput
+        value={value}
+        onChange={setValue}
+        onSend={props.onSend ?? vi.fn()}
+        disabled={props.disabled}
+      />
+    );
+  }
+
   it('отправляет по Enter', async () => {
     const onSend = vi.fn();
-    render(<MessageInput onSend={onSend} />);
+    render(<ControlledInput onSend={onSend} />);
 
     const input = screen.getByLabelText('Сообщение');
     await userEvent.type(input, 'привет{Enter}');
 
     expect(onSend).toHaveBeenCalledWith('привет');
-    expect(input).toHaveValue('');
   });
 
   it('не отправляет пустое сообщение', async () => {
     const onSend = vi.fn();
-    render(<MessageInput onSend={onSend} />);
+    render(<ControlledInput onSend={onSend} />);
 
     await userEvent.type(screen.getByLabelText('Сообщение'), '   {Enter}');
 
@@ -156,7 +169,7 @@ describe('MessageInput', () => {
 
   it('переносит строку по Shift+Enter, не отправляя', async () => {
     const onSend = vi.fn();
-    render(<MessageInput onSend={onSend} />);
+    render(<ControlledInput onSend={onSend} />);
 
     await userEvent.type(screen.getByLabelText('Сообщение'), 'строка1{Shift>}{Enter}{/Shift}');
 
@@ -165,7 +178,7 @@ describe('MessageInput', () => {
   });
 
   it('блокируется во время стриминга', () => {
-    render(<MessageInput onSend={vi.fn()} disabled />);
+    render(<ControlledInput onSend={vi.fn()} disabled />);
 
     expect(screen.getByLabelText('Сообщение')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Отправить' })).toBeDisabled();
