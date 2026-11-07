@@ -334,6 +334,25 @@
       "saved": "Settings saved",
       "error": "Could not save the settings"
     },
+    "sessions": {
+      "title": "Active sessions",
+      "hint": "Devices signed in to your account. If you see an unfamiliar one, revoke it and change your password.",
+      "current": "This device",
+      "created": "Signed in",
+      "lastUsed": "Last active",
+      "ip": "IP",
+      "unknownDevice": "Unknown device",
+      "revoke": "Revoke",
+      "revoked": "Session revoked",
+      "error": "Could not load sessions",
+      "revokeError": "Could not revoke the session",
+      "signOutOthers": "Sign out everywhere",
+      "signOutConfirm": "End all sessions except this one? Other devices will need to sign in again.",
+      "signOutDone": "All other sessions ended",
+      "signOutError": "Could not end the sessions",
+      "confirm": "Sign out everywhere",
+      "cancel": "Cancel"
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",

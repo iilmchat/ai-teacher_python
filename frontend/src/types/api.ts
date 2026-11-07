@@ -40,6 +40,16 @@ export interface UserPreferences {
   deadline_days: number;
 }
 
+/** Активная сессия (устройство) пользователя (S45-005) */
+export interface UserSession {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  user_agent: string | null;
+  ip: string | null;
+  current: boolean;
+}
+
 export interface LevelInfo {
   level: UserLevel;
   title: string;

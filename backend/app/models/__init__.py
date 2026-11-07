@@ -24,7 +24,7 @@ from app.models.task import (
     TaskVersion,
     UserTaskProgress,
 )
-from app.models.user import User, UserLevel, UserRole
+from app.models.user import User, UserLevel, UserRole, UserSession
 
 __all__ = [
     "AuditLog",
@@ -48,5 +48,6 @@ __all__ = [
     "UserAchievement",
     "UserLevel",
     "UserRole",
+    "UserSession",
     "UserTaskProgress",
 ]

@@ -76,25 +76,34 @@ def decode_token(token: str) -> dict[str, Any] | None:
         return None
 
 
-def _payload_for(user: User, token_type: str) -> dict[str, Any]:
-    """Общий payload для пары токенов (S45-001).
+def _payload_for(
+    user: User, token_type: str, jti: str | None = None
+) -> dict[str, Any]:
+    """Общий payload для пары токенов (S45-001, S45-005).
 
     `tv` — версия refresh-токенов: смена пароля увеличивает её, и
     refresh-токены, выданные до смены, отклоняются при обновлении.
     Отсутствие `tv` в старых токенах трактуется как версия 0, поэтому
     deploy не выбрасывает уже выданные refresh-токены.
+
+    `jti` — идентификатор сессии (одна на пару access/refresh): по нему
+    refresh-токен связывается со строкой `user_sessions` и отзывается
+    поштучно (S45-005).
     """
-    return {
+    payload: dict[str, Any] = {
         "sub": str(user.id),
         "type": token_type,
         "tv": user.token_version,
     }
+    if jti:
+        payload["jti"] = jti
+    return payload
 
 
-def issue_token_pair(user: User) -> dict[str, str]:
-    """Выдать пару access/refresh токенов с версией (`tv`) пользователя"""
-    access = create_access_token(data=_payload_for(user, "access"))
-    refresh = create_refresh_token(data=_payload_for(user, "refresh"))
+def issue_token_pair(user: User, *, jti: str | None = None) -> dict[str, str]:
+    """Выдать пару access/refresh токенов с версией (`tv`) и сессией (`jti`)"""
+    access = create_access_token(data=_payload_for(user, "access", jti))
+    refresh = create_refresh_token(data=_payload_for(user, "refresh", jti))
     return {"access_token": access, "refresh_token": refresh}
 
 

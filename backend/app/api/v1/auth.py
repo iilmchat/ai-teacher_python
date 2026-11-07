@@ -27,6 +27,7 @@ from app.db.repositories.user import UserRepository
 from app.models.user import User, UserLevel, UserRole
 from app.schemas.user import DeleteAccountRequest, UserCreate, UserResponse, UserUpdate
 from app.services.audit_service import record_audit
+from app.services.sessions import rotate_session, start_session
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -69,6 +70,7 @@ async def register(user_data: UserCreate, db: DbSession) -> User:
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbSession,
+    request: Request,
 ) -> dict[str, Any]:
     """Вход по username или email; возвращает пару токенов"""
     user_repo = UserRepository(db)
@@ -95,10 +97,13 @@ async def login(
 
     await user_repo.update(user.id, last_active=datetime.utcnow())
 
+    # Сессия (устройство) с `jti`: её видно в списке и можно отозвать (S45-005).
+    jti = await start_session(db, user, request)
+
     # `tv` в payload: смена пароля увеличивает версию и обнуляет все
     # выданные раньше refresh-токены (S45-001).
     return {
-        **issue_token_pair(user),
+        **issue_token_pair(user, jti=jti),
         "token_type": "bearer",
         "user": {
             "id": str(user.id),
@@ -155,8 +160,13 @@ async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Сессия: отозванная/несуществующая строка → 401, иначе `jti`
+    # ротируется, чтобы старый refresh-токен больше не работал (S45-005).
+    raw_jti = (payload or {}).get("jti")
+    new_jti = await rotate_session(db, user, str(raw_jti) if raw_jti else None)
+
     return {
-        **issue_token_pair(user),
+        **issue_token_pair(user, jti=new_jti),
         "token_type": "bearer",
     }
 

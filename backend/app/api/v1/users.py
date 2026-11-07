@@ -30,9 +30,17 @@ from app.schemas.user import (
     UserResponse,
     UserSettingsUpdate,
 )
+from app.models.user import User, UserRole, UserSession
 from app.services.audit_service import record_audit
 from app.services.levels import get_level_info, list_levels
 from app.services.personal_export import collect_user_data, export_filename
+from app.services.sessions import (
+    current_jti,
+    list_sessions,
+    revoke_all_sessions,
+    revoke_session,
+    start_session,
+)
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -92,7 +100,11 @@ async def change_password(
     )
 
     # Текущее устройство получает пару с новой версией и остаётся в сессии.
-    return {**issue_token_pair(updated), "token_type": "bearer"}
+    # Все строки сессий отзываются, для этого устройства создаётся новая
+    # (S45-005): список «Активные сессии» не показывает старые устройства.
+    await revoke_all_sessions(db, current_user.id)
+    jti = await start_session(db, updated, request)
+    return {**issue_token_pair(updated, jti=jti), "token_type": "bearer"}
 
 
 @router.get("/me/export")
@@ -124,6 +136,113 @@ async def export_my_data(
         media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{export_filename()}"'},
     )
+
+
+def _session_dict(session: UserSession, *, current: bool) -> dict[str, Any]:
+    """Представление сессии для UI (PRIVACY.md: UA/IP только владельцу)"""
+    return {
+        "id": str(session.id),
+        "created_at": session.created_at.isoformat(),
+        "last_used_at": session.last_used_at.isoformat(),
+        "user_agent": session.user_agent,
+        "ip": session.ip,
+        "current": current,
+    }
+
+
+@router.get("/me/sessions")
+async def get_my_sessions(
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+) -> list[dict[str, Any]]:
+    """Список активных сессий пользователя (S45-005)"""
+    jti = current_jti(request)
+    sessions = await list_sessions(db, current_user.id)
+    return [
+        _session_dict(session, current=bool(jti and session.jti == jti))
+        for session in sessions
+    ]
+
+
+@router.delete("/me/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_my_session(
+    session_id: UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+) -> None:
+    """Отозвать сессию (refresh-токен) другого устройства (S45-005).
+
+    Текущую сессию так не отозвать: для этого есть выход из аккаунта,
+    иначе клиент остался бы без пары токенов. Чужая сессия — 404.
+    """
+    target = await db.get(UserSession, session_id)
+    if (
+        target is None
+        or target.user_id != current_user.id
+        or target.revoked_at is not None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Сессия не найдена"
+        )
+    jti = current_jti(request)
+    if jti and target.jti == jti:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя отозвать текущую сессию — выйдите из аккаунта",
+        )
+    session = await revoke_session(db, current_user.id, session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Сессия не найдена"
+        )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="user.session_revoked",
+        entity_type="user_session",
+        entity_id=session_id,
+        request=request,
+    )
+
+
+@router.post("/me/sessions/revoke-others")
+async def revoke_other_sessions(
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+) -> dict[str, Any]:
+    """«Выйти на всех устройствах» (S45-005, KI-028).
+
+    Увеличивает `token_version` (все refresh-токены, включая текущий,
+    перестают работать), отзывает строки сессий и выдаёт текущему
+    устройству новую пару — оно остаётся в системе.
+    """
+    user_repo = UserRepository(db)
+    updated = await user_repo.update(
+        current_user.id, token_version=current_user.token_version + 1
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+        )
+    revoked = await revoke_all_sessions(db, current_user.id)
+    jti = await start_session(db, updated, request)
+    await record_audit(
+        db,
+        actor=current_user,
+        action="user.sessions_revoked",
+        entity_type="user",
+        entity_id=current_user.id,
+        payload={"revoked": revoked},
+        request=request,
+    )
+    return {
+        **issue_token_pair(updated, jti=jti),
+        "token_type": "bearer",
+        "revoked": revoked,
+    }
 
 
 @router.patch("/me/level", response_model=UserResponse)

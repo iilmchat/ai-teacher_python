@@ -6,7 +6,17 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, String, UniqueConstraint, text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -77,3 +87,39 @@ class User(Base):
 
     def __repr__(self) -> str:
         return f"<User {self.username} ({self.role.value})>"
+
+
+class UserSession(Base):
+    """Активная сессия пользователя — refresh-токен с `jti` (S45-005).
+
+    Одна строка на вход (устройство). Ротация при refresh обновляет `jti`,
+    `last_used_at`; отзыв ставит `revoked_at`. Смена пароля и «выйти везде»
+    отзывают строки и увеличивают `users.token_version`.
+    """
+
+    __tablename__ = "user_sessions"
+    __table_args__ = (
+        UniqueConstraint("jti", name="user_sessions_jti_key"),
+        Index("idx_user_sessions_user", "user_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Идентификатор refresh-токена (jti), ротируется при обновлении
+    jti: Mapped[str] = mapped_column(String(36), nullable=False)
+    #: User-Agent устройства (обрезан до 255 символов, PRIVACY.md)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    #: IP входа (по политике PRIVACY.md хранится для списка сессий)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    last_used_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<UserSession user={self.user_id} jti={self.jti}>"

@@ -8,6 +8,7 @@ import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { DataExportCard } from '@/components/profile/DataExportCard';
 import { NotificationSettingsCard } from '@/components/profile/NotificationSettingsCard';
 import { PasswordChangeCard } from '@/components/profile/PasswordChangeCard';
+import { SessionsCard } from '@/components/profile/SessionsCard';
 import { ProfileEditCard } from '@/components/profile/ProfileEditCard';
 import { DangerZoneCard } from '@/components/profile/DangerZoneCard';
 import { useAuthStore } from '@/store/auth';
@@ -81,6 +82,10 @@ export function ProfilePage() {
 
       <Card title={t('profile.notifications.title')}>
         <NotificationSettingsCard />
+      </Card>
+
+      <Card title={t('profile.sessions.title')}>
+        <SessionsCard />
       </Card>
 
       <Card title={t('profile.level')} description={t('profile.levelHint')}>

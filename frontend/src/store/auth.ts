@@ -41,6 +41,8 @@ interface AuthState {
   setCodeSnippets: (snippets: CodeSnippet[]) => Promise<void>;
   /** Сохранить настройки уведомлений/языка (S45-004) */
   savePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
+  /** «Выйти на всех устройствах»: новая пара для текущего (S45-005) */
+  revokeOtherSessions: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -190,6 +192,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (prefs.language) {
       await i18n.changeLanguage(prefs.language);
     }
+  },
+
+  async revokeOtherSessions() {
+    // S45-005: сервер отзывает все сессии и увеличивает token_version.
+    // Текущее устройство получает новую пару — остаёмся в системе.
+    const tokens = await api.post<PasswordChangeResponse>(
+      '/users/me/sessions/revoke-others',
+    );
+    setTokens({ access: tokens.access_token, refresh: tokens.refresh_token });
+    await get().loadMe();
   },
 
   clearError() {
