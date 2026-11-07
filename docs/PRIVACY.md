@@ -14,6 +14,7 @@
 | Сессии и сообщения чата | `chat_sessions`, `chat_messages` | история помощи ученику | `RETENTION_CHAT_MESSAGES_DAYS` (90) |
 | Запуски кода (код, вывод, ошибка) | `code_executions` | история песочницы | `RETENTION_CODE_EXECUTIONS_DAYS` (90) |
 | Уведомления и достижения | `notifications`, `user_achievements` | мотивация | `RETENTION_NOTIFICATIONS_DAYS` (180) |
+| Активные сессии: `jti`, user-agent, IP входа (S45-005) | `user_sessions` | список устройств и отзыв доступа | пока сессия не отозвана/не истекла |
 | Журнал действий teacher/admin | `audit_log` | безопасность, разбор инцидентов | `RETENTION_AUDIT_LOG_DAYS` (365) |
 
 Пароли хранятся только как bcrypt-хэш; токены — JWT без ПДн (только `sub`).
@@ -33,6 +34,15 @@
 `GET /api/v1/classrooms/{id}/report` — отчёт класса (CSV) для владельца класса.
 Каждый экспорт фиксируется в журнале (`analytics.exported`,
 `classroom.report_exported`).
+
+**Выгрузка своих данных (S45-003).**
+`GET /api/v1/users/me/export` — JSON-файл со всеми данными пользователя:
+профиль, прогресс и попытки, сессии чата с сообщениями, уведомления и
+достижения. В файл не входят эмбеддинги сообщений, хэш пароля и данные
+других пользователей. Файл отдаётся как вложение
+(`ai-teacher-export-<дата>.json`) и после скачивания живёт только на
+устройстве пользователя — сервер его не сохраняет. Каждая выгрузка пишется
+в журнал (`user.data_exported`).
 
 ## 4. Retention (сроки хранения)
 
@@ -66,8 +76,11 @@ PostgreSQL). Альтернатива — внешний cron (пример в D
 - узнать свои данные: `GET /api/v1/auth/me`, `GET /api/v1/me/*`;
 - исправить: `PATCH /api/v1/auth/me`;
 - удалить: `DELETE /api/v1/auth/me` (см. выше);
-- экспорт своих данных: запрос администратору (dataset `users`/`attempts`
-  фильтруется вручную до внедрения self-service экспорта).
+- выгрузить свои данные: `GET /api/v1/users/me/export` (JSON-файл, S45-003);
+- сменить пароль: `POST /api/v1/users/me/password` (S45-001);
+- увидеть и отозвать активные сессии: `GET /api/v1/users/me/sessions`,
+  `DELETE /api/v1/users/me/sessions/{id}`,
+  `POST /api/v1/users/me/sessions/revoke-others` (S45-005).
 
 ## 7. Инциденты
 

@@ -60,14 +60,22 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | Метод | Путь | Тело | Ответ |
 |-------|------|------|-------|
 | POST | `/auth/register` | `{email, username, password}` | 201 `User` |
-| POST | `/auth/login` | form: `username`, `password` | 200 `{access_token, refresh_token, token_type, user}` |
-| POST | `/auth/refresh` | query `refresh_token` | 200 `{access_token, refresh_token}` |
+| POST | `/auth/login` | form: `username`, `password` | 200 `{access_token, refresh_token, token_type, user}`; создаёт сессию (S45-005) |
+| POST | `/auth/refresh` | query `refresh_token` | 200 `{access_token, refresh_token}`; ротирует `jti` сессии (S45-005) |
 | POST | `/auth/logout` | — | 200 `{message}` |
 | GET | `/auth/me` | — | 200 `User` |
 | PATCH | `/auth/me` | `{email?, username?, level?, settings?}` | 200 `User` |
 
 Ошибки: 400 (дубликат email/username), 401 (неверные данные), 422 (валидация),
 429 (лимит — после подключения KI-007; реализовано в S11-003).
+
+Токены пары содержат `tv` — версию refresh-токенов пользователя
+(`users.token_version`). Смена пароля и «выйти на всех устройствах»
+увеличивают `tv`; refresh-токены с меньшей версией получают 401 (S45-001,
+S45-005, закрывает KI-028). `jti` связывает пару со строкой `user_sessions`;
+при refresh `jti` ротируется, поэтому старый refresh-токен одноразовый.
+Токены без `jti` (выданные до S45-005) не отклоняются: для них создаётся
+новая сессия.
 
 ### 3.2 Пользователи
 
@@ -76,7 +84,12 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 | GET | `/users/me` | любой | `User` |
 | GET | `/users/me/level` | любой | `{level, title, description, audience, gives_ready_code}` |
 | PATCH | `/users/me/level` | любой | `User` |
-| PATCH | `/users/me/settings` | любой | `User` (S43-004, S44-003) |
+| PATCH | `/users/me/settings` | любой | `User` (S43-004, S44-003, S45-004) |
+| POST | `/users/me/password` | любой | 200 `{access_token, refresh_token, token_type}` (S45-001) |
+| GET | `/users/me/export` | любой | 200 JSON-файл, `Content-Disposition: attachment` (S45-003) |
+| GET | `/users/me/sessions` | любой | `[{id, created_at, last_used_at, user_agent, ip, current}]` (S45-005) |
+| DELETE | `/users/me/sessions/{id}` | любой | 204; текущая — 400, чужая — 404 (S45-005) |
+| POST | `/users/me/sessions/revoke-others` | любой | 200 `{access_token, refresh_token, token_type, revoked}` (S45-005) |
 | GET | `/users/levels` | любой | `{levels: [...]}` |
 | POST | `/users/me/activity` | любой | `{status}` |
 | GET | `/users/{id}` | admin | `User` |
@@ -190,16 +203,53 @@ metadata, warnings}`.
   блоки кода и спецсимволы не экранируются.
 - Права: своя сессия — 200, чужая — 403, несуществующая — 404.
 
-**Личные настройки (S43-004, S44-003).**
+**Личные настройки (S43-004, S44-003, S45-004).**
 
 - `PATCH /users/me/settings` — обновление `users.settings`. Список ключей
-  закрытый: `prompt_template` (id выбранного шаблона промпта, до 64 символов)
-  и `snippets` (личные сниппеты кода). Настройки **дополняются**, а не
-  заменяются; `null` удаляет ключ.
+  закрытый: `prompt_template` (id выбранного шаблона промпта, до 64 символов),
+  `snippets` (личные сниппеты кода), `language` (`ru`/`en`),
+  `email_notifications` (bool), `deadline_notifications` (bool),
+  `deadline_days` (1…14 — за сколько дней напоминать о дедлайне).
+  Настройки **дополняются**, а не заменяются; `null` удаляет ключ и
+  возвращает значение по умолчанию.
+- Значения по умолчанию: `language=ru`, оба уведомления включены,
+  `deadline_days=3`. Рассылка писем (`_send_assignment_emails`,
+  `scripts/notify_deadlines.py`) и напоминания
+  (`sync_deadline_notifications`) уважают эти ключи: выключенный флаг
+  пропускает пользователя, `deadline_days` задаёт окно напоминания.
 - `snippets` — полный список сниппетов, а не отдельная операция: клиент
   присылает массив `{id, name, code}` и заменяет его целиком. Не больше 20
   штук, id уникальны, `name` — 1…80 символов, `code` — 1…20 000 символов.
   Нарушение любого ограничения — 422.
+
+**Смена пароля (S45-001).**
+
+`POST /users/me/password` принимает `current_password` и `new_password`
+(8…72 символа и не длиннее 72 байт UTF-8). Неверный текущий пароль — 400.
+Успех: `token_version` увеличивается, все refresh-токены, выданные раньше,
+получают 401, а текущее устройство получает новую пару — остаётся в системе.
+Действие пишется в аудит как `user.password_changed`; строки сессий
+отзываются, для текущего устройства создаётся новая.
+
+**Выгрузка своих данных (S45-003).**
+
+`GET /users/me/export` отдаёт JSON-файл (`attachment`,
+`ai-teacher-export-<дата>.json`): профиль, прогресс по задачам, попытки,
+сессии чата с сообщениями, уведомления и достижения. В выгрузку не попадают
+эмбеддинги сообщений, хэш пароля и данные других пользователей. Действие
+пишется в аудит как `user.data_exported`.
+
+**Активные сессии (S45-005).**
+
+`GET /users/me/sessions` возвращает действующие сессии (устройства) с
+`user_agent`, IP, временем входа и активности; текущая помечена
+`current: true`. `DELETE /users/me/sessions/{id}` отзывает refresh-токен
+конкретного устройства (204): его следующий refresh получает 401.
+Текущую сессию так отозвать нельзя (400) — для неё есть выход.
+`POST /users/me/sessions/revoke-others` — «выйти на всех устройствах»:
+увеличивает `token_version`, отзывает все строки сессий и возвращает
+текущему устройству новую пару. Действия пишутся в аудит как
+`user.session_revoked` и `user.sessions_revoked`.
 
 **Контекст задачи (S42-006).**
 
