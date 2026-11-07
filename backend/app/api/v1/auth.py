@@ -11,8 +11,6 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-logger = structlog.get_logger(__name__)
-
 from app.core.security import (
     decode_token,
     get_current_active_user,
@@ -28,6 +26,8 @@ from app.models.user import User, UserLevel, UserRole
 from app.schemas.user import DeleteAccountRequest, UserCreate, UserResponse, UserUpdate
 from app.services.audit_service import record_audit
 from app.services.sessions import rotate_session, start_session
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

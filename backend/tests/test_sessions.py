@@ -62,7 +62,7 @@ async def test_login_creates_listed_session(client: AsyncClient) -> None:
 async def test_two_logins_two_sessions(client: AsyncClient) -> None:
     """Два входа — две сессии; текущая помечена только одна"""
     await _register(client, "twologins")
-    first = await _login(client, "twologins")
+    await _login(client, "twologins")
     second = await _login(client, "twologins")
 
     sessions = await _sessions(client, second["access_token"])

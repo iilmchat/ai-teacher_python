@@ -23,14 +23,13 @@ from app.core.security import (
 )
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserSession
 from app.schemas.user import (
     LevelUpdateRequest,
     PasswordChangeRequest,
     UserResponse,
     UserSettingsUpdate,
 )
-from app.models.user import User, UserRole, UserSession
 from app.services.audit_service import record_audit
 from app.services.levels import get_level_info, list_levels
 from app.services.personal_export import collect_user_data, export_filename

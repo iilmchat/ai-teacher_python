@@ -7,7 +7,6 @@ DELETE /auth/me реализован в S26-004; здесь проверяютс
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.repositories.user import UserRepository
 from app.models.user import User
 
 REGISTER_URL = "/api/v1/auth/register"
