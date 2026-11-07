@@ -28,6 +28,10 @@ interface AuthState {
   logout: () => void;
   loadMe: () => Promise<void>;
   setLevel: (level: UserLevel) => Promise<void>;
+  /** Правка e-mail/имени через PATCH /auth/me (S45-002) */
+  updateProfile: (data: { email?: string; username?: string }) => Promise<void>;
+  /** Удалить аккаунт навсегда (S45-002): очищает локальную сессию */
+  deleteAccount: (password: string) => Promise<void>;
   /** Сменить пароль: отзыв старых refresh-токенов, текущая сессия жива (S45-001) */
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Сохранить выбранный шаблон промпта в личных настройках (S43-004) */
@@ -134,6 +138,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
     setTokens({ access: tokens.access_token, refresh: tokens.refresh_token });
     await get().loadMe();
+  },
+
+  async updateProfile(data) {
+    const user = await api.patch<User>('/auth/me', data);
+    cacheUser(user);
+    set({ user });
+  },
+
+  async deleteAccount(password) {
+    // Сервер анонимизирует аккаунт и блокирует вход (S26-004).
+    // Локальную сессию убираем только после успешного удаления: если
+    // пароль неверен, аккаунт остаётся живым и разлогин был бы ложным.
+    await api.delete<unknown>('/auth/me', { password });
+    get().logout();
   },
 
   async setPromptTemplate(templateId) {

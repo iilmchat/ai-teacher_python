@@ -176,7 +176,8 @@ export const api = {
     apiRequest<T>(path, { method: 'POST', file }),
   patch: <T>(path: string, body?: unknown) =>
     apiRequest<T>(path, { method: 'PATCH', body }),
-  delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string, body?: unknown) =>
+    apiRequest<T>(path, { method: 'DELETE', body }),
   download: (path: string) => downloadRequest(path),
   anonymousPostForm: <T>(path: string, form: Record<string, string>) =>
     apiRequest<T>(path, { method: 'POST', form, anonymous: true }),

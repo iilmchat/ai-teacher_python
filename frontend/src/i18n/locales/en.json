@@ -296,6 +296,26 @@
         "strong": "Strong"
       }
     },
+    "edit": {
+      "title": "Account details",
+      "email": "Email",
+      "username": "Username",
+      "save": "Save",
+      "reset": "Discard changes",
+      "saved": "Profile updated. A notice was sent to the old address.",
+      "error": "Could not save the profile"
+    },
+    "danger": {
+      "zone": "Danger zone",
+      "title": "Delete account",
+      "hint": "The account will be anonymized irreversibly: sign-in becomes impossible, while progress and class history remain.",
+      "open": "Delete account",
+      "confirm": "The account is deleted permanently: sign-in is blocked and the name and address are replaced by placeholders. This cannot be undone.",
+      "password": "Confirm with your password",
+      "confirmButton": "Delete forever",
+      "cancel": "Cancel",
+      "error": "Could not delete the account"
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",

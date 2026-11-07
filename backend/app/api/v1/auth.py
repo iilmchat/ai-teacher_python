@@ -5,10 +5,13 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
+
+logger = structlog.get_logger(__name__)
 
 from app.core.security import (
     decode_token,
@@ -200,13 +203,32 @@ async def update_me(
                 detail="Username already taken",
             )
 
+    old_email = current_user.email
     updated_user = await user_repo.update(current_user.id, **update_dict)
     if updated_user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # Смена e-mail: письмо на старый адрес (best-effort, S45-002) — у
+    # владельца останется способ заметить чужой доступ к аккаунту.
+    if new_email is not None and new_email != old_email:
+        await _notify_email_change(old_email, new_email)
+
     return updated_user
+
+
+async def _notify_email_change(old_email: str, new_email: str) -> None:
+    """Отправить уведомление о смене e-mail, не ломая PATCH (S45-002)"""
+    from app.services.email import get_email_sender, send_email_change_email
+
+    try:
+        await send_email_change_email(
+            get_email_sender(), to=old_email, new_email=new_email
+        )
+    except Exception as exc:  # noqa: BLE001 — уведомление не должно ломать API
+        logger.warning("email_change_notice_failed", error=str(exc))
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

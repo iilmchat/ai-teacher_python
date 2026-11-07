@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { PasswordChangeCard } from '@/components/profile/PasswordChangeCard';
+import { ProfileEditCard } from '@/components/profile/ProfileEditCard';
+import { DangerZoneCard } from '@/components/profile/DangerZoneCard';
 import { useAuthStore } from '@/store/auth';
 import type { UserLevel } from '@/types/api';
 
@@ -60,6 +62,10 @@ export function ProfilePage() {
         </div>
       </Card>
 
+      <Card title={t('profile.edit.title')}>
+        <ProfileEditCard />
+      </Card>
+
       <Card
         title={t('profile.password.title')}
         description={t('profile.password.hint')}
@@ -91,6 +97,10 @@ export function ProfilePage() {
             <Alert tone="error">{t('errors.generic')}</Alert>
           </div>
         )}
+      </Card>
+
+      <Card title={t('profile.danger.zone')}>
+        <DangerZoneCard />
       </Card>
     </div>
   );
