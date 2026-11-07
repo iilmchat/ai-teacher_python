@@ -106,10 +106,37 @@ async def send_assignment_email(
     return True
 
 
+async def send_email_change_email(
+    sender: EmailSender,
+    *,
+    to: str,
+    new_email: str,
+) -> bool:
+    """Уведомление на старый адрес при смене e-mail (S45-002).
+
+    Best-effort: `False` при любой ошибке, API запрос не ломает.
+    """
+    if not to:
+        return False
+    subject = "Адрес эл. почты изменён"
+    body = (
+        "Адрес эл. почты вашего аккаунта AI Teacher for Python изменён на "
+        f"{new_email}.\nЕсли это не вы — немедленно смените пароль: "
+        "другие устройства уйдут из сессии при следующем обновлении токенов."
+    )
+    try:
+        await sender.send(to=to, subject=subject, body=body)
+    except Exception as exc:  # noqa: BLE001 — уведомление не должно ломать API
+        logger.warning("email_send_failed", to=to, error=str(exc))
+        return False
+    return True
+
+
 __all__ = [
     "EmailSender",
     "LoggingEmailSender",
     "SMTPEmailSender",
     "get_email_sender",
     "send_assignment_email",
+    "send_email_change_email",
 ]

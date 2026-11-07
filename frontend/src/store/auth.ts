@@ -9,7 +9,14 @@ import { create } from 'zustand';
 
 import { api, ApiError, UNAUTHORIZED_EVENT } from '@/lib/api';
 import { clearTokens, getAccessToken, setTokens } from '@/lib/token';
-import type { CodeSnippet, LoginResponse, User, UserLevel } from '@/types/api';
+import type {
+  CodeSnippet,
+  LoginResponse,
+  PasswordChangeResponse,
+  User,
+  UserLevel,
+  UserPreferences,
+} from '@/types/api';
 
 interface AuthState {
   user: User | null;
@@ -22,10 +29,20 @@ interface AuthState {
   logout: () => void;
   loadMe: () => Promise<void>;
   setLevel: (level: UserLevel) => Promise<void>;
+  /** Правка e-mail/имени через PATCH /auth/me (S45-002) */
+  updateProfile: (data: { email?: string; username?: string }) => Promise<void>;
+  /** Удалить аккаунт навсегда (S45-002): очищает локальную сессию */
+  deleteAccount: (password: string) => Promise<void>;
+  /** Сменить пароль: отзыв старых refresh-токенов, текущая сессия жива (S45-001) */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Сохранить выбранный шаблон промпта в личных настройках (S43-004) */
   setPromptTemplate: (templateId: string | null) => Promise<void>;
   /** Заменить список личных сниппетов кода (S44-003) */
   setCodeSnippets: (snippets: CodeSnippet[]) => Promise<void>;
+  /** Сохранить настройки уведомлений/языка (S45-004) */
+  savePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
+  /** «Выйти на всех устройствах»: новая пара для текущего (S45-005) */
+  revokeOtherSessions: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -51,6 +68,14 @@ function cacheUser(user: User | null): void {
   }
 }
 
+/** Применить сохранённый язык профиля к интерфейсу (S45-004) */
+function applyProfileLanguage(settings: Record<string, unknown> | undefined): void {
+  const language = settings?.language;
+  if ((language === 'ru' || language === 'en') && i18n.language !== language) {
+    void i18n.changeLanguage(language);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: readCachedUser(),
   initializing: Boolean(getAccessToken()),
@@ -68,6 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await api.get<User>('/auth/me');
       cacheUser(user);
       set({ user, loading: false, initializing: false });
+      applyProfileLanguage(user.settings);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : i18n.t('errors.login');
@@ -104,6 +130,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await api.get<User>('/auth/me');
       cacheUser(user);
       set({ user, initializing: false });
+      applyProfileLanguage(user.settings);
     } catch {
       clearTokens();
       cacheUser(null);
@@ -115,6 +142,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = await api.patch<User>('/users/me/level', { level });
     cacheUser(user);
     set({ user });
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    // Сервер отзывает все выданные раньше refresh-токены и возвращает
+    // новую пару для текущего устройства (S45-001, KI-028).
+    const tokens = await api.post<PasswordChangeResponse>('/users/me/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    setTokens({ access: tokens.access_token, refresh: tokens.refresh_token });
+    await get().loadMe();
+  },
+
+  async updateProfile(data) {
+    const user = await api.patch<User>('/auth/me', data);
+    cacheUser(user);
+    set({ user });
+  },
+
+  async deleteAccount(password) {
+    // Сервер анонимизирует аккаунт и блокирует вход (S26-004).
+    // Локальную сессию убираем только после успешного удаления: если
+    // пароль неверен, аккаунт остаётся живым и разлогин был бы ложным.
+    await api.delete<unknown>('/auth/me', { password });
+    get().logout();
   },
 
   async setPromptTemplate(templateId) {
@@ -129,6 +181,27 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = await api.patch<User>('/users/me/settings', { snippets });
     cacheUser(user);
     set({ user });
+  },
+
+  async savePreferences(prefs) {
+    // S45-004: сервер дополняет `users.settings`; язык применяется сразу
+    // (i18n.changeLanguage) и сохраняется в профиле.
+    const user = await api.patch<User>('/users/me/settings', prefs);
+    cacheUser(user);
+    set({ user });
+    if (prefs.language) {
+      await i18n.changeLanguage(prefs.language);
+    }
+  },
+
+  async revokeOtherSessions() {
+    // S45-005: сервер отзывает все сессии и увеличивает token_version.
+    // Текущее устройство получает новую пару — остаёмся в системе.
+    const tokens = await api.post<PasswordChangeResponse>(
+      '/users/me/sessions/revoke-others',
+    );
+    setTokens({ access: tokens.access_token, refresh: tokens.refresh_token });
+    await get().loadMe();
   },
 
   clearError() {

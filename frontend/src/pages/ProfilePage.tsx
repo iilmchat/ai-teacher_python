@@ -5,6 +5,12 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { DataExportCard } from '@/components/profile/DataExportCard';
+import { NotificationSettingsCard } from '@/components/profile/NotificationSettingsCard';
+import { PasswordChangeCard } from '@/components/profile/PasswordChangeCard';
+import { SessionsCard } from '@/components/profile/SessionsCard';
+import { ProfileEditCard } from '@/components/profile/ProfileEditCard';
+import { DangerZoneCard } from '@/components/profile/DangerZoneCard';
 import { useAuthStore } from '@/store/auth';
 import type { UserLevel } from '@/types/api';
 
@@ -59,6 +65,29 @@ export function ProfilePage() {
         </div>
       </Card>
 
+      <Card title={t('profile.edit.title')}>
+        <ProfileEditCard />
+      </Card>
+
+      <Card
+        title={t('profile.password.title')}
+        description={t('profile.password.hint')}
+      >
+        <PasswordChangeCard />
+      </Card>
+
+      <Card title={t('profile.export.title')}>
+        <DataExportCard />
+      </Card>
+
+      <Card title={t('profile.notifications.title')}>
+        <NotificationSettingsCard />
+      </Card>
+
+      <Card title={t('profile.sessions.title')}>
+        <SessionsCard />
+      </Card>
+
       <Card title={t('profile.level')} description={t('profile.levelHint')}>
         <div className="flex flex-wrap gap-2">
           {LEVELS.map((level) => (
@@ -83,6 +112,10 @@ export function ProfilePage() {
             <Alert tone="error">{t('errors.generic')}</Alert>
           </div>
         )}
+      </Card>
+
+      <Card title={t('profile.danger.zone')}>
+        <DangerZoneCard />
       </Card>
     </div>
   );

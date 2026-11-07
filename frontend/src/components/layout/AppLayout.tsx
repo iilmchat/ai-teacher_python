@@ -22,12 +22,23 @@ function navClass({ isActive }: { isActive: boolean }) {
 }
 
 export function AppLayout() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const savePreferences = useAuthStore((state) => state.savePreferences);
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const isStaff = user?.role === 'teacher' || user?.role === 'admin';
+  const language = i18n.language === 'en' ? 'en' : 'ru';
+
+  function handleLanguage(next: 'ru' | 'en') {
+    // S45-004: язык меняется сразу; авторизованному — ещё и сохраняется
+    if (user) {
+      void savePreferences({ language: next });
+    } else {
+      void i18n.changeLanguage(next);
+    }
+  }
 
   function handleLogout() {
     logout();
@@ -115,6 +126,17 @@ export function AppLayout() {
           </nav>
 
           <div className="flex items-center gap-1 sm:gap-2">
+            <select
+              aria-label={t('language.label')}
+              value={language}
+              onChange={(event) =>
+                handleLanguage(event.target.value === 'en' ? 'en' : 'ru')
+              }
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm text-slate-700"
+            >
+              <option value="ru">{t('language.ru')}</option>
+              <option value="en">{t('language.en')}</option>
+            </select>
             <ThemeToggle />
             <button
               type="button"

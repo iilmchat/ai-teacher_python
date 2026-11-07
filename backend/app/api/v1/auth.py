@@ -5,18 +5,19 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.security import (
-    create_access_token,
-    create_refresh_token,
     decode_token,
     get_current_active_user,
     get_current_user,
     hash_password,
+    issue_token_pair,
+    token_version_from_payload,
     verify_password,
 )
 from app.db.database import get_db
@@ -24,6 +25,9 @@ from app.db.repositories.user import UserRepository
 from app.models.user import User, UserLevel, UserRole
 from app.schemas.user import DeleteAccountRequest, UserCreate, UserResponse, UserUpdate
 from app.services.audit_service import record_audit
+from app.services.sessions import rotate_session, start_session
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -66,6 +70,7 @@ async def register(user_data: UserCreate, db: DbSession) -> User:
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DbSession,
+    request: Request,
 ) -> dict[str, Any]:
     """Вход по username или email; возвращает пару токенов"""
     user_repo = UserRepository(db)
@@ -92,9 +97,13 @@ async def login(
 
     await user_repo.update(user.id, last_active=datetime.utcnow())
 
+    # Сессия (устройство) с `jti`: её видно в списке и можно отозвать (S45-005).
+    jti = await start_session(db, user, request)
+
+    # `tv` в payload: смена пароля увеличивает версию и обнуляет все
+    # выданные раньше refresh-токены (S45-001).
     return {
-        "access_token": create_access_token(data={"sub": str(user.id)}),
-        "refresh_token": create_refresh_token(data={"sub": str(user.id)}),
+        **issue_token_pair(user, jti=jti),
         "token_type": "bearer",
         "user": {
             "id": str(user.id),
@@ -129,7 +138,8 @@ def _user_id_from_payload(payload: dict[str, Any] | None) -> UUID:
 @router.post("/refresh")
 async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
     """Обновление пары токенов по refresh token"""
-    user_id = _user_id_from_payload(decode_token(refresh_token))
+    payload = decode_token(refresh_token)
+    user_id = _user_id_from_payload(payload)
     user = await UserRepository(db).get(user_id)
 
     # Удалённый/заблокированный аккаунт не должен обновлять токены: иначе
@@ -141,9 +151,22 @@ async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Токены, выданные до смены пароля, отклоняются даже при верном
+    # payload (S45-001): версия в токене ниже текущей.
+    if token_version_from_payload(payload) != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Сессия: отозванная/несуществующая строка → 401, иначе `jti`
+    # ротируется, чтобы старый refresh-токен больше не работал (S45-005).
+    raw_jti = (payload or {}).get("jti")
+    new_jti = await rotate_session(db, user, str(raw_jti) if raw_jti else None)
+
     return {
-        "access_token": create_access_token(data={"sub": str(user.id)}),
-        "refresh_token": create_refresh_token(data={"sub": str(user.id)}),
+        **issue_token_pair(user, jti=new_jti),
         "token_type": "bearer",
     }
 
@@ -190,13 +213,32 @@ async def update_me(
                 detail="Username already taken",
             )
 
+    old_email = current_user.email
     updated_user = await user_repo.update(current_user.id, **update_dict)
     if updated_user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+
+    # Смена e-mail: письмо на старый адрес (best-effort, S45-002) — у
+    # владельца останется способ заметить чужой доступ к аккаунту.
+    if new_email is not None and new_email != old_email:
+        await _notify_email_change(old_email, new_email)
+
     return updated_user
+
+
+async def _notify_email_change(old_email: str, new_email: str) -> None:
+    """Отправить уведомление о смене e-mail, не ломая PATCH (S45-002)"""
+    from app.services.email import get_email_sender, send_email_change_email
+
+    try:
+        await send_email_change_email(
+            get_email_sender(), to=old_email, new_email=new_email
+        )
+    except Exception as exc:  # noqa: BLE001 — уведомление не должно ломать API
+        logger.warning("email_change_notice_failed", error=str(exc))
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

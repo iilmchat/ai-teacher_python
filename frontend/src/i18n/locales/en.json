@@ -278,6 +278,81 @@
     "save": "Save",
     "appearance": "Appearance",
     "appearanceHint": "Theme is stored in the browser",
+    "password": {
+      "title": "Change password",
+      "hint": "After the change, other devices will need to sign in again",
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "Repeat the new password",
+      "submit": "Change password",
+      "saved": "Password changed. Other devices will need to sign in again.",
+      "error": "Could not change the password",
+      "mismatch": "Passwords do not match",
+      "strength": {
+        "short": "At least 8 characters",
+        "weak": "Weak",
+        "fair": "Fair",
+        "good": "Good",
+        "strong": "Strong"
+      }
+    },
+    "edit": {
+      "title": "Account details",
+      "email": "Email",
+      "username": "Username",
+      "save": "Save",
+      "reset": "Discard changes",
+      "saved": "Profile updated. A notice was sent to the old address.",
+      "error": "Could not save the profile"
+    },
+    "danger": {
+      "zone": "Danger zone",
+      "title": "Delete account",
+      "hint": "The account will be anonymized irreversibly: sign-in becomes impossible, while progress and class history remain.",
+      "open": "Delete account",
+      "confirm": "The account is deleted permanently: sign-in is blocked and the name and address are replaced by placeholders. This cannot be undone.",
+      "password": "Confirm with your password",
+      "confirmButton": "Delete forever",
+      "cancel": "Cancel",
+      "error": "Could not delete the account"
+    },
+    "export": {
+      "title": "My data",
+      "hint": "Download a file with all of your data: profile, task progress, attempts, chats, notifications and achievements.",
+      "button": "Download my data",
+      "saved": "File downloaded",
+      "error": "Could not download the data"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "email": "Emails about new assignments",
+      "emailHint": "Sent to the profile e-mail; no need to be signed in",
+      "deadlines": "Deadline reminders",
+      "deadlinesHint": "In the app — before the due date",
+      "days": "Remind me before",
+      "daysValue": "{{count}} days",
+      "saved": "Settings saved",
+      "error": "Could not save the settings"
+    },
+    "sessions": {
+      "title": "Active sessions",
+      "hint": "Devices signed in to your account. If you see an unfamiliar one, revoke it and change your password.",
+      "current": "This device",
+      "created": "Signed in",
+      "lastUsed": "Last active",
+      "ip": "IP",
+      "unknownDevice": "Unknown device",
+      "revoke": "Revoke",
+      "revoked": "Session revoked",
+      "error": "Could not load sessions",
+      "revokeError": "Could not revoke the session",
+      "signOutOthers": "Sign out everywhere",
+      "signOutConfirm": "End all sessions except this one? Other devices will need to sign in again.",
+      "signOutDone": "All other sessions ended",
+      "signOutError": "Could not end the sessions",
+      "confirm": "Sign out everywhere",
+      "cancel": "Cancel"
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",
@@ -288,6 +363,11 @@
     "label": "Dark theme",
     "toDark": "Enable dark theme",
     "toLight": "Enable light theme"
+  },
+  "language": {
+    "label": "Interface language",
+    "ru": "Русский",
+    "en": "English"
   },
   "a11y": {
     "skipToContent": "Skip to content"
