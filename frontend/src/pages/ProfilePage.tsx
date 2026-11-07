@@ -5,6 +5,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { PasswordChangeCard } from '@/components/profile/PasswordChangeCard';
 import { useAuthStore } from '@/store/auth';
 import type { UserLevel } from '@/types/api';
 
@@ -57,6 +58,13 @@ export function ProfilePage() {
           <span className="text-sm text-slate-700">{t('theme.label')}</span>
           <ThemeToggle />
         </div>
+      </Card>
+
+      <Card
+        title={t('profile.password.title')}
+        description={t('profile.password.hint')}
+      >
+        <PasswordChangeCard />
       </Card>
 
       <Card title={t('profile.level')} description={t('profile.levelHint')}>

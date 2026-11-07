@@ -11,12 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from app.core.security import (
-    create_access_token,
-    create_refresh_token,
     decode_token,
     get_current_active_user,
     get_current_user,
     hash_password,
+    issue_token_pair,
+    token_version_from_payload,
     verify_password,
 )
 from app.db.database import get_db
@@ -92,9 +92,10 @@ async def login(
 
     await user_repo.update(user.id, last_active=datetime.utcnow())
 
+    # `tv` в payload: смена пароля увеличивает версию и обнуляет все
+    # выданные раньше refresh-токены (S45-001).
     return {
-        "access_token": create_access_token(data={"sub": str(user.id)}),
-        "refresh_token": create_refresh_token(data={"sub": str(user.id)}),
+        **issue_token_pair(user),
         "token_type": "bearer",
         "user": {
             "id": str(user.id),
@@ -129,7 +130,8 @@ def _user_id_from_payload(payload: dict[str, Any] | None) -> UUID:
 @router.post("/refresh")
 async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
     """Обновление пары токенов по refresh token"""
-    user_id = _user_id_from_payload(decode_token(refresh_token))
+    payload = decode_token(refresh_token)
+    user_id = _user_id_from_payload(payload)
     user = await UserRepository(db).get(user_id)
 
     # Удалённый/заблокированный аккаунт не должен обновлять токены: иначе
@@ -141,9 +143,17 @@ async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Токены, выданные до смены пароля, отклоняются даже при верном
+    # payload (S45-001): версия в токене ниже текущей.
+    if token_version_from_payload(payload) != user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     return {
-        "access_token": create_access_token(data={"sub": str(user.id)}),
-        "refresh_token": create_refresh_token(data={"sub": str(user.id)}),
+        **issue_token_pair(user),
         "token_type": "bearer",
     }
 

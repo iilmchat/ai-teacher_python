@@ -76,6 +76,37 @@ def decode_token(token: str) -> dict[str, Any] | None:
         return None
 
 
+def _payload_for(user: User, token_type: str) -> dict[str, Any]:
+    """Общий payload для пары токенов (S45-001).
+
+    `tv` — версия refresh-токенов: смена пароля увеличивает её, и
+    refresh-токены, выданные до смены, отклоняются при обновлении.
+    Отсутствие `tv` в старых токенах трактуется как версия 0, поэтому
+    deploy не выбрасывает уже выданные refresh-токены.
+    """
+    return {
+        "sub": str(user.id),
+        "type": token_type,
+        "tv": user.token_version,
+    }
+
+
+def issue_token_pair(user: User) -> dict[str, str]:
+    """Выдать пару access/refresh токенов с версией (`tv`) пользователя"""
+    access = create_access_token(data=_payload_for(user, "access"))
+    refresh = create_refresh_token(data=_payload_for(user, "refresh"))
+    return {"access_token": access, "refresh_token": refresh}
+
+
+def token_version_from_payload(payload: dict[str, Any] | None) -> int:
+    """Версия, вшитая в refresh-токен (0 для токенов старого формата)"""
+    value = (payload or {}).get("tv", 0)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return -1  # не совпадёт ни с какой реальной версией
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db)

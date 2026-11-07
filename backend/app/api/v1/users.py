@@ -9,14 +9,27 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
-from app.core.security import get_current_active_user, require_role
+from app.core.security import (
+    get_current_active_user,
+    hash_password,
+    issue_token_pair,
+    require_role,
+    verify_password,
+)
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
 from app.models.user import User, UserRole
-from app.schemas.user import LevelUpdateRequest, UserResponse, UserSettingsUpdate
+from app.schemas.user import (
+    LevelUpdateRequest,
+    PasswordChangeRequest,
+    UserResponse,
+    UserSettingsUpdate,
+)
+from app.services.audit_service import record_audit
 from app.services.levels import get_level_info, list_levels
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -30,6 +43,54 @@ AdminUser = Annotated[User, Depends(require_role(UserRole.ADMIN))]
 async def get_profile(current_user: CurrentUser) -> User:
     """Профиль текущего пользователя"""
     return current_user
+
+
+@router.post("/me/password")
+async def change_password(
+    payload: PasswordChangeRequest,
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+) -> dict[str, str]:
+    """Сменить пароль и отозвать чужие refresh-токены (S45-001).
+
+    Проверка текущего пароля обязательна, чтобы токен с чужого устройства
+    не менял пароль. Смена увеличивает `token_version`: refresh-токены,
+    выданные раньше, при обновлении получают 401. Текущая сессия не
+    страдает — новая пара возвращается в ответе (KI-028).
+    """
+    if not await run_in_threadpool(
+        verify_password, payload.current_password, current_user.hashed_password
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный текущий пароль",
+        )
+
+    user_repo = UserRepository(db)
+    # bcrypt синхронный (~0.1–0.3 с): в потоке, как в register/login.
+    new_hash = await run_in_threadpool(hash_password, payload.new_password)
+    updated = await user_repo.update(
+        current_user.id,
+        hashed_password=new_hash,
+        token_version=current_user.token_version + 1,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+        )
+
+    await record_audit(
+        db,
+        actor=current_user,
+        action="user.password_changed",
+        entity_type="user",
+        entity_id=current_user.id,
+        request=request,
+    )
+
+    # Текущее устройство получает пару с новой версией и остаётся в сессии.
+    return {**issue_token_pair(updated), "token_type": "bearer"}
 
 
 @router.patch("/me/level", response_model=UserResponse)

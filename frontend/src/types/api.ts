@@ -23,6 +23,12 @@ export interface LoginResponse {
   user: Pick<User, 'id' | 'email' | 'username' | 'role' | 'level'>;
 }
 
+export interface PasswordChangeResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
 export interface LevelInfo {
   level: UserLevel;
   title: string;

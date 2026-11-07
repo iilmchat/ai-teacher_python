@@ -278,6 +278,24 @@
     "save": "Save",
     "appearance": "Appearance",
     "appearanceHint": "Theme is stored in the browser",
+    "password": {
+      "title": "Change password",
+      "hint": "After the change, other devices will need to sign in again",
+      "current": "Current password",
+      "new": "New password",
+      "repeat": "Repeat the new password",
+      "submit": "Change password",
+      "saved": "Password changed. Other devices will need to sign in again.",
+      "error": "Could not change the password",
+      "mismatch": "Passwords do not match",
+      "strength": {
+        "short": "At least 8 characters",
+        "weak": "Weak",
+        "fair": "Fair",
+        "good": "Good",
+        "strong": "Strong"
+      }
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",

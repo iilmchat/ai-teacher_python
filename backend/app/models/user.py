@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -67,6 +67,11 @@ class User(Base):
     )
     last_active: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, nullable=False
+    )
+    # Смена пароля увеличивает счётчик: refresh-токены, выданные раньше,
+    # при обновлении сравнивают `tv` из payload и отклоняются (KI-028).
+    token_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0")
     )
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
 

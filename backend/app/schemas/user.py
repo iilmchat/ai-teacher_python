@@ -84,6 +84,24 @@ class DeleteAccountRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=72)
 
 
+def _validate_password_bytes(value: str) -> None:
+    """Bcrypt не хэширует пароли длиннее 72 байт (S45-001)"""
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Пароль не должен превышать 72 байта")
+
+
+class PasswordChangeRequest(BaseModel):
+    """Смена пароля текущего пользователя (S45-001)"""
+
+    current_password: str = Field(..., min_length=1, max_length=72)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @model_validator(mode="after")
+    def _new_password_fits_bcrypt(self) -> "PasswordChangeRequest":
+        _validate_password_bytes(self.new_password)
+        return self
+
+
 class UserResponse(UserBase):
     """Схема ответа с пользователем"""
 

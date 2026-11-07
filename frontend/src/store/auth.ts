@@ -9,7 +9,13 @@ import { create } from 'zustand';
 
 import { api, ApiError, UNAUTHORIZED_EVENT } from '@/lib/api';
 import { clearTokens, getAccessToken, setTokens } from '@/lib/token';
-import type { CodeSnippet, LoginResponse, User, UserLevel } from '@/types/api';
+import type {
+  CodeSnippet,
+  LoginResponse,
+  PasswordChangeResponse,
+  User,
+  UserLevel,
+} from '@/types/api';
 
 interface AuthState {
   user: User | null;
@@ -22,6 +28,8 @@ interface AuthState {
   logout: () => void;
   loadMe: () => Promise<void>;
   setLevel: (level: UserLevel) => Promise<void>;
+  /** Сменить пароль: отзыв старых refresh-токенов, текущая сессия жива (S45-001) */
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   /** Сохранить выбранный шаблон промпта в личных настройках (S43-004) */
   setPromptTemplate: (templateId: string | null) => Promise<void>;
   /** Заменить список личных сниппетов кода (S44-003) */
@@ -115,6 +123,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = await api.patch<User>('/users/me/level', { level });
     cacheUser(user);
     set({ user });
+  },
+
+  async changePassword(currentPassword, newPassword) {
+    // Сервер отзывает все выданные раньше refresh-токены и возвращает
+    // новую пару для текущего устройства (S45-001, KI-028).
+    const tokens = await api.post<PasswordChangeResponse>('/users/me/password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    setTokens({ access: tokens.access_token, refresh: tokens.refresh_token });
+    await get().loadMe();
   },
 
   async setPromptTemplate(templateId) {
