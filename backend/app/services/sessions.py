@@ -150,6 +150,8 @@ async def revoke_session(
 
 async def revoke_all_sessions(db: AsyncSession, user_id: UUID) -> int:
     """Отозвать все действующие сессии пользователя"""
+    # `RETURNING id` вместо `.rowcount`: тип результата `rowcount` в новых
+    # версиях SQLAlchemy/mypy не выводится (CI mypy strict).
     result = await db.execute(
         update(UserSession)
         .where(
@@ -157,6 +159,8 @@ async def revoke_all_sessions(db: AsyncSession, user_id: UUID) -> int:
             UserSession.revoked_at.is_(None),
         )
         .values(revoked_at=datetime.utcnow())
+        .returning(UserSession.id)
     )
+    revoked = len(result.scalars().all())
     await db.commit()
-    return int(result.rowcount or 0)
+    return revoked
