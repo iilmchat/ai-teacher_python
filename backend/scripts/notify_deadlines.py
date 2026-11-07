@@ -65,9 +65,24 @@ async def notify(dry_run: bool) -> int:
             ).scalars().all()
             if not members:
                 continue
-            emails = (
-                await db.execute(select(User.email).where(User.id.in_(members)))
-            ).scalars().all()
+            # S45-004: письмо и напоминание о дедлайне — по личным настройкам
+            rows = (
+                await db.execute(
+                    select(User.email, User.settings).where(User.id.in_(members))
+                )
+            ).all()
+            from app.services.notification_prefs import notification_preferences
+
+            emails = [
+                email
+                for email, user_settings in rows
+                if notification_preferences(user_settings)[
+                    "email_notifications"
+                ]
+                and notification_preferences(user_settings)[
+                    "deadline_notifications"
+                ]
+            ]
             print(
                 f"  {classroom.name}: {task.title} до {assignment.due_at:%Y-%m-%d %H:%M} "
                 f"({len(emails)} учеников)"

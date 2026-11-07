@@ -16,9 +16,6 @@ from app.models.task import Task, TaskDifficulty, TaskStatus, UserTaskProgress
 #: Часовой пояс ученика для серии дней (UTC+3)
 STREAK_TIMEZONE_OFFSET = timedelta(hours=3)
 
-#: За сколько часов до дедлайна напоминать
-DEADLINE_NOTICE_HOURS = 72
-
 
 async def completed_dates(db: AsyncSession, user_id: UUID) -> list[datetime]:
     """Даты завершений (UTC+3), по одной на день, по возрастанию"""
@@ -315,10 +312,17 @@ async def mark_read(
 
 
 async def sync_deadline_notifications(db: AsyncSession, user_id: UUID) -> int:
-    """Создать напоминания о дедлайнах в ближайшие 72 часа"""
+    """Создать напоминания о дедлайнах по личным настройкам (S45-004)"""
     from app.models.classroom import Assignment, Classroom, ClassroomMember
+    from app.models.user import User
+    from app.services.notification_prefs import notification_preferences
 
-    threshold = datetime.utcnow() + timedelta(hours=DEADLINE_NOTICE_HOURS)
+    user = await db.get(User, user_id)
+    prefs = notification_preferences(user.settings if user else None)
+    if not prefs["deadline_notifications"]:
+        return 0
+
+    threshold = datetime.utcnow() + timedelta(days=prefs["deadline_days"])
     result = await db.execute(
         select(Assignment, Task, Classroom)
         .join(Classroom, Classroom.id == Assignment.classroom_id)

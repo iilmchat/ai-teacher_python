@@ -15,6 +15,7 @@ import type {
   PasswordChangeResponse,
   User,
   UserLevel,
+  UserPreferences,
 } from '@/types/api';
 
 interface AuthState {
@@ -38,6 +39,8 @@ interface AuthState {
   setPromptTemplate: (templateId: string | null) => Promise<void>;
   /** Заменить список личных сниппетов кода (S44-003) */
   setCodeSnippets: (snippets: CodeSnippet[]) => Promise<void>;
+  /** Сохранить настройки уведомлений/языка (S45-004) */
+  savePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
   clearError: () => void;
 }
 
@@ -63,6 +66,14 @@ function cacheUser(user: User | null): void {
   }
 }
 
+/** Применить сохранённый язык профиля к интерфейсу (S45-004) */
+function applyProfileLanguage(settings: Record<string, unknown> | undefined): void {
+  const language = settings?.language;
+  if ((language === 'ru' || language === 'en') && i18n.language !== language) {
+    void i18n.changeLanguage(language);
+  }
+}
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: readCachedUser(),
   initializing: Boolean(getAccessToken()),
@@ -80,6 +91,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await api.get<User>('/auth/me');
       cacheUser(user);
       set({ user, loading: false, initializing: false });
+      applyProfileLanguage(user.settings);
     } catch (error) {
       const message =
         error instanceof ApiError ? error.message : i18n.t('errors.login');
@@ -116,6 +128,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const user = await api.get<User>('/auth/me');
       cacheUser(user);
       set({ user, initializing: false });
+      applyProfileLanguage(user.settings);
     } catch {
       clearTokens();
       cacheUser(null);
@@ -166,6 +179,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = await api.patch<User>('/users/me/settings', { snippets });
     cacheUser(user);
     set({ user });
+  },
+
+  async savePreferences(prefs) {
+    // S45-004: сервер дополняет `users.settings`; язык применяется сразу
+    // (i18n.changeLanguage) и сохраняется в профиле.
+    const user = await api.patch<User>('/users/me/settings', prefs);
+    cacheUser(user);
+    set({ user });
+    if (prefs.language) {
+      await i18n.changeLanguage(prefs.language);
+    }
   },
 
   clearError() {

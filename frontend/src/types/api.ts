@@ -29,6 +29,17 @@ export interface PasswordChangeResponse {
   token_type: string;
 }
 
+/** Язык интерфейса (S45-004) */
+export type UiLanguage = 'ru' | 'en';
+
+/** Личные настройки уведомлений и языка (S45-004) */
+export interface UserPreferences {
+  language: UiLanguage;
+  email_notifications: boolean;
+  deadline_notifications: boolean;
+  deadline_days: number;
+}
+
 export interface LevelInfo {
   level: UserLevel;
   title: string;

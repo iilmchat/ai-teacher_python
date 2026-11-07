@@ -323,6 +323,17 @@
       "saved": "File downloaded",
       "error": "Could not download the data"
     },
+    "notifications": {
+      "title": "Notifications",
+      "email": "Emails about new assignments",
+      "emailHint": "Sent to the profile e-mail; no need to be signed in",
+      "deadlines": "Deadline reminders",
+      "deadlinesHint": "In the app — before the due date",
+      "days": "Remind me before",
+      "daysValue": "{{count}} days",
+      "saved": "Settings saved",
+      "error": "Could not save the settings"
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",
@@ -333,6 +344,11 @@
     "label": "Dark theme",
     "toDark": "Enable dark theme",
     "toLight": "Enable light theme"
+  },
+  "language": {
+    "label": "Interface language",
+    "ru": "Русский",
+    "en": "English"
   },
   "a11y": {
     "skipToContent": "Skip to content"

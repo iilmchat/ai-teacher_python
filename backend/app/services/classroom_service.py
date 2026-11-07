@@ -554,14 +554,23 @@ class ClassroomService:
         """Best-effort email-уведомления (S28-004): SMTP-сбой не ломает API"""
         from app.config import settings
         from app.services.email import get_email_sender, send_assignment_email
+        from app.services.notification_prefs import notification_preferences
 
         if not settings.notifications_email_enabled or not student_ids:
             return
-        emails = (
+        # S45-004: письмо приходит только тем, кто включил e-mail-уведомления
+        rows = (
             await self.db.execute(
-                select(User.email).where(User.id.in_(student_ids))
+                select(User.email, User.settings).where(User.id.in_(student_ids))
             )
-        ).scalars().all()
+        ).all()
+        emails = [
+            email
+            for email, user_settings in rows
+            if notification_preferences(user_settings)["email_notifications"]
+        ]
+        if not emails:
+            return
         sender = get_email_sender()
         due = due_at.isoformat() if due_at else None
         for task in tasks:

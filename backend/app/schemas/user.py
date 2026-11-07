@@ -2,7 +2,7 @@
 Pydantic schemas for User model
 """
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, model_validator
@@ -67,6 +67,11 @@ class UserSettingsUpdate(BaseModel):
     snippets: list[CodeSnippet] | None = Field(
         default=None, max_length=MAX_CODE_SNIPPETS
     )
+    # S45-004: язык интерфейса и настройки уведомлений
+    language: Literal["ru", "en"] | None = None
+    email_notifications: bool | None = None
+    deadline_notifications: bool | None = None
+    deadline_days: int | None = Field(default=None, ge=1, le=14)
 
     @model_validator(mode="after")
     def _snippet_ids_are_unique(self) -> "UserSettingsUpdate":

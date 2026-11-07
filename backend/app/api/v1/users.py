@@ -167,6 +167,20 @@ async def update_my_settings(
             current["snippets"] = [
                 snippet.model_dump() for snippet in payload.snippets
             ]
+    # S45-004: язык интерфейса и настройки уведомлений. `None` возвращает
+    # ключ к значению по умолчанию (см. notification_preferences).
+    for key in (
+        "language",
+        "email_notifications",
+        "deadline_notifications",
+        "deadline_days",
+    ):
+        if key in payload.model_fields_set:
+            value = getattr(payload, key)
+            if value is None:
+                current.pop(key, None)
+            else:
+                current[key] = value
     updated = await user_repo.update(current_user.id, settings=current)
     if updated is None:
         raise HTTPException(
