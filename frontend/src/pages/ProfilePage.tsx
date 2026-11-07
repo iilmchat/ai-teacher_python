@@ -5,6 +5,7 @@ import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { DataExportCard } from '@/components/profile/DataExportCard';
 import { PasswordChangeCard } from '@/components/profile/PasswordChangeCard';
 import { ProfileEditCard } from '@/components/profile/ProfileEditCard';
 import { DangerZoneCard } from '@/components/profile/DangerZoneCard';
@@ -71,6 +72,10 @@ export function ProfilePage() {
         description={t('profile.password.hint')}
       >
         <PasswordChangeCard />
+      </Card>
+
+      <Card title={t('profile.export.title')}>
+        <DataExportCard />
       </Card>
 
       <Card title={t('profile.level')} description={t('profile.levelHint')}>

@@ -316,6 +316,13 @@
       "cancel": "Cancel",
       "error": "Could not delete the account"
     },
+    "export": {
+      "title": "My data",
+      "hint": "Download a file with all of your data: profile, task progress, attempts, chats, notifications and achievements.",
+      "button": "Download my data",
+      "saved": "File downloaded",
+      "error": "Could not download the data"
+    },
     "roles": {
       "student": "Student",
       "teacher": "Teacher",

@@ -5,11 +5,12 @@ User API endpoints (S5-002, S5-004).
 пользователям; смена роли — только администратору (RBAC).
 """
 
+import json
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -31,6 +32,7 @@ from app.schemas.user import (
 )
 from app.services.audit_service import record_audit
 from app.services.levels import get_level_info, list_levels
+from app.services.personal_export import collect_user_data, export_filename
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -91,6 +93,37 @@ async def change_password(
 
     # Текущее устройство получает пару с новой версией и остаётся в сессии.
     return {**issue_token_pair(updated), "token_type": "bearer"}
+
+
+@router.get("/me/export")
+async def export_my_data(
+    current_user: CurrentUser,
+    db: DbSession,
+    request: Request,
+) -> Response:
+    """Выгрузить все свои данные одним JSON-файлом (S45-003).
+
+    Профиль, прогресс по задачам и попытки, сессии чата с сообщениями
+    (без служебных эмбеддингов), уведомления и достижения. Выгружаются
+    только данные запрашивающего: чужого профиля/чужих чатов там нет.
+    Файл отдаётся с `Content-Disposition: attachment`. Действие
+    фиксируется в журнале аудита (`user.data_exported`).
+    """
+    data = await collect_user_data(db, current_user)
+    await record_audit(
+        db,
+        actor=current_user,
+        action="user.data_exported",
+        entity_type="user",
+        entity_id=current_user.id,
+        request=request,
+    )
+    payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+    return Response(
+        content=payload,
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{export_filename()}"'},
+    )
 
 
 @router.patch("/me/level", response_model=UserResponse)
