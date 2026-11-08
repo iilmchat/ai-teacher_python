@@ -23,6 +23,7 @@ from app.schemas.classroom import (
     AssignmentCreate,
     AssignmentItem,
     AssignmentList,
+    AssignmentUpdate,
     BulkAssignmentRequest,
     BulkAssignmentResult,
     ClassProgress,
@@ -223,6 +224,79 @@ async def create_assignment(
         difficulty=task.difficulty,
         due_at=assignment.due_at,
         created_at=assignment.created_at,
+    )
+
+
+@router.patch(
+    "/classrooms/{classroom_id}/assignments/{assignment_id}",
+    response_model=AssignmentItem,
+)
+async def update_assignment(
+    classroom_id: UUID,
+    assignment_id: UUID,
+    payload: AssignmentUpdate,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> AssignmentItem:
+    """Перенести срок назначения (S46-004), только владелец."""
+    service = ClassroomService(db)
+    assignment, task = await service.update_assignment(
+        classroom_id, assignment_id, current_user, payload.due_at
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="assignment.updated",
+        entity_type="assignment",
+        entity_id=assignment.id,
+        payload={
+            "classroom_id": str(classroom_id),
+            "due_at": assignment.due_at.isoformat()
+            if assignment.due_at is not None
+            else None,
+        },
+        request=request,
+    )
+    items = await service.list_assignments(classroom_id, current_user)
+    found = next(
+        (item for item in items if item.assignment.id == assignment_id), None
+    )
+    return AssignmentItem(
+        id=assignment.id,
+        task_id=assignment.task_id,
+        title=task.title,
+        difficulty=task.difficulty,
+        due_at=assignment.due_at,
+        created_at=assignment.created_at,
+        completed_count=found.completed_count if found is not None else 0,
+        total_members=found.total_members if found is not None else 0,
+    )
+
+
+@router.delete(
+    "/classrooms/{classroom_id}/assignments/{assignment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_assignment(
+    classroom_id: UUID,
+    assignment_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> None:
+    """Снять назначение (S46-004): прогресс сохраняется, уведомления — нет."""
+    removed = await ClassroomService(db).delete_assignment(
+        classroom_id, assignment_id, current_user
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="assignment.deleted",
+        entity_type="assignment",
+        entity_id=assignment_id,
+        payload={"classroom_id": str(classroom_id), "removed": removed},
+        request=request,
     )
 
 

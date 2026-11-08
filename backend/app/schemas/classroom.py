@@ -57,6 +57,12 @@ class AssignmentCreate(BaseModel):
     due_at: datetime | None = None
 
 
+class AssignmentUpdate(BaseModel):
+    """Перенос срока назначения (S46-004)"""
+
+    due_at: datetime | None = None
+
+
 class AssignmentItem(BaseModel):
     """Назначение в классе"""
 

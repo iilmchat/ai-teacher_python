@@ -37,6 +37,11 @@ export function ClassroomDetailPage() {
   const [analytics, setAnalytics] = useState<AssignmentAnalytics | null>(null);
   const [analyticsId, setAnalyticsId] = useState('');
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [dueDrafts, setDueDrafts] = useState<Record<string, string>>({});
+  const [bulkDueAt, setBulkDueAt] = useState('');
+  const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<string[]>([]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [assignmentBusy, setAssignmentBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -130,6 +135,85 @@ export function ClassroomDetailPage() {
       await load();
     } catch {
       setError(t('classrooms.assignmentError'));
+    }
+  }
+
+  function toLocalInput(value: string | null): string {
+    if (!value) {
+      return '';
+    }
+    const date = new Date(value);
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60_000)
+      .toISOString()
+      .slice(0, 16);
+  }
+
+  async function saveDue(item: Assignment) {
+    const value = dueDrafts[item.id] ?? toLocalInput(item.due_at);
+    setAssignmentBusy(true);
+    setError(null);
+    try {
+      await api.patch<Assignment>(
+        `/classrooms/${classroomId}/assignments/${item.id}`,
+        { due_at: value ? new Date(value).toISOString() : null },
+      );
+      setNotice(t('classrooms.dueUpdated'));
+      setDueDrafts((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      await load();
+    } catch {
+      setError(t('classrooms.dueUpdateError'));
+    } finally {
+      setAssignmentBusy(false);
+    }
+  }
+
+  async function removeAssignment(item: Assignment) {
+    setAssignmentBusy(true);
+    setError(null);
+    try {
+      await api.delete(`/classrooms/${classroomId}/assignments/${item.id}`);
+      setNotice(t('classrooms.assignmentRemoved'));
+      setConfirmDeleteId(null);
+      setSelectedAssignmentIds((current) =>
+        current.filter((id) => id !== item.id),
+      );
+      await load();
+    } catch {
+      setError(t('classrooms.assignmentRemoveError'));
+    } finally {
+      setAssignmentBusy(false);
+    }
+  }
+
+  async function bulkShiftDue() {
+    if (!bulkDueAt || selectedAssignmentIds.length === 0) {
+      return;
+    }
+    setAssignmentBusy(true);
+    setError(null);
+    try {
+      const iso = new Date(bulkDueAt).toISOString();
+      for (const id of selectedAssignmentIds) {
+        await api.patch<Assignment>(
+          `/classrooms/${classroomId}/assignments/${id}`,
+          { due_at: iso },
+        );
+      }
+      setNotice(
+        t('classrooms.bulkShifted', { count: selectedAssignmentIds.length }),
+      );
+      setSelectedAssignmentIds([]);
+      setBulkDueAt('');
+      await load();
+    } catch {
+      setError(t('classrooms.dueUpdateError'));
+    } finally {
+      setAssignmentBusy(false);
     }
   }
 
@@ -283,18 +367,82 @@ export function ClassroomDetailPage() {
             onApplied={() => void load()}
           />
         )}
+        {isOwner && (
+          <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2">
+            <span className="text-xs text-slate-600">
+              {t('classrooms.selectedAssignments', {
+                count: selectedAssignmentIds.length,
+              })}
+            </span>
+            <input
+              type="datetime-local"
+              value={bulkDueAt}
+              onChange={(event) => setBulkDueAt(event.target.value)}
+              aria-label={t('classrooms.bulkDue')}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+            />
+            <Button
+              variant="secondary"
+              onClick={() => void bulkShiftDue()}
+              loading={assignmentBusy}
+              disabled={
+                selectedAssignmentIds.length === 0 || !bulkDueAt
+              }
+            >
+              {t('classrooms.bulkShift')}
+            </Button>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <Table>
             <thead className="text-xs uppercase text-slate-500">
               <Tr>
+                {isOwner && (
+                  <Th className="py-2">
+                    <input
+                      type="checkbox"
+                      aria-label={t('classrooms.selectAllAssignments')}
+                      checked={
+                        assignments.length > 0 &&
+                        selectedAssignmentIds.length === assignments.length
+                      }
+                      onChange={(event) =>
+                        setSelectedAssignmentIds(
+                          event.target.checked
+                            ? assignments.map((item) => item.id)
+                            : [],
+                        )
+                      }
+                    />
+                  </Th>
+                )}
                 <Th className="py-2">{t('teacher.colTask')}</Th>
                 <Th className="py-2">{t('classrooms.dueAt')}</Th>
                 <Th className="py-2">{t('classrooms.done')}</Th>
+                {isOwner && <Th className="py-2">{t('classrooms.actions')}</Th>}
               </Tr>
             </thead>
             <tbody>
               {assignments.map((item) => (
                 <Tr key={item.id} className={`border-t border-slate-100 ${analyticsId === item.id ? 'bg-indigo-50' : ''}`}>
+                  {isOwner && (
+                    <Td className="py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={t('classrooms.selectAssignment', {
+                          title: item.title,
+                        })}
+                        checked={selectedAssignmentIds.includes(item.id)}
+                        onChange={(event) =>
+                          setSelectedAssignmentIds((current) =>
+                            event.target.checked
+                              ? [...current, item.id]
+                              : current.filter((id) => id !== item.id),
+                          )
+                        }
+                      />
+                    </Td>
+                  )}
                   <Td className="py-2 font-medium text-slate-800">
                     {isOwner ? (
                       <button
@@ -316,11 +464,67 @@ export function ClassroomDetailPage() {
                   <Td className="py-2 text-slate-600">
                     {item.completed_count}/{item.total_members}
                   </Td>
+                  {isOwner && (
+                    <Td className="py-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <input
+                          type="datetime-local"
+                          aria-label={t('classrooms.dueFor', {
+                            title: item.title,
+                          })}
+                          value={
+                            dueDrafts[item.id] ?? toLocalInput(item.due_at)
+                          }
+                          onChange={(event) =>
+                            setDueDrafts((current) => ({
+                              ...current,
+                              [item.id]: event.target.value,
+                            }))
+                          }
+                          className="rounded border border-slate-300 px-2 py-1 text-xs"
+                        />
+                        <Button
+                          variant="ghost"
+                          onClick={() => void saveDue(item)}
+                          disabled={assignmentBusy}
+                        >
+                          {t('classrooms.saveDue')}
+                        </Button>
+                        {confirmDeleteId === item.id ? (
+                          <>
+                            <Button
+                              variant="danger"
+                              onClick={() => void removeAssignment(item)}
+                              disabled={assignmentBusy}
+                            >
+                              {t('classrooms.confirmRemoveAssignment')}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              {t('classrooms.cancel')}
+                            </Button>
+                          </>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            onClick={() => setConfirmDeleteId(item.id)}
+                          >
+                            {t('classrooms.removeAssignment')}
+                          </Button>
+                        )}
+                      </div>
+                    </Td>
+                  )}
                 </Tr>
               ))}
               {assignments.length === 0 && (
                 <Tr>
-                  <Td colSpan={3} className="py-3 text-center text-slate-500">
+                  <Td
+                    colSpan={isOwner ? 5 : 3}
+                    className="py-3 text-center text-slate-500"
+                  >
                     {t('classrooms.noAssignments')}
                   </Td>
                 </Tr>

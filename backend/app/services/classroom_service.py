@@ -21,6 +21,7 @@ from app.models.classroom import (
     ClassroomMember,
     ClassroomRole,
 )
+from app.models.engagement import Notification
 from app.models.task import Task, TaskStatus, UserTaskProgress
 from app.models.user import User
 
@@ -292,6 +293,72 @@ class ClassroomService:
             )
             for assignment, task in rows
         ]
+
+    async def update_assignment(
+        self,
+        classroom_id: UUID,
+        assignment_id: UUID,
+        actor: User,
+        due_at: datetime | None,
+    ) -> tuple[Assignment, Task]:
+        """Перенести срок назначения (S46-004).
+
+        Меняется только `due_at`; прогресс учеников и уведомления о
+        назначении остаются как есть.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Менять назначения может только владелец")
+        row = (
+            await self.db.execute(
+                select(Assignment, Task)
+                .join(Task, Task.id == Assignment.task_id)
+                .where(
+                    Assignment.id == assignment_id,
+                    Assignment.classroom_id == classroom_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Назначение не найдено")
+        assignment, task = row
+        assignment.due_at = due_at
+        await self.db.commit()
+        await self.db.refresh(assignment)
+        return assignment, task
+
+    async def delete_assignment(
+        self, classroom_id: UUID, assignment_id: UUID, actor: User
+    ) -> bool:
+        """Снять назначение (S46-004).
+
+        Прогресс учеников сохраняется, а уведомления о назначении удаляются.
+        Повторное снятие — не ошибка (идемпотентность): возвращается `False`.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Снимать назначения может только владелец")
+        assignment = await self.db.get(Assignment, assignment_id)
+        if assignment is None or assignment.classroom_id != classroom_id:
+            return False
+
+        notifications = (
+            await self.db.execute(
+                select(Notification).where(Notification.type == "assignment")
+            )
+        ).scalars().all()
+        stale_ids = [
+            notification.id
+            for notification in notifications
+            if str(notification.payload.get("assignment_id")) == str(assignment_id)
+        ]
+        if stale_ids:
+            await self.db.execute(
+                delete(Notification).where(Notification.id.in_(stale_ids))
+            )
+        await self.db.delete(assignment)
+        await self.db.commit()
+        return True
 
     async def my_assignments(self, user: User) -> list[MyAssignmentData]:
         """Задания пользователя по всем его классам"""
