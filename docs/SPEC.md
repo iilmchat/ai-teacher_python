@@ -914,9 +914,18 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 
 **Аудит (таблица `audit_log`, миграция 011):** актор (`actor_id`, `actor_role`),
 действие, сущность (`entity_type`, `entity_id`), сводка `payload` (без PII),
-IP, время. Записываются: `user.updated`, `user.deleted`, `task.created`,
+IP, время. Записываются: `user.updated`, `user.deleted`, `user.deactivated`,
+`user.activated`, `user.bulk_updated`, `task.created`,
 `task.updated`, `task.deleted`, `classroom.created`, `assignment.created`.
 Запись best-effort: ошибка аудита не ломает действие (warning в лог).
+
+**Admin Console v2 (S47-002).**
+
+| Что | Контракт |
+|-----|----------|
+| `GET /api/v1/admin/users/{id}` | admin; профиль (`AdminUserItem` с `is_active`), прогресс `{solved, attempts}`, последние 10 записей аудита (актор или сущность — этот пользователь) и действующие сессии (`id, created_at, last_used_at, user_agent, ip`, без `jti`); неизвестный id — 404 |
+| `PATCH /api/v1/admin/users/{id}` | admin; `role`, `level`, `is_active`. `is_active=false` отзывает все сессии, увеличивает `token_version` и пишет `user.deactivated`; `true` — `user.activated` (D-004). Себя деактивировать/понизить нельзя — 400. Остальные изменения — `user.updated`; `DELETE` не меняется |
+| `PATCH /api/v1/admin/users/bulk` | admin; `{user_ids: [1…100], changes: {role?, is_active?}}`; валидация всего набора до записи, применение одной транзакцией; ответ `{updated, skipped: [{id, reason}]}`, где `reason` — `not_found`, `self`, `admin_role`, `no_changes`; одно событие `user.bulk_updated` с количествами; пустой `updated` — 200 (D-005) |
 
 ---
 

@@ -17,6 +17,11 @@ const AdminAuditPage = lazy(() =>
     default: module.AdminAuditPage,
   })),
 );
+const AdminUserPage = lazy(() =>
+  import('@/pages/AdminUserPage').then((module) => ({
+    default: module.AdminUserPage,
+  })),
+);
 const AssignmentsPage = lazy(() =>
   import('@/pages/AssignmentsPage').then((module) => ({
     default: module.AssignmentsPage,
@@ -218,6 +223,16 @@ export function App() {
                 <ProtectedRoute>
                   <AdminRoute>
                     <AdminAuditPage />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/users/:userId"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminUserPage />
                   </AdminRoute>
                 </ProtectedRoute>
               }
