@@ -116,6 +116,9 @@ function mockApi() {
     if (path.endsWith('/analytics')) {
       return ANALYTICS as never;
     }
+    if (path.endsWith('/announcements')) {
+      return { items: [] } as never;
+    }
     throw new Error(`unexpected path ${path}`);
   });
 }

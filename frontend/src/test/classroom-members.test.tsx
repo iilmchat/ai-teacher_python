@@ -61,6 +61,9 @@ function mockApi(members: { user_id: string; username: string }[]) {
         problem_tasks: [],
       } as never;
     }
+    if (path.endsWith('/announcements')) {
+      return { items: [] } as never;
+    }
     throw new Error(`unexpected path ${path}`);
   });
 }

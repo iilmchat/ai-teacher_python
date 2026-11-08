@@ -558,6 +558,18 @@
     "selectedMembers": "Выбрано учеников: {{count}}",
     "bulkRemoveSubmit": "Исключить выбранных",
     "selectMember": "Выбрать ученика {{name}}",
+    "announcements": "Объявления",
+    "announcementsEmpty": "Объявлений пока нет",
+    "announcementTitlePlaceholder": "Тема объявления",
+    "announcementBodyPlaceholder": "Текст объявления для учеников",
+    "publishAnnouncement": "Опубликовать",
+    "announcementPublished": "Объявление опубликовано",
+    "announcementPublishError": "Не удалось опубликовать объявление",
+    "announcementDelete": "Удалить",
+    "announcementDeleted": "Объявление удалено",
+    "announcementDeleteError": "Не удалось удалить объявление",
+    "announcementBy": "{{author}} · {{date}}",
+    "announcementFeedBy": "{{classroom}} · {{author}} · {{date}}",
     "roles": {
       "owner": "владелец",
       "student": "ученик"

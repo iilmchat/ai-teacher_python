@@ -558,6 +558,18 @@
     "selectedMembers": "Selected students: {{count}}",
     "bulkRemoveSubmit": "Remove selected",
     "selectMember": "Select student {{name}}",
+    "announcements": "Announcements",
+    "announcementsEmpty": "No announcements yet",
+    "announcementTitlePlaceholder": "Announcement title",
+    "announcementBodyPlaceholder": "Announcement text for students",
+    "publishAnnouncement": "Publish",
+    "announcementPublished": "Announcement published",
+    "announcementPublishError": "Could not publish the announcement",
+    "announcementDelete": "Delete",
+    "announcementDeleted": "Announcement deleted",
+    "announcementDeleteError": "Could not delete the announcement",
+    "announcementBy": "{{author}} · {{date}}",
+    "announcementFeedBy": "{{classroom}} · {{author}} · {{date}}",
     "roles": {
       "owner": "owner",
       "student": "student"

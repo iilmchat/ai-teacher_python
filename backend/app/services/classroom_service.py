@@ -18,6 +18,7 @@ from app.models.classroom import (
     Assignment,
     AssignmentTemplate,
     Classroom,
+    ClassroomAnnouncement,
     ClassroomMember,
     ClassroomRole,
 )
@@ -986,6 +987,110 @@ class ClassroomService:
             completion_rate=progress.completion_rate,
             overdue=overdue,
         )
+
+    # --- Объявления класса ----------------------------------------------
+
+    async def list_announcements(
+        self, classroom_id: UUID, actor: User, limit: int = 50
+    ) -> list[tuple[ClassroomAnnouncement, str]]:
+        """Объявления класса, новые сверху (видят все участники)."""
+        await self.get_for_user(classroom_id, actor)
+        rows = await self.db.execute(
+            select(ClassroomAnnouncement, User.username)
+            .join(User, User.id == ClassroomAnnouncement.author_id)
+            .where(ClassroomAnnouncement.classroom_id == classroom_id)
+            .order_by(ClassroomAnnouncement.created_at.desc())
+            .limit(limit)
+        )
+        return [(announcement, name) for announcement, name in rows.all()]
+
+    async def create_announcement(
+        self, classroom_id: UUID, actor: User, title: str, body: str
+    ) -> ClassroomAnnouncement:
+        """Публикация объявления (S46-006): только владелец класса.
+
+        Ученики класса получают in-app уведомление; рассылка идёт после
+        сохранения объявления, чтобы уведомление ссылалось на реальный id.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Публиковать объявления может только владелец класса"
+            )
+        announcement = ClassroomAnnouncement(
+            classroom_id=classroom_id,
+            author_id=actor.id,
+            title=title.strip(),
+            body=body.strip(),
+        )
+        self.db.add(announcement)
+        await self.db.commit()
+        await self.db.refresh(announcement)
+
+        student_ids = [
+            member.user_id
+            for member in await self.get_members(classroom_id)
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        if student_ids:
+            from app.services.engagement_service import (
+                create_announcement_notifications,
+            )
+
+            await create_announcement_notifications(
+                self.db,
+                student_ids,
+                classroom_id=classroom.id,
+                classroom_name=classroom.name,
+                announcement_id=announcement.id,
+                title=announcement.title,
+            )
+        return announcement
+
+    async def delete_announcement(
+        self, classroom_id: UUID, announcement_id: UUID, actor: User
+    ) -> None:
+        """Удалить объявление: автор или владелец класса (S46-006)."""
+        classroom = await self._get_or_404(classroom_id)
+        announcement = await self.db.get(ClassroomAnnouncement, announcement_id)
+        if announcement is None or announcement.classroom_id != classroom_id:
+            raise NotFoundError("Объявление не найдено")
+        if (
+            announcement.author_id != actor.id
+            and classroom.owner_id != actor.id
+        ):
+            raise AccessDeniedError(
+                "Удалить объявление может автор или владелец класса"
+            )
+        await self.db.delete(announcement)
+        await self.db.commit()
+
+    async def announcements_for_user(
+        self, user: User, limit: int = 20
+    ) -> list[tuple[ClassroomAnnouncement, str, str]]:
+        """Лента объявлений всех классов пользователя (S46-006).
+
+        Нужна странице «Мои задания»: один запрос вместо N запросов по
+        каждому классу.
+        """
+        member_classrooms = select(ClassroomMember.classroom_id).where(
+            ClassroomMember.user_id == user.id
+        )
+        rows = await self.db.execute(
+            select(ClassroomAnnouncement, User.username, Classroom.name)
+            .join(User, User.id == ClassroomAnnouncement.author_id)
+            .join(
+                Classroom,
+                Classroom.id == ClassroomAnnouncement.classroom_id,
+            )
+            .where(ClassroomAnnouncement.classroom_id.in_(member_classrooms))
+            .order_by(ClassroomAnnouncement.created_at.desc())
+            .limit(limit)
+        )
+        return [
+            (announcement, author_name, classroom_name)
+            for announcement, author_name, classroom_name in rows.all()
+        ]
 
 @dataclass(slots=True)
 class AssignmentItemData:

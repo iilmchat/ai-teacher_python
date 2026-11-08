@@ -561,6 +561,23 @@ export interface BulkMembersRemoveResult {
   skipped: string[];
 }
 
+/** Объявление класса (S46-006) */
+export interface AnnouncementItem {
+  id: string;
+  classroom_id: string;
+  classroom_name: string;
+  author_id: string;
+  author_name: string;
+  title: string;
+  body: string;
+  created_at: string;
+  can_delete: boolean;
+}
+
+export interface AnnouncementList {
+  items: AnnouncementItem[];
+}
+
 export interface Assignment {
   id: string;
   task_id: string;

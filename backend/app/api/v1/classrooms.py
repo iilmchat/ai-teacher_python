@@ -17,6 +17,9 @@ from app.models.classroom import Classroom
 from app.models.task import Task
 from app.models.user import User, UserRole
 from app.schemas.classroom import (
+    AnnouncementCreate,
+    AnnouncementItem,
+    AnnouncementList,
     AssignmentAnalytics,
     AssignmentAnalyticsStudent,
     AssignmentAttemptBucket,
@@ -664,4 +667,135 @@ async def class_gradebook_csv(
                 f'attachment; filename="gradebook-{classroom_id}.csv"'
             )
         },
+    )
+
+
+# --- Объявления класса (S46-006) -------------------------------------------
+
+
+@router.get(
+    "/classrooms/{classroom_id}/announcements",
+    response_model=AnnouncementList,
+)
+async def list_announcements(
+    classroom_id: UUID,
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> AnnouncementList:
+    """Объявления класса, новые сверху (видят все участники)."""
+    rows = await ClassroomService(db).list_announcements(
+        classroom_id, current_user, limit=limit
+    )
+    return AnnouncementList(
+        items=[
+            AnnouncementItem(
+                id=announcement.id,
+                classroom_id=announcement.classroom_id,
+                author_id=announcement.author_id,
+                author_name=author_name,
+                title=announcement.title,
+                body=announcement.body,
+                created_at=announcement.created_at,
+                can_delete=announcement.author_id == current_user.id,
+            )
+            for announcement, author_name in rows
+        ]
+    )
+
+
+@router.post(
+    "/classrooms/{classroom_id}/announcements",
+    response_model=AnnouncementItem,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_announcement(
+    classroom_id: UUID,
+    payload: AnnouncementCreate,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> AnnouncementItem:
+    """Опубликовать объявление (S46-006), только владелец класса.
+
+    Публикация порождает in-app уведомление всем ученикам класса.
+    """
+    announcement = await ClassroomService(db).create_announcement(
+        classroom_id, current_user, payload.title, payload.body
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="announcement.created",
+        entity_type="announcement",
+        entity_id=announcement.id,
+        payload={
+            "classroom_id": str(classroom_id),
+            "title_length": len(announcement.title),
+        },
+        request=request,
+    )
+    return AnnouncementItem(
+        id=announcement.id,
+        classroom_id=announcement.classroom_id,
+        author_id=announcement.author_id,
+        author_name=current_user.username,
+        title=announcement.title,
+        body=announcement.body,
+        created_at=announcement.created_at,
+        can_delete=True,
+    )
+
+
+@router.delete(
+    "/classrooms/{classroom_id}/announcements/{announcement_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_announcement(
+    classroom_id: UUID,
+    announcement_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> None:
+    """Удалить объявление: автор или владелец класса (S46-006)."""
+    await ClassroomService(db).delete_announcement(
+        classroom_id, announcement_id, current_user
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="announcement.deleted",
+        entity_type="announcement",
+        entity_id=announcement_id,
+        payload={"classroom_id": str(classroom_id)},
+        request=request,
+    )
+
+
+@router.get("/me/announcements", response_model=AnnouncementList)
+async def my_announcements(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> AnnouncementList:
+    """Лента объявлений всех классов пользователя (S46-006)."""
+    rows = await ClassroomService(db).announcements_for_user(
+        current_user, limit=limit
+    )
+    return AnnouncementList(
+        items=[
+            AnnouncementItem(
+                id=announcement.id,
+                classroom_id=announcement.classroom_id,
+                classroom_name=classroom_name,
+                author_id=announcement.author_id,
+                author_name=author_name,
+                title=announcement.title,
+                body=announcement.body,
+                created_at=announcement.created_at,
+                can_delete=announcement.author_id == current_user.id,
+            )
+            for announcement, author_name, classroom_name in rows
+        ]
     )

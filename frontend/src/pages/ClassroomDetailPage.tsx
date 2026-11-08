@@ -12,6 +12,8 @@ import { api } from '@/lib/api';
 import { saveBlob } from '@/lib/download';
 import { useAuthStore } from '@/store/auth';
 import type {
+  AnnouncementItem,
+  AnnouncementList,
   Assignment,
   AssignmentAnalytics,
   AssignmentList,
@@ -52,6 +54,10 @@ export function ClassroomDetailPage() {
     skipped: string[];
     unknown: string[];
   } | null>(null);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementBody, setAnnouncementBody] = useState('');
+  const [announcementBusy, setAnnouncementBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,12 +68,16 @@ export function ClassroomDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const [detail, assignmentData] = await Promise.all([
+      const [detail, assignmentData, announcementData] = await Promise.all([
         api.get<ClassroomDetail>(`/classrooms/${classroomId}`),
         api.get<AssignmentList>(`/classrooms/${classroomId}/assignments`),
+        api.get<AnnouncementList>(
+          `/classrooms/${classroomId}/announcements`,
+        ),
       ]);
       setClassroom(detail);
       setAssignments(assignmentData.items);
+      setAnnouncements(announcementData.items);
       if (detail.owner_id === user?.id) {
         const [taskData, progressData] = await Promise.all([
           api.get<TeacherTaskList>('/teacher/tasks'),
@@ -294,6 +304,47 @@ export function ClassroomDetailPage() {
     setSelectedMemberIds((current) =>
       checked ? [...current, userId] : current.filter((id) => id !== userId),
     );
+  }
+
+  async function publishAnnouncement() {
+    if (!announcementTitle.trim() || !announcementBody.trim()) {
+      return;
+    }
+    setAnnouncementBusy(true);
+    setError(null);
+    try {
+      await api.post<AnnouncementItem>(
+        `/classrooms/${classroomId}/announcements`,
+        {
+          title: announcementTitle.trim(),
+          body: announcementBody.trim(),
+        },
+      );
+      setNotice(t('classrooms.announcementPublished'));
+      setAnnouncementTitle('');
+      setAnnouncementBody('');
+      await load();
+    } catch {
+      setError(t('classrooms.announcementPublishError'));
+    } finally {
+      setAnnouncementBusy(false);
+    }
+  }
+
+  async function removeAnnouncement(item: AnnouncementItem) {
+    setAnnouncementBusy(true);
+    setError(null);
+    try {
+      await api.delete(
+        `/classrooms/${classroomId}/announcements/${item.id}`,
+      );
+      setNotice(t('classrooms.announcementDeleted'));
+      await load();
+    } catch {
+      setError(t('classrooms.announcementDeleteError'));
+    } finally {
+      setAnnouncementBusy(false);
+    }
   }
 
   async function openAnalytics(item: Assignment) {
@@ -736,6 +787,75 @@ export function ClassroomDetailPage() {
           )}
         </Card>
       )}
+
+      <Card title={t('classrooms.announcements')}>
+        {isOwner && (
+          <div className="mb-3 flex flex-col gap-2 border-b border-slate-100 pb-3">
+            <input
+              value={announcementTitle}
+              onChange={(event) => setAnnouncementTitle(event.target.value)}
+              placeholder={t('classrooms.announcementTitlePlaceholder')}
+              aria-label={t('classrooms.announcementTitlePlaceholder')}
+              maxLength={200}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <textarea
+              value={announcementBody}
+              onChange={(event) => setAnnouncementBody(event.target.value)}
+              placeholder={t('classrooms.announcementBodyPlaceholder')}
+              aria-label={t('classrooms.announcementBodyPlaceholder')}
+              maxLength={5000}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div>
+              <Button
+                onClick={() => void publishAnnouncement()}
+                loading={announcementBusy}
+                disabled={
+                  !announcementTitle.trim() || !announcementBody.trim()
+                }
+              >
+                {t('classrooms.publishAnnouncement')}
+              </Button>
+            </div>
+          </div>
+        )}
+        <ul className="flex flex-col divide-y divide-slate-100 text-sm">
+          {announcements.map((item) => (
+            <li key={item.id} className="py-2">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <p className="font-medium text-slate-800">{item.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {t('classrooms.announcementBy', {
+                      author: item.author_name,
+                      date: new Date(item.created_at).toLocaleString('ru-RU'),
+                    })}
+                  </p>
+                </div>
+                {item.can_delete && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => void removeAnnouncement(item)}
+                    disabled={announcementBusy}
+                  >
+                    {t('classrooms.announcementDelete')}
+                  </Button>
+                )}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-slate-700">
+                {item.body}
+              </p>
+            </li>
+          ))}
+          {announcements.length === 0 && (
+            <li className="py-2 text-slate-500">
+              {t('classrooms.announcementsEmpty')}
+            </li>
+          )}
+        </ul>
+      </Card>
 
       <Card title={t('classrooms.members')}>
         {isOwner && (

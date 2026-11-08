@@ -231,6 +231,31 @@ class TemplateList(BaseModel):
     total: int
 
 
+class AnnouncementCreate(BaseModel):
+    """Публикация объявления класса (S46-006)"""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=5000)
+
+
+class AnnouncementItem(BaseModel):
+    """Объявление класса"""
+
+    id: UUID
+    classroom_id: UUID
+    classroom_name: str = ""
+    author_id: UUID
+    author_name: str
+    title: str
+    body: str
+    created_at: datetime
+    can_delete: bool = False
+
+
+class AnnouncementList(BaseModel):
+    items: list[AnnouncementItem]
+
+
 class GradebookCell(BaseModel):
     """Ячейка журнала оценок (S28-003)"""
 

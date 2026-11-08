@@ -11,6 +11,7 @@ from app.models.classroom import (
     Assignment,
     AssignmentTemplate,
     Classroom,
+    ClassroomAnnouncement,
     ClassroomMember,
     ClassroomRole,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "Classroom",
+    "ClassroomAnnouncement",
     "ClassroomMember",
     "ClassroomRole",
     "CodeExecution",
