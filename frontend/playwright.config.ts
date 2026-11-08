@@ -33,7 +33,7 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
-      command: `${PYTHON} scripts/prepare_e2e_db.py && ${PYTHON} -m alembic upgrade head && ${PYTHON} scripts/seed_tasks.py && ${PYTHON} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
+      command: `${PYTHON} scripts/prepare_e2e_db.py && ${PYTHON} -m alembic upgrade head && ${PYTHON} scripts/seed_tasks.py && ${PYTHON} scripts/seed_e2e.py && ${PYTHON} -m uvicorn app.main:app --host 127.0.0.1 --port ${BACKEND_PORT}`,
       cwd: '../backend',
       url: `http://127.0.0.1:${BACKEND_PORT}/api/v1/health`,
       timeout: 120_000,

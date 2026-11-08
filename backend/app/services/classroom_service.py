@@ -1002,7 +1002,10 @@ class ClassroomService:
             .order_by(ClassroomAnnouncement.created_at.desc())
             .limit(limit)
         )
-        return [(announcement, name) for announcement, name in rows.all()]
+        items: list[tuple[ClassroomAnnouncement, str]] = []
+        for announcement, author_name in rows.all():
+            items.append((announcement, author_name))
+        return items
 
     async def create_announcement(
         self, classroom_id: UUID, actor: User, title: str, body: str
@@ -1017,11 +1020,15 @@ class ClassroomService:
             raise AccessDeniedError(
                 "Публиковать объявления может только владелец класса"
             )
+        clean_title = title.strip()
+        clean_body = body.strip()
+        if not clean_title or not clean_body:
+            raise ValidationError("Тема и текст объявления не могут быть пустыми")
         announcement = ClassroomAnnouncement(
             classroom_id=classroom_id,
             author_id=actor.id,
-            title=title.strip(),
-            body=body.strip(),
+            title=clean_title,
+            body=clean_body,
         )
         self.db.add(announcement)
         await self.db.commit()
@@ -1087,10 +1094,10 @@ class ClassroomService:
             .order_by(ClassroomAnnouncement.created_at.desc())
             .limit(limit)
         )
-        return [
-            (announcement, author_name, classroom_name)
-            for announcement, author_name, classroom_name in rows.all()
-        ]
+        items: list[tuple[ClassroomAnnouncement, str, str]] = []
+        for announcement, author_name, classroom_name in rows.all():
+            items.append((announcement, author_name, classroom_name))
+        return items
 
 @dataclass(slots=True)
 class AssignmentItemData:

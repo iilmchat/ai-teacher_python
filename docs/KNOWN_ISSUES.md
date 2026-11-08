@@ -133,7 +133,7 @@ CSRF-защитой, флаг `AUTH_TOKEN_TRANSPORT` и рабочий отка�
 
 ---
 
-### KI-029 · Open · Low · models/task · `best_solution` пишется, но не читается
+### KI-029 · Closed · Low · models/task · `best_solution` пишется, но не читается
 
 **Описание:** `user_task_progress.best_solution` заполняется при успешной
 отправке (`app/services/task_service.py`), но ни один API его не отдаёт и ни
@@ -141,13 +141,16 @@ CSRF-защитой, флаг `AUTH_TOKEN_TRANSPORT` и рабочий отка�
 использования: учитель не может посмотреть решение ученика, ученик — своё
 успешное решение. Это же блокирует разбор работ и drill-down по назначению.
 
-**Workaround:** нет — функциональности не существует.
+**Решение (v0.5.0):** S46-001 — `GET /teacher/students/{id}/progress` отдаёт
+`best_solution` (только для завершённых задач), а
+`GET /teacher/students/{id}/attempts` — полную историю попыток с кодом и
+разбором; UI показывает «последнее успешное решение» во вкладке «Прогресс».
+S42-002 даёт ученику историю попыток, S46-003 — drill-down по назначению.
 
-**План (v0.5.0):** S42-002 (таблица `task_attempts` с полной историей
-попыток), S46-001 (`GET /teacher/students/{id}/attempts` — доступ только
-владельцу класса), S46-003 (drill-down по назначению).
+**Проверки:** `backend/tests/test_teacher_work.py` (12), frontend
+`teacher-works.test.tsx` (5), e2e `sprint46-teacher-feedback.spec.ts`.
 
-**Создано:** 2026-11-05 · **Обновлено:** 2026-11-05
+**Создано:** 2026-11-05 · **Обновлено:** 2026-11-08 · **Закрыто:** 2026-11-08
 
 ---
 

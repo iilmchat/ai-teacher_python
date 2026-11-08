@@ -229,11 +229,17 @@ async def test_announcement_validation(
         json={"title": "Тема", "body": "x" * 5001},
         headers=auth(teacher),
     )
+    blank = await client.post(
+        f"{CLASSROOMS}/{classroom['id']}/announcements",
+        json={"title": "   ", "body": "   "},
+        headers=auth(teacher),
+    )
 
     assert empty_title.status_code == 422
     assert empty_body.status_code == 422
     assert long_title.status_code == 422
     assert long_body.status_code == 422
+    assert blank.status_code == 422
 
 
 async def test_announcement_audit(

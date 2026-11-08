@@ -454,9 +454,18 @@ errors}`. Метрики — в памяти процесса: при неско
 | GET | `/teacher/tasks/{id}` | — | `TaskAdminDetail` |
 | GET | `/teacher/students` | `search?`, `skip`, `limit` | `{total, items[]}` (агрегаты) |
 | GET | `/teacher/students/{id}/progress` | — | `{student, total_tasks, completed, in_progress, completion_rate, items[]}` |
+| GET | `/teacher/students/{id}/attempts` | `task_id?`, `skip`, `limit` | `{total, items[]}` — работы ученика (S46-001) |
+| GET | `/teacher/students/{id}/attempts/{attempt_id}` | — | попытка: код, разбор, комментарии (S46-001/002) |
+| POST | `/teacher/attempts/{id}/feedback` | `{comment}` | 200 `AttemptFeedbackItem` (S46-002) |
 
 Доступ: `teacher`/`admin`; ученик получает 403. Не-ученик в
-`/teacher/students/{id}` — 404.
+`/teacher/students/{id}` — 404. Доступ к работам и комментариям — только
+владелец класса, в котором состоит ученик (иначе 403); администратор не
+ограничен классами. `best_solution` в карточке прогресса отдаётся только для
+завершённых задач как «последнее успешное решение». Комментарий — 1…2000
+символов, один на пару (`attempt_id`, `teacher_id`), повторная отправка
+обновляет текст; аудит `attempt.feedback_added`, ученику уходит уведомление
+`attempt_feedback`.
 
 ### 3.8 Классы и назначения
 
@@ -468,12 +477,27 @@ errors}`. Метрики — в памяти процесса: при неско
 | POST | `/classrooms/join` | `{join_code}` | `Classroom` |
 | POST | `/classrooms/{id}/join` | `{join_code}` | `Classroom` (проверяет id) |
 | DELETE | `/classrooms/{id}/members/{user_id}` | — | 204 (владелец) |
+| POST | `/classrooms/{id}/members/bulk` | `{usernames: [1…100]}` | `{added, skipped, unknown}` (S46-005) |
+| DELETE | `/classrooms/{id}/members/bulk` | `{user_ids: [1…100]}` | `{removed, skipped}` (S46-005) |
 | POST | `/classrooms/{id}/assignments` | `{task_id, due_at?}` | 201 `AssignmentItem` (владелец) |
 | GET | `/classrooms/{id}/assignments` | — | `{items[]}` (участник) |
+| PATCH | `/classrooms/{id}/assignments/{assignment_id}` | `{due_at}` | `AssignmentItem` (S46-004) |
+| DELETE | `/classrooms/{id}/assignments/{assignment_id}` | — | 204, идемпотентно (S46-004) |
+| GET | `/classrooms/{id}/assignments/{assignment_id}/analytics` | `problem_threshold=3` | `AssignmentAnalytics` (S46-003) |
 | GET | `/classrooms/{id}/progress` | — | матрица + `completion_rate` (владелец) |
 | GET | `/me/assignments` | — | `{items[]}` с `overdue` |
+| GET | `/classrooms/{id}/announcements` | `limit` | `{items[]}` — новые сверху (S46-006) |
+| POST | `/classrooms/{id}/announcements` | `{title, body}` | 201 `AnnouncementItem` (S46-006) |
+| DELETE | `/classrooms/{id}/announcements/{announcement_id}` | — | 204, автор или владелец (S46-006) |
+| GET | `/me/announcements` | `limit` | лента объявлений всех классов (S46-006) |
 
 Не участник класса → 403; неверный код → 404; повторное назначение задачи → 409.
+Управление назначениями (перенос/снятие) и публикация объявлений — только
+владелец. Снятие назначения сохраняет `UserTaskProgress`, удаляет уведомления
+`assignment`. Drill-down считает «проблемными» учеников с числом попыток
+больше `problem_threshold`, «просрочившими» — дедлайн прошёл, задача не
+завершена. Публикация объявления уведомляет всех учеников класса
+(`announcement`).
 
 ### 3.9 Вовлечение
 
@@ -484,7 +508,9 @@ errors}`. Метрики — в памяти процесса: при неско
 | GET | `/me/notifications` | `unread_only?`, `skip`, `limit` | `{items[], unread}`; создаёт напоминания о дедлайнах |
 | POST | `/me/notifications/{id}/read` | — | `NotificationItem`; чужое — 404 |
 
-Типы уведомлений: `assignment`, `deadline`, `achievement`.
+Типы уведомлений: `assignment`, `deadline`, `achievement`, `attempt_feedback`
+(комментарий учителя к попытке, S46-002), `announcement` (объявление класса,
+S46-006).
 
 ### 3.10 Служебное
 
@@ -597,17 +623,25 @@ task_attempts(id, user_id→users, task_id→tasks, code, passed,
                passed_count, total_count, results JSONB, created_at)
    история засчитанных отправок (S42-002) · results — разбор по кейсам
 
+attempt_feedback(id, attempt_id→task_attempts, teacher_id→users,
+                 comment, created_at)
+   один комментарий учителя на попытку (S46-002)
+   UNIQUE(attempt_id, teacher_id) · повторная отправка обновляет текст
+
 classrooms(id, name, owner_id→users, join_code*, created_at)
 classroom_members(id, classroom_id→classrooms, user_id→users, role, joined_at)
    role ∈ {owner, student} · UNIQUE(classroom_id, user_id)
 assignments(id, classroom_id→classrooms, task_id→tasks, due_at, created_at)
    UNIQUE(classroom_id, task_id)
+classroom_announcements(id, classroom_id→classrooms, author_id→users,
+                        title, body, created_at)
+   объявления класса (S46-006)
 
 achievements(code*, title, description, icon)
 user_achievements(id, user_id→users, code→achievements, earned_at)
    UNIQUE(user_id, code)
 notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
-   type ∈ {assignment, deadline, achievement}
+   type ∈ {assignment, deadline, achievement, attempt_feedback, announcement}
 ```
 
 Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс,
@@ -622,6 +656,7 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 `user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,
 `task_attempts(task_id, created_at)`, `classrooms(owner_id)`,
 `classroom_members(user_id)`, `assignments(classroom_id)`,
+`attempt_feedback(attempt_id)`, `classroom_announcements(classroom_id, created_at)`,
 `user_achievements(user_id)`, `notifications(user_id, read_at)`.
 
 **Миграции 0009/0010 (S19-004/005), только аддитивные:**

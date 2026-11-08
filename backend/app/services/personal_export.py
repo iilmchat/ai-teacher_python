@@ -1,7 +1,8 @@
 """Экспорт собственных данных пользователя — GET /users/me/export (S45-003).
 
 Персональные данные (PRIVACY.md, право на переносимость): профиль, прогресс
-по задачам и попытки, сессии чата с сообщениями, уведомления, достижения.
+по задачам и попытки, комментарии учителей к попыткам, сессии чата с
+сообщениями, уведомления, достижения.
 
 Правила:
 
@@ -25,7 +26,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.chat import ChatMessage, ChatSession
 from app.models.engagement import Notification, UserAchievement
-from app.models.task import TaskAttempt, UserTaskProgress
+from app.models.task import (
+    AttemptFeedback,
+    TaskAttempt,
+    UserTaskProgress,
+)
 from app.models.user import User
 
 
@@ -111,6 +116,18 @@ def _serialize_achievement(row: UserAchievement) -> dict[str, Any]:
     return {
         "code": row.code,
         "earned_at": _iso(row.earned_at),
+    }
+
+
+def _serialize_feedback(
+    row: AttemptFeedback, teacher_name: str
+) -> dict[str, Any]:
+    """Комментарий учителя к попытке — ученик видел его в истории (S46-002)"""
+    return {
+        "attempt_id": str(row.attempt_id),
+        "comment": row.comment,
+        "teacher_name": teacher_name,
+        "created_at": _iso(row.created_at),
     }
 
 
@@ -211,12 +228,28 @@ async def collect_user_data(db: AsyncSession, user: User) -> dict[str, Any]:
         .scalars()
         .all()
     )
+    attempt_ids = [attempt.id for attempt in attempts]
+    feedback_rows: list[tuple[AttemptFeedback, str]] = []
+    if attempt_ids:
+        feedback_result = await db.execute(
+            select(AttemptFeedback, User.username)
+            .join(User, User.id == AttemptFeedback.teacher_id)
+            .where(AttemptFeedback.attempt_id.in_(attempt_ids))
+            .order_by(AttemptFeedback.created_at)
+        )
+        feedback_rows = []
+        for feedback, teacher_name in feedback_result.all():
+            feedback_rows.append((feedback, teacher_name))
 
     return {
         "exported_at": datetime.utcnow().isoformat(),
         "profile": _serialize_profile(user),
         "task_progress": [_serialize_progress(row) for row in progress],
         "task_attempts": [_serialize_attempt(row) for row in attempts],
+        "teacher_feedback": [
+            _serialize_feedback(feedback, teacher_name)
+            for feedback, teacher_name in feedback_rows
+        ],
         "chat_sessions": session_items,
         "notifications": [_serialize_notification(row) for row in notifications],
         "achievements": [_serialize_achievement(row) for row in achievements],
