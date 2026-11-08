@@ -11,12 +11,14 @@ from app.models.classroom import (
     Assignment,
     AssignmentTemplate,
     Classroom,
+    ClassroomAnnouncement,
     ClassroomMember,
     ClassroomRole,
 )
 from app.models.code import CodeExecution
 from app.models.engagement import Achievement, Notification, UserAchievement
 from app.models.task import (
+    AttemptFeedback,
     Task,
     TaskAttempt,
     TaskDifficulty,
@@ -31,9 +33,11 @@ __all__ = [
     "Achievement",
     "Assignment",
     "AssignmentTemplate",
+    "AttemptFeedback",
     "ChatMessage",
     "ChatSession",
     "Classroom",
+    "ClassroomAnnouncement",
     "ClassroomMember",
     "ClassroomRole",
     "CodeExecution",

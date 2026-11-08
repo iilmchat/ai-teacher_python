@@ -64,20 +64,25 @@ describe('ClassroomsPage', () => {
 
 describe('AssignmentsPage', () => {
   it('показывает просроченное задание', async () => {
-    vi.spyOn(api, 'get').mockResolvedValue({
-      items: [
-        {
-          id: '33333333-3333-3333-3333-333333333333',
-          classroom_id: '22222222-2222-2222-2222-222222222222',
-          classroom_name: '7А класс',
-          task_id: '44444444-4444-4444-4444-444444444444',
-          title: 'Циклы',
-          difficulty: 'easy',
-          due_at: '2026-10-01T10:00:00',
-          status: 'not_started',
-          overdue: true,
-        },
-      ],
+    vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
+      if (path === '/me/announcements') {
+        return { items: [] };
+      }
+      return {
+        items: [
+          {
+            id: '33333333-3333-3333-3333-333333333333',
+            classroom_id: '22222222-2222-2222-2222-222222222222',
+            classroom_name: '7А класс',
+            task_id: '44444444-4444-4444-4444-444444444444',
+            title: 'Циклы',
+            difficulty: 'easy',
+            due_at: '2026-10-01T10:00:00',
+            status: 'not_started',
+            overdue: true,
+          },
+        ],
+      };
     });
 
     renderWithRouter(<AssignmentsPage />);

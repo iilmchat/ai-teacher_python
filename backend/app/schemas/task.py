@@ -184,8 +184,19 @@ class AttemptItem(BaseModel):
     passed_count: int
     total_count: int
     created_at: datetime
+    #: Комментарии учителей (S46-002), новые сверху
+    feedback: list["AttemptFeedbackItem"] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
+
+
+class AttemptFeedbackItem(BaseModel):
+    """Комментарий учителя к попытке (S46-002)"""
+
+    id: UUID
+    comment: str
+    teacher_name: str
+    created_at: datetime
 
 
 class AttemptDetail(AttemptItem):

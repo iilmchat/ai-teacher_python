@@ -227,6 +227,13 @@ export interface RecommendedTaskList {
   items: RecommendedTask[];
 }
 
+export interface AttemptFeedbackItem {
+  id: string;
+  comment: string;
+  teacher_name: string;
+  created_at: string;
+}
+
 export interface AttemptItem {
   id: string;
   task_id: string;
@@ -234,6 +241,8 @@ export interface AttemptItem {
   passed_count: number;
   total_count: number;
   created_at: string;
+  /** Комментарии учителей (S46-002) */
+  feedback?: AttemptFeedbackItem[];
 }
 
 export interface AttemptDetail extends AttemptItem {
@@ -445,6 +454,30 @@ export interface TeacherProgressItem {
   status: TaskStatus;
   attempts: number;
   completed_at: string | null;
+  /** Последнее успешное решение (S46-001) */
+  best_solution?: string | null;
+}
+
+export interface TeacherAttempt {
+  id: string;
+  task_id: string;
+  task_title: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  created_at: string;
+}
+
+export interface TeacherAttemptList {
+  total: number;
+  items: TeacherAttempt[];
+}
+
+export interface TeacherAttemptDetail extends TeacherAttempt {
+  student_id: string;
+  code: string;
+  results: TestCaseResult[];
+  feedback: AttemptFeedbackItem[];
 }
 
 export interface TeacherStudentDetail {
@@ -515,6 +548,36 @@ export interface ClassroomDetail extends Classroom {
   members: ClassroomMember[];
 }
 
+/** Результат массового добавления учеников (S46-005) */
+export interface BulkMembersAddResult {
+  added: string[];
+  skipped: string[];
+  unknown: string[];
+}
+
+/** Результат массового снятия учеников (S46-005) */
+export interface BulkMembersRemoveResult {
+  removed: string[];
+  skipped: string[];
+}
+
+/** Объявление класса (S46-006) */
+export interface AnnouncementItem {
+  id: string;
+  classroom_id: string;
+  classroom_name: string;
+  author_id: string;
+  author_name: string;
+  title: string;
+  body: string;
+  created_at: string;
+  can_delete: boolean;
+}
+
+export interface AnnouncementList {
+  items: AnnouncementItem[];
+}
+
 export interface Assignment {
   id: string;
   task_id: string;
@@ -528,6 +591,37 @@ export interface Assignment {
 
 export interface AssignmentList {
   items: Assignment[];
+}
+
+export interface AssignmentAnalyticsStudent {
+  student_id: string;
+  username: string;
+  status: TaskStatus;
+  attempts: number;
+  completed_at: string | null;
+  overdue: boolean;
+}
+
+export interface AssignmentAttemptBucket {
+  attempts: number;
+  students: number;
+}
+
+export interface AssignmentAnalytics {
+  assignment_id: string;
+  task_id: string;
+  task_title: string;
+  due_at: string | null;
+  total_students: number;
+  completed: number;
+  in_progress: number;
+  not_started: number;
+  overdue: number;
+  attempts_total: number;
+  attempts_distribution: AssignmentAttemptBucket[];
+  problem_threshold: number;
+  problem_students: AssignmentAnalyticsStudent[];
+  students: AssignmentAnalyticsStudent[];
 }
 
 export interface MyAssignment {
@@ -590,7 +684,7 @@ export interface UserStats {
 
 export interface AppNotification {
   id: string;
-  type: 'assignment' | 'deadline' | 'achievement';
+  type: 'assignment' | 'deadline' | 'achievement' | 'attempt_feedback' | 'announcement';
   payload: Record<string, unknown>;
   read_at: string | null;
   created_at: string;

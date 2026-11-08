@@ -165,6 +165,38 @@ class TaskAttempt(Base):
         )
 
 
+class AttemptFeedback(Base):
+    """Комментарий учителя к попытке ученика (S46-002)
+
+    Один учитель оставляет один комментарий на попытку: повторная отправка
+    обновляет текст, а не создаёт дубль. Ученик видит комментарий в истории
+    попыток и получает in-app уведомление.
+    """
+
+    __tablename__ = "attempt_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "attempt_id", "teacher_id", name="uq_attempt_feedback_teacher"
+        ),
+        Index("idx_attempt_feedback_attempt", "attempt_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    attempt_id: Mapped[UUID] = mapped_column(
+        ForeignKey("task_attempts.id", ondelete="CASCADE"), nullable=False
+    )
+    teacher_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    comment: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return f"<AttemptFeedback attempt={self.attempt_id} teacher={self.teacher_id}>"
+
+
 class UserTaskProgress(Base):
     """Прогресс ученика по конкретной задаче"""
 

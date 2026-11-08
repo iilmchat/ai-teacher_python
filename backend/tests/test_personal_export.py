@@ -14,13 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.chat import ChatMessage, ChatSession, MessageRole
 from app.models.engagement import Notification
 from app.models.task import (
+    AttemptFeedback,
     Task,
     TaskAttempt,
     TaskDifficulty,
     TaskStatus,
     UserTaskProgress,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 
 REGISTER_URL = "/api/v1/auth/register"
 EXPORT_URL = "/api/v1/users/me/export"
@@ -118,6 +119,7 @@ async def test_export_contains_profile_and_sections(client: AsyncClient) -> None
         "profile",
         "task_progress",
         "task_attempts",
+        "teacher_feedback",
         "chat_sessions",
         "notifications",
         "achievements",
@@ -174,15 +176,31 @@ async def test_export_attempts_and_progress(
     )
     db_session.add(task)
     await db_session.flush()
+    attempt = TaskAttempt(
+        user_id=user.id,
+        task_id=task.id,
+        code="print('hi')",
+        passed=True,
+        passed_count=3,
+        total_count=3,
+        results=[],
+        created_at=datetime.utcnow(),
+    )
+    db_session.add(attempt)
+    await db_session.flush()
+    teacher = User(
+        email="export_feedback_teacher@example.com",
+        username="export_feedback_teacher",
+        hashed_password="x",
+        role=UserRole.TEACHER,
+    )
+    db_session.add(teacher)
+    await db_session.flush()
     db_session.add(
-        TaskAttempt(
-            user_id=user.id,
-            task_id=task.id,
-            code="print('hi')",
-            passed=True,
-            passed_count=3,
-            total_count=3,
-            results=[],
+        AttemptFeedback(
+            attempt_id=attempt.id,
+            teacher_id=teacher.id,
+            comment="Проверь ввод",
             created_at=datetime.utcnow(),
         )
     )
@@ -202,10 +220,16 @@ async def test_export_attempts_and_progress(
     data = json.loads(response.content)
 
     assert len(data["task_attempts"]) == 1
-    attempt = data["task_attempts"][0]
-    assert attempt["code"] == "print('hi')"
-    assert attempt["passed"] is True
-    assert attempt["passed_count"] == 3
+    attempt_data = data["task_attempts"][0]
+    assert attempt_data["code"] == "print('hi')"
+    assert attempt_data["passed"] is True
+    assert attempt_data["passed_count"] == 3
+
+    assert len(data["teacher_feedback"]) == 1
+    feedback = data["teacher_feedback"][0]
+    assert feedback["attempt_id"] == str(attempt.id)
+    assert feedback["comment"] == "Проверь ввод"
+    assert feedback["teacher_name"] == "export_feedback_teacher"
 
     progress = data["task_progress"][0]
     assert progress["status"] == "completed"

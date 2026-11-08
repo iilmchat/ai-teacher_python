@@ -149,27 +149,50 @@ function AttemptsHistory({
         {attempts.items.map((item: AttemptItem) => (
           <li
             key={item.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
           >
-            <span className="text-slate-600">
-              {new Date(item.created_at).toLocaleString('ru-RU')}
-            </span>
-            <span
-              className={item.passed ? 'font-medium text-emerald-700' : 'font-medium text-rose-700'}
-            >
-              {item.passed ? t('tasks.attemptPassed') : t('tasks.attemptFailed')}{' '}
-              {t('tasks.attemptScore', {
-                passed: item.passed_count,
-                total: item.total_count,
-              })}
-            </span>
-            <button
-              type="button"
-              className="text-sm text-indigo-700 hover:underline"
-              onClick={() => onOpen(item.id)}
-            >
-              {t('tasks.attemptDetails')}
-            </button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-600">
+                {new Date(item.created_at).toLocaleString('ru-RU')}
+              </span>
+              <span
+                className={
+                  item.passed
+                    ? 'font-medium text-emerald-700'
+                    : 'font-medium text-rose-700'
+                }
+              >
+                {item.passed ? t('tasks.attemptPassed') : t('tasks.attemptFailed')}{' '}
+                {t('tasks.attemptScore', {
+                  passed: item.passed_count,
+                  total: item.total_count,
+                })}
+              </span>
+              <button
+                type="button"
+                className="text-sm text-indigo-700 hover:underline"
+                onClick={() => onOpen(item.id)}
+              >
+                {t('tasks.attemptDetails')}
+              </button>
+            </div>
+            {(item.feedback ?? []).length > 0 && (
+              <ul className="mt-2 flex flex-col gap-1 border-t border-slate-100 pt-2">
+                {(item.feedback ?? []).map((feedback) => (
+                  <li
+                    key={feedback.id}
+                    className="rounded bg-amber-50 px-2 py-1 text-xs text-slate-700"
+                  >
+                    <span className="font-medium">
+                      {t('tasks.feedbackFrom', {
+                        teacher: feedback.teacher_name,
+                      })}
+                    </span>{' '}
+                    {feedback.comment}
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>

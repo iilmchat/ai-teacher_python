@@ -7,7 +7,7 @@ Teacher API (S15): список учеников, их прогресс и вс�
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,8 +21,17 @@ from app.schemas.classroom import (
     TemplateItem,
     TemplateList,
 )
-from app.schemas.task import TaskAdminDetail, TestCase
+from app.schemas.task import (
+    AttemptFeedbackItem,
+    TaskAdminDetail,
+    TestCase,
+    TestCaseResult,
+)
 from app.schemas.teacher import (
+    AttemptFeedbackCreate,
+    TeacherAttemptDetail,
+    TeacherAttemptItem,
+    TeacherAttemptList,
     TeacherProgressItem,
     TeacherStudentDetail,
     TeacherStudentItem,
@@ -30,7 +39,9 @@ from app.schemas.teacher import (
     TeacherTaskItem,
     TeacherTaskList,
 )
+from app.services.audit_service import record_audit
 from app.services.classroom_service import ClassroomService
+from app.services.teacher_service import TeacherService
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
@@ -136,6 +147,11 @@ async def student_progress(
                 status=status_value,
                 attempts=record.attempts if record else 0,
                 completed_at=record.completed_at if record else None,
+                best_solution=(
+                    record.best_solution
+                    if record and status_value == TaskStatus.COMPLETED
+                    else None
+                ),
             )
         )
 
@@ -147,6 +163,117 @@ async def student_progress(
         in_progress=in_progress,
         completion_rate=round(completed / total * 100, 1) if total else 0.0,
         items=items,
+    )
+
+
+@router.get(
+    "/students/{student_id}/attempts", response_model=TeacherAttemptList
+)
+async def list_student_attempts(
+    student_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    task_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> TeacherAttemptList:
+    """Работы ученика (S46-001): только для владельца его класса.
+
+    Ученик состоит в классе учителя — 200; чужой ученик — 403; неизвестный —
+    404. Фильтр `task_id` необязателен.
+    """
+    rows, total = await TeacherService(db).list_attempts(
+        current_user, student_id, task_id=task_id, skip=skip, limit=limit
+    )
+    return TeacherAttemptList(
+        total=total,
+        items=[
+            TeacherAttemptItem(
+                id=attempt.id,
+                task_id=attempt.task_id,
+                task_title=title,
+                passed=attempt.passed,
+                passed_count=attempt.passed_count,
+                total_count=attempt.total_count,
+                created_at=attempt.created_at,
+            )
+            for attempt, title in rows
+        ],
+    )
+
+
+@router.get(
+    "/students/{student_id}/attempts/{attempt_id}",
+    response_model=TeacherAttemptDetail,
+)
+async def get_student_attempt(
+    student_id: UUID,
+    attempt_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+) -> TeacherAttemptDetail:
+    """Детальная работа ученика: код, разбор и комментарии (S46-001/002)"""
+    service = TeacherService(db)
+    attempt, title = await service.get_attempt(
+        current_user, student_id, attempt_id
+    )
+    feedback = await service.list_feedback(attempt.id)
+    return TeacherAttemptDetail(
+        id=attempt.id,
+        student_id=attempt.user_id,
+        task_id=attempt.task_id,
+        task_title=title,
+        passed=attempt.passed,
+        passed_count=attempt.passed_count,
+        total_count=attempt.total_count,
+        created_at=attempt.created_at,
+        code=attempt.code,
+        results=[TestCaseResult(**item) for item in (attempt.results or [])],
+        feedback=[
+            AttemptFeedbackItem(
+                id=item.id,
+                comment=item.comment,
+                teacher_name=name,
+                created_at=item.created_at,
+            )
+            for item, name in feedback
+        ],
+    )
+
+
+@router.post(
+    "/attempts/{attempt_id}/feedback",
+    response_model=AttemptFeedbackItem,
+)
+async def add_attempt_feedback(
+    attempt_id: UUID,
+    payload: AttemptFeedbackCreate,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> AttemptFeedbackItem:
+    """Комментарий учителя к попытке ученика (S46-002).
+
+    Доступ — тот же, что к работам ученика: владелец класса (или админ).
+    Повторная отправка обновляет текст; ученику уходит уведомление.
+    """
+    feedback, teacher_name, _ = await TeacherService(db).add_feedback(
+        current_user, attempt_id, payload.comment
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="attempt.feedback_added",
+        entity_type="task_attempt",
+        entity_id=attempt_id,
+        payload={"length": len(payload.comment)},
+        request=request,
+    )
+    return AttemptFeedbackItem(
+        id=feedback.id,
+        comment=feedback.comment,
+        teacher_name=teacher_name,
+        created_at=feedback.created_at,
     )
 
 

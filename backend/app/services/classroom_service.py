@@ -18,9 +18,11 @@ from app.models.classroom import (
     Assignment,
     AssignmentTemplate,
     Classroom,
+    ClassroomAnnouncement,
     ClassroomMember,
     ClassroomRole,
 )
+from app.models.engagement import Notification
 from app.models.task import Task, TaskStatus, UserTaskProgress
 from app.models.user import User
 
@@ -187,6 +189,100 @@ class ClassroomService:
         )
         await self.db.commit()
 
+    async def add_members_bulk(
+        self, classroom_id: UUID, actor: User, usernames: list[str]
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Добавить учеников списком логинов (S46-005).
+
+        Существующие участники и дубликаты — `skipped`, неизвестные логины —
+        `unknown`; один запрос не ломается из-за части ошибок. Возвращает
+        (added, skipped, unknown) в порядке входного списка.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Добавлять участников может только владелец"
+            )
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in usernames:
+            name = raw.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            normalized.append(name)
+        if not normalized:
+            raise ValidationError("Укажите хотя бы один логин")
+
+        users = {
+            user.username: user
+            for user in (
+                await self.db.execute(
+                    select(User).where(User.username.in_(normalized))
+                )
+            )
+            .scalars()
+            .all()
+        }
+        existing_ids = {
+            member.user_id
+            for member in await self.get_members(classroom_id)
+        }
+        added: list[str] = []
+        skipped: list[str] = []
+        unknown: list[str] = []
+        for name in normalized:
+            user = users.get(name)
+            if user is None:
+                unknown.append(name)
+            elif user.id in existing_ids:
+                skipped.append(name)
+            else:
+                self.db.add(
+                    ClassroomMember(
+                        classroom_id=classroom_id,
+                        user_id=user.id,
+                        role=ClassroomRole.STUDENT.value,
+                    )
+                )
+                existing_ids.add(user.id)
+                added.append(name)
+        if added:
+            await self.db.commit()
+        return added, skipped, unknown
+
+    async def remove_members_bulk(
+        self, classroom_id: UUID, actor: User, user_ids: list[UUID]
+    ) -> tuple[list[UUID], list[UUID]]:
+        """Снять выбранных учеников (S46-005).
+
+        Владелец и не-участники попадают в `skipped`; повторное снятие
+        идемпотентно.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Удалять участников может только владелец")
+        member_ids = {
+            member.user_id
+            for member in await self.get_members(classroom_id)
+        }
+        removed: list[UUID] = []
+        skipped: list[UUID] = []
+        for user_id in user_ids:
+            if user_id in member_ids and user_id != classroom.owner_id:
+                removed.append(user_id)
+            else:
+                skipped.append(user_id)
+        if removed:
+            await self.db.execute(
+                delete(ClassroomMember).where(
+                    ClassroomMember.classroom_id == classroom_id,
+                    ClassroomMember.user_id.in_(removed),
+                )
+            )
+            await self.db.commit()
+        return removed, skipped
+
     # --- Назначения -----------------------------------------------------
 
     async def add_assignment(
@@ -292,6 +388,72 @@ class ClassroomService:
             )
             for assignment, task in rows
         ]
+
+    async def update_assignment(
+        self,
+        classroom_id: UUID,
+        assignment_id: UUID,
+        actor: User,
+        due_at: datetime | None,
+    ) -> tuple[Assignment, Task]:
+        """Перенести срок назначения (S46-004).
+
+        Меняется только `due_at`; прогресс учеников и уведомления о
+        назначении остаются как есть.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Менять назначения может только владелец")
+        row = (
+            await self.db.execute(
+                select(Assignment, Task)
+                .join(Task, Task.id == Assignment.task_id)
+                .where(
+                    Assignment.id == assignment_id,
+                    Assignment.classroom_id == classroom_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Назначение не найдено")
+        assignment, task = row
+        assignment.due_at = due_at
+        await self.db.commit()
+        await self.db.refresh(assignment)
+        return assignment, task
+
+    async def delete_assignment(
+        self, classroom_id: UUID, assignment_id: UUID, actor: User
+    ) -> bool:
+        """Снять назначение (S46-004).
+
+        Прогресс учеников сохраняется, а уведомления о назначении удаляются.
+        Повторное снятие — не ошибка (идемпотентность): возвращается `False`.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Снимать назначения может только владелец")
+        assignment = await self.db.get(Assignment, assignment_id)
+        if assignment is None or assignment.classroom_id != classroom_id:
+            return False
+
+        notifications = (
+            await self.db.execute(
+                select(Notification).where(Notification.type == "assignment")
+            )
+        ).scalars().all()
+        stale_ids = [
+            notification.id
+            for notification in notifications
+            if str(notification.payload.get("assignment_id")) == str(assignment_id)
+        ]
+        if stale_ids:
+            await self.db.execute(
+                delete(Notification).where(Notification.id.in_(stale_ids))
+            )
+        await self.db.delete(assignment)
+        await self.db.commit()
+        return True
 
     async def my_assignments(self, user: User) -> list[MyAssignmentData]:
         """Задания пользователя по всем его классам"""
@@ -446,6 +608,129 @@ class ClassroomService:
             if total_cells
             else 0.0,
             problem_tasks=problem_tasks,
+        )
+
+    async def assignment_analytics(
+        self,
+        classroom_id: UUID,
+        assignment_id: UUID,
+        actor: User,
+        *,
+        problem_threshold: int = 3,
+    ) -> AssignmentAnalyticsData:
+        """Drill-down по одному назначению (S46-003).
+
+        Агрегаты совпадают с матрицей прогресса класса: те же ученики, та же
+        запись `UserTaskProgress`. «Просрочили» — дедлайн прошёл, а задача не
+        завершена. «Проблемные» — ученики, сделавшие больше `problem_threshold`
+        попыток.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Аналитику назначения видит только владелец"
+            )
+        row = (
+            await self.db.execute(
+                select(Assignment, Task)
+                .join(Task, Task.id == Assignment.task_id)
+                .where(
+                    Assignment.id == assignment_id,
+                    Assignment.classroom_id == classroom_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Назначение не найдено")
+        assignment, task = row
+
+        members = await self.get_members(classroom_id)
+        students = [
+            member
+            for member in members
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        student_ids = [member.user_id for member in students]
+        users = {
+            user.id: user
+            for user in (
+                await self.db.execute(
+                    select(User).where(User.id.in_(student_ids))
+                )
+            )
+            .scalars()
+            .all()
+        } if student_ids else {}
+
+        progress_map: dict[UUID, UserTaskProgress] = {}
+        if student_ids:
+            progress_rows = (
+                await self.db.execute(
+                    select(UserTaskProgress).where(
+                        UserTaskProgress.user_id.in_(student_ids),
+                        UserTaskProgress.task_id == task.id,
+                    )
+                )
+            ).scalars().all()
+            progress_map = {record.user_id: record for record in progress_rows}
+
+        now = datetime.utcnow()
+        items: list[AssignmentAnalyticsStudentData] = []
+        completed = in_progress = not_started = overdue = 0
+        attempts_total = 0
+        distribution: dict[int, int] = {}
+        for member in students:
+            record = progress_map.get(member.user_id)
+            status_value = record.status if record else TaskStatus.NOT_STARTED
+            attempts = record.attempts if record else 0
+            is_overdue = bool(
+                assignment.due_at is not None
+                and assignment.due_at < now
+                and status_value != TaskStatus.COMPLETED
+            )
+            if status_value == TaskStatus.COMPLETED:
+                completed += 1
+            elif status_value == TaskStatus.IN_PROGRESS:
+                in_progress += 1
+            else:
+                not_started += 1
+            if is_overdue:
+                overdue += 1
+            attempts_total += attempts
+            distribution[attempts] = distribution.get(attempts, 0) + 1
+            user = users.get(member.user_id)
+            items.append(
+                AssignmentAnalyticsStudentData(
+                    student_id=member.user_id,
+                    username=user.username if user is not None else "",
+                    status=status_value,
+                    attempts=attempts,
+                    completed_at=record.completed_at if record else None,
+                    overdue=is_overdue,
+                )
+            )
+
+        problem_students = [
+            item for item in items if item.attempts > problem_threshold
+        ]
+        return AssignmentAnalyticsData(
+            assignment_id=assignment.id,
+            task_id=task.id,
+            task_title=task.title,
+            due_at=assignment.due_at,
+            total_students=len(students),
+            completed=completed,
+            in_progress=in_progress,
+            not_started=not_started,
+            overdue=overdue,
+            attempts_total=attempts_total,
+            attempts_distribution=[
+                AssignmentAttemptBucketData(attempts=attempts, students=count)
+                for attempts, count in sorted(distribution.items())
+            ],
+            problem_threshold=problem_threshold,
+            problem_students=problem_students,
+            students=items,
         )
 
 
@@ -703,6 +988,117 @@ class ClassroomService:
             overdue=overdue,
         )
 
+    # --- Объявления класса ----------------------------------------------
+
+    async def list_announcements(
+        self, classroom_id: UUID, actor: User, limit: int = 50
+    ) -> list[tuple[ClassroomAnnouncement, str]]:
+        """Объявления класса, новые сверху (видят все участники)."""
+        await self.get_for_user(classroom_id, actor)
+        rows = await self.db.execute(
+            select(ClassroomAnnouncement, User.username)
+            .join(User, User.id == ClassroomAnnouncement.author_id)
+            .where(ClassroomAnnouncement.classroom_id == classroom_id)
+            .order_by(ClassroomAnnouncement.created_at.desc())
+            .limit(limit)
+        )
+        items: list[tuple[ClassroomAnnouncement, str]] = []
+        for announcement, author_name in rows.all():
+            items.append((announcement, author_name))
+        return items
+
+    async def create_announcement(
+        self, classroom_id: UUID, actor: User, title: str, body: str
+    ) -> ClassroomAnnouncement:
+        """Публикация объявления (S46-006): только владелец класса.
+
+        Ученики класса получают in-app уведомление; рассылка идёт после
+        сохранения объявления, чтобы уведомление ссылалось на реальный id.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Публиковать объявления может только владелец класса"
+            )
+        clean_title = title.strip()
+        clean_body = body.strip()
+        if not clean_title or not clean_body:
+            raise ValidationError("Тема и текст объявления не могут быть пустыми")
+        announcement = ClassroomAnnouncement(
+            classroom_id=classroom_id,
+            author_id=actor.id,
+            title=clean_title,
+            body=clean_body,
+        )
+        self.db.add(announcement)
+        await self.db.commit()
+        await self.db.refresh(announcement)
+
+        student_ids = [
+            member.user_id
+            for member in await self.get_members(classroom_id)
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        if student_ids:
+            from app.services.engagement_service import (
+                create_announcement_notifications,
+            )
+
+            await create_announcement_notifications(
+                self.db,
+                student_ids,
+                classroom_id=classroom.id,
+                classroom_name=classroom.name,
+                announcement_id=announcement.id,
+                title=announcement.title,
+            )
+        return announcement
+
+    async def delete_announcement(
+        self, classroom_id: UUID, announcement_id: UUID, actor: User
+    ) -> None:
+        """Удалить объявление: автор или владелец класса (S46-006)."""
+        classroom = await self._get_or_404(classroom_id)
+        announcement = await self.db.get(ClassroomAnnouncement, announcement_id)
+        if announcement is None or announcement.classroom_id != classroom_id:
+            raise NotFoundError("Объявление не найдено")
+        if (
+            announcement.author_id != actor.id
+            and classroom.owner_id != actor.id
+        ):
+            raise AccessDeniedError(
+                "Удалить объявление может автор или владелец класса"
+            )
+        await self.db.delete(announcement)
+        await self.db.commit()
+
+    async def announcements_for_user(
+        self, user: User, limit: int = 20
+    ) -> list[tuple[ClassroomAnnouncement, str, str]]:
+        """Лента объявлений всех классов пользователя (S46-006).
+
+        Нужна странице «Мои задания»: один запрос вместо N запросов по
+        каждому классу.
+        """
+        member_classrooms = select(ClassroomMember.classroom_id).where(
+            ClassroomMember.user_id == user.id
+        )
+        rows = await self.db.execute(
+            select(ClassroomAnnouncement, User.username, Classroom.name)
+            .join(User, User.id == ClassroomAnnouncement.author_id)
+            .join(
+                Classroom,
+                Classroom.id == ClassroomAnnouncement.classroom_id,
+            )
+            .where(ClassroomAnnouncement.classroom_id.in_(member_classrooms))
+            .order_by(ClassroomAnnouncement.created_at.desc())
+            .limit(limit)
+        )
+        items: list[tuple[ClassroomAnnouncement, str, str]] = []
+        for announcement, author_name, classroom_name in rows.all():
+            items.append((announcement, author_name, classroom_name))
+        return items
+
 @dataclass(slots=True)
 class AssignmentItemData:
     assignment: Assignment
@@ -773,3 +1169,37 @@ class GradebookData:
     cells: list[GradebookCellData]
     completion_rate: float
     overdue: int
+
+
+@dataclass(slots=True)
+class AssignmentAnalyticsStudentData:
+    student_id: UUID
+    username: str
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None
+    overdue: bool
+
+
+@dataclass(slots=True)
+class AssignmentAttemptBucketData:
+    attempts: int
+    students: int
+
+
+@dataclass(slots=True)
+class AssignmentAnalyticsData:
+    assignment_id: UUID
+    task_id: UUID
+    task_title: str
+    due_at: datetime | None
+    total_students: int
+    completed: int
+    in_progress: int
+    not_started: int
+    overdue: int
+    attempts_total: int
+    attempts_distribution: list[AssignmentAttemptBucketData]
+    problem_threshold: int
+    problem_students: list[AssignmentAnalyticsStudentData]
+    students: list[AssignmentAnalyticsStudentData]

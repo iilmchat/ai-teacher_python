@@ -9,6 +9,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 from app.models.task import TaskDifficulty, TaskStatus
 from app.models.user import UserLevel
+from app.schemas.task import AttemptFeedbackItem, TestCaseResult
 
 
 class TeacherStudentItem(BaseModel):
@@ -41,6 +42,8 @@ class TeacherProgressItem(BaseModel):
     status: TaskStatus
     attempts: int
     completed_at: datetime | None = None
+    #: Последнее успешное решение (S46-001) — `best_solution` в прогрессе
+    best_solution: str | None = None
 
 
 class TeacherStudentDetail(BaseModel):
@@ -73,3 +76,38 @@ class TeacherTaskList(BaseModel):
 
     total: int
     items: list[TeacherTaskItem]
+
+
+class TeacherAttemptItem(BaseModel):
+    """Попытка ученика в списке работ (S46-001)"""
+
+    id: UUID
+    task_id: UUID
+    task_title: str
+    passed: bool
+    passed_count: int
+    total_count: int
+    created_at: datetime
+
+
+class TeacherAttemptList(BaseModel):
+    """Работы ученика постранично"""
+
+    total: int
+    items: list[TeacherAttemptItem] = Field(default_factory=list)
+
+
+class TeacherAttemptDetail(TeacherAttemptItem):
+    """Попытка с кодом и разбором по тест-кейсам (S46-001)"""
+
+    student_id: UUID
+    code: str
+    results: list[TestCaseResult] = Field(default_factory=list)
+    #: Комментарии этого учителя и коллег (S46-002)
+    feedback: list[AttemptFeedbackItem] = Field(default_factory=list)
+
+
+class AttemptFeedbackCreate(BaseModel):
+    """Комментарий учителя к попытке (S46-002)"""
+
+    comment: str = Field(..., min_length=1, max_length=2000)

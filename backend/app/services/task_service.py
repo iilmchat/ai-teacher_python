@@ -5,6 +5,7 @@
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.executor import SandboxedExecutor
@@ -17,6 +18,7 @@ from app.db.repositories.task import (
 )
 from app.errors import NotFoundError, ValidationError
 from app.models.task import (
+    AttemptFeedback,
     Task,
     TaskAttempt,
     TaskDifficulty,
@@ -27,6 +29,7 @@ from app.models.task import (
 from app.models.user import User
 from app.schemas.task import (
     AttemptDetail,
+    AttemptFeedbackItem,
     AttemptItem,
     AttemptList,
     DraftStatus,
@@ -373,17 +376,61 @@ class TaskService:
             practice=True,
         )
 
+    async def _feedback_map(
+        self, attempt_ids: list[UUID]
+    ) -> dict[UUID, list[AttemptFeedbackItem]]:
+        """Комментарии учителей для набора попыток (S46-002).
+
+        Один запрос на страницу истории: иначе на каждую попытку уходил бы
+        отдельный round-trip. Комментарии внутри попытки — новые сверху.
+        """
+        if not attempt_ids:
+            return {}
+        rows = await self.db.execute(
+            select(AttemptFeedback, User.username)
+            .join(User, User.id == AttemptFeedback.teacher_id)
+            .where(AttemptFeedback.attempt_id.in_(attempt_ids))
+            .order_by(AttemptFeedback.created_at.desc())
+        )
+        mapping: dict[UUID, list[AttemptFeedbackItem]] = {}
+        for feedback, teacher_name in rows.all():
+            mapping.setdefault(feedback.attempt_id, []).append(
+                AttemptFeedbackItem(
+                    id=feedback.id,
+                    comment=feedback.comment,
+                    teacher_name=teacher_name,
+                    created_at=feedback.created_at,
+                )
+            )
+        return mapping
+
     async def list_attempts(
         self, task_id: UUID, user: User, skip: int = 0, limit: int = 20
     ) -> AttemptList:
-        """История попыток ученика по задаче (S42-002), новые сверху"""
+        """История попыток ученика по задаче (S42-002), новые сверху
+
+        С S46-002 к каждой попытке прикладываются комментарии учителей:
+        ученик видит разбор прямо в истории.
+        """
         await self._get_task_or_404(task_id)
         items = await self.attempts.list_for_user_and_task(
             user.id, task_id, skip=skip, limit=limit
         )
         total = await self.attempts.count_for_user_and_task(user.id, task_id)
+        feedback = await self._feedback_map([item.id for item in items])
         return AttemptList(
-            items=[AttemptItem.model_validate(item) for item in items],
+            items=[
+                AttemptItem(
+                    id=item.id,
+                    task_id=item.task_id,
+                    passed=item.passed,
+                    passed_count=item.passed_count,
+                    total_count=item.total_count,
+                    created_at=item.created_at,
+                    feedback=feedback.get(item.id, []),
+                )
+                for item in items
+            ],
             total=total,
         )
 
@@ -405,6 +452,7 @@ class TaskService:
             raise NotFoundError("Попытка не найдена")
 
         results = [TestCaseResult(**item) for item in (attempt.results or [])]
+        feedback = await self._feedback_map([attempt.id])
         return AttemptDetail(
             id=attempt.id,
             task_id=attempt.task_id,
@@ -414,6 +462,7 @@ class TaskService:
             created_at=attempt.created_at,
             code=attempt.code,
             results=results,
+            feedback=feedback.get(attempt.id, []),
         )
 
     async def save_draft(

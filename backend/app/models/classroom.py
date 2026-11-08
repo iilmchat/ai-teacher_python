@@ -6,7 +6,7 @@ import enum
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -131,3 +131,35 @@ class AssignmentTemplate(Base):
 
     def __repr__(self) -> str:
         return f"<AssignmentTemplate {self.name} owner={self.owner_id}>"
+
+
+class ClassroomAnnouncement(Base):
+    """Объявление класса (S46-006).
+
+    Публикуется учителем; ученики класса видят его на странице класса и в
+    «Моих заданиях». Удалить может автор или владелец класса.
+    """
+
+    __tablename__ = "classroom_announcements"
+    __table_args__ = (
+        Index("idx_classroom_announcements_classroom", "classroom_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    classroom_id: Mapped[UUID] = mapped_column(
+        ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=False
+    )
+    author_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ClassroomAnnouncement {self.title} "
+            f"classroom={self.classroom_id}>"
+        )

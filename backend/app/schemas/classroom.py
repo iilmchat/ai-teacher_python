@@ -38,6 +38,29 @@ class ClassroomMemberItem(BaseModel):
     joined_at: datetime
 
 
+class BulkMembersAddRequest(BaseModel):
+    """Добавление учеников списком логинов (S46-005)"""
+
+    usernames: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class BulkMembersAddResult(BaseModel):
+    added: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    unknown: list[str] = Field(default_factory=list)
+
+
+class BulkMembersRemoveRequest(BaseModel):
+    """Массовое снятие учеников (S46-005)"""
+
+    user_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class BulkMembersRemoveResult(BaseModel):
+    removed: list[UUID] = Field(default_factory=list)
+    skipped: list[UUID] = Field(default_factory=list)
+
+
 class ClassroomDetail(ClassroomResponse):
     """Класс с участниками"""
 
@@ -54,6 +77,12 @@ class AssignmentCreate(BaseModel):
     """Назначение задачи классу"""
 
     task_id: UUID
+    due_at: datetime | None = None
+
+
+class AssignmentUpdate(BaseModel):
+    """Перенос срока назначения (S46-004)"""
+
     due_at: datetime | None = None
 
 
@@ -123,6 +152,47 @@ class ClassProgress(BaseModel):
     completion_rate: float
     problem_tasks: list[ProblemTask] = Field(default_factory=list)
 
+
+class AssignmentAnalyticsStudent(BaseModel):
+    """Ученик в drill-down по назначению (S46-003)"""
+
+    student_id: UUID
+    username: str
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None = None
+    overdue: bool = False
+
+
+class AssignmentAttemptBucket(BaseModel):
+    """Сколько учеников сделали столько-то попыток"""
+
+    attempts: int
+    students: int
+
+
+class AssignmentAnalytics(BaseModel):
+    """Аналитика одного назначения: кто как справился (S46-003)"""
+
+    assignment_id: UUID
+    task_id: UUID
+    task_title: str
+    due_at: datetime | None = None
+    total_students: int
+    completed: int
+    in_progress: int
+    not_started: int
+    overdue: int
+    attempts_total: int
+    attempts_distribution: list[AssignmentAttemptBucket] = Field(
+        default_factory=list
+    )
+    problem_threshold: int
+    problem_students: list[AssignmentAnalyticsStudent] = Field(
+        default_factory=list
+    )
+    students: list[AssignmentAnalyticsStudent] = Field(default_factory=list)
+
 class BulkAssignmentRequest(BaseModel):
     """Массовое назначение задач классу (S28-001)"""
 
@@ -159,6 +229,31 @@ class TemplateItem(BaseModel):
 class TemplateList(BaseModel):
     items: list[TemplateItem]
     total: int
+
+
+class AnnouncementCreate(BaseModel):
+    """Публикация объявления класса (S46-006)"""
+
+    title: str = Field(..., min_length=1, max_length=200)
+    body: str = Field(..., min_length=1, max_length=5000)
+
+
+class AnnouncementItem(BaseModel):
+    """Объявление класса"""
+
+    id: UUID
+    classroom_id: UUID
+    classroom_name: str = ""
+    author_id: UUID
+    author_name: str
+    title: str
+    body: str
+    created_at: datetime
+    can_delete: bool = False
+
+
+class AnnouncementList(BaseModel):
+    items: list[AnnouncementItem]
 
 
 class GradebookCell(BaseModel):
