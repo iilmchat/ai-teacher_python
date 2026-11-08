@@ -243,6 +243,7 @@
     "attemptDetails": "Подробнее",
     "attemptRestore": "Вернуть код в редактор",
     "attemptScore": "{{passed}} из {{total}}",
+    "feedbackFrom": "Комментарий учителя {{teacher}}:",
     "draftSaving": "Сохраняю черновик…",
     "draftSavedAt": "Черновик сохранён в {{time}}",
     "draftDiscard": "Удалить черновик",
@@ -503,7 +504,12 @@
       "solution": "Решение",
       "showSolution": "Показать",
       "expected": "Ожидалось",
-      "actual": "Получено"
+      "actual": "Получено",
+      "feedbackTitle": "Комментарий учителя",
+      "noFeedback": "Комментариев пока нет",
+      "feedbackPlaceholder": "Что ученику стоит исправить или попробовать?",
+      "feedbackSubmit": "Отправить комментарий",
+      "feedbackError": "Не удалось отправить комментарий"
     }
   },
   "classrooms": {
@@ -600,7 +606,9 @@
     "loadError": "Не удалось загрузить дашборд",
     "notifyAssignment": "Новое задание: {{title}}",
     "notifyDeadline": "Приближается дедлайн: {{title}}",
-    "notifyAchievement": "Достижение: {{title}}"
+    "notifyAchievement": "Достижение: {{title}}",
+    "notifyFeedback": "Учитель {{teacher}} оставил комментарий к работе «{{title}}»",
+    "notifyAnnouncement": "Объявление класса «{{title}}»"
   },
   "errors": {
     "notFoundTitle": "Страница не найдена",

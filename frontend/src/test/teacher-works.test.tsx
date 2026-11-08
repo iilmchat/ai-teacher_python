@@ -74,6 +74,14 @@ const DETAIL = {
       error: null,
     },
   ],
+  feedback: [
+    {
+      id: 'feedback-1',
+      comment: 'Разбери второй тест',
+      teacher_name: 'teacher',
+      created_at: '2026-11-08T10:00:00',
+    },
+  ],
 };
 
 describe('работы ученика в кабинете учителя (S46-001)', () => {
@@ -156,5 +164,47 @@ describe('работы ученика в кабинете учителя (S46-00
     await user.click(await screen.findByRole('button', { name: 'Прогресс' }));
 
     expect(await screen.findByText('Показать')).toBeInTheDocument();
+  });
+
+  it('существующий комментарий учителя виден в работе (S46-002)', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TeacherStudentsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Прогресс' }));
+    await user.click(await screen.findByRole('tab', { name: 'Работы' }));
+    await user.click(await screen.findByRole('button', { name: 'Открыть' }));
+
+    expect(await screen.findByText('Разбери второй тест')).toBeInTheDocument();
+  });
+
+  it('учитель отправляет комментарий к работе (S46-002)', async () => {
+    const user = userEvent.setup();
+    const post = vi.spyOn(api, 'post').mockResolvedValue({
+      id: 'feedback-new',
+      comment: 'Молодец',
+      teacher_name: 'teacher',
+      created_at: '2026-11-08T11:00:00',
+    } as never);
+    renderWithRouter(<TeacherStudentsPage />);
+
+    await user.click(await screen.findByRole('button', { name: 'Прогресс' }));
+    await user.click(await screen.findByRole('tab', { name: 'Работы' }));
+    await user.click(await screen.findByRole('button', { name: 'Открыть' }));
+    await user.type(
+      await screen.findByLabelText(
+        'Что ученику стоит исправить или попробовать?',
+      ),
+      'Молодец',
+    );
+    await user.click(
+      screen.getByRole('button', { name: 'Отправить комментарий' }),
+    );
+
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith('/teacher/attempts/attempt-1/feedback', {
+        comment: 'Молодец',
+      });
+    });
+    expect(await screen.findByText('Молодец')).toBeInTheDocument();
   });
 });

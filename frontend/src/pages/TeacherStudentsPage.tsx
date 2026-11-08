@@ -10,6 +10,7 @@ import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { CodeEditor } from '@/components/code-editor/CodeEditor';
 import { api } from '@/lib/api';
 import type {
+  AttemptFeedbackItem,
   TeacherAttempt,
   TeacherAttemptDetail,
   TeacherAttemptList,
@@ -32,6 +33,9 @@ export function TeacherStudentsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [attemptsLoading, setAttemptsLoading] = useState(false);
   const [attemptDetailLoading, setAttemptDetailLoading] = useState(false);
+  const [comment, setComment] = useState('');
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -100,6 +104,8 @@ export function TeacherStudentsPage() {
     }
     setAttemptDetailLoading(true);
     setError(null);
+    setComment('');
+    setFeedbackError(null);
     try {
       const detail = await api.get<TeacherAttemptDetail>(
         `/teacher/students/${selected.student.id}/attempts/${attempt.id}`,
@@ -109,6 +115,38 @@ export function TeacherStudentsPage() {
       setError(t('teacher.works.detailError'));
     } finally {
       setAttemptDetailLoading(false);
+    }
+  }
+
+  async function submitFeedback() {
+    if (!attemptDetail || !comment.trim()) {
+      return;
+    }
+    setSavingFeedback(true);
+    setFeedbackError(null);
+    try {
+      const feedback = await api.post<AttemptFeedbackItem>(
+        `/teacher/attempts/${attemptDetail.id}/feedback`,
+        { comment: comment.trim() },
+      );
+      setAttemptDetail((current) =>
+        current
+          ? {
+              ...current,
+              feedback: [
+                feedback,
+                ...current.feedback.filter(
+                  (item) => item.teacher_name !== feedback.teacher_name,
+                ),
+              ],
+            }
+          : current,
+      );
+      setComment('');
+    } catch {
+      setFeedbackError(t('teacher.works.feedbackError'));
+    } finally {
+      setSavingFeedback(false);
     }
   }
 
@@ -382,6 +420,57 @@ export function TeacherStudentsPage() {
                       ))}
                     </tbody>
                   </Table>
+
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <p className="mb-2 text-sm font-medium text-slate-800">
+                      {t('teacher.works.feedbackTitle')}
+                    </p>
+                    {attemptDetail.feedback.length === 0 && (
+                      <p className="mb-2 text-xs text-slate-500">
+                        {t('teacher.works.noFeedback')}
+                      </p>
+                    )}
+                    <ul className="mb-2 flex flex-col gap-1">
+                      {attemptDetail.feedback.map((item) => (
+                        <li
+                          key={item.id}
+                          className="rounded bg-amber-50 px-2 py-1 text-xs text-slate-700"
+                        >
+                          <span className="font-medium">
+                            {item.teacher_name}
+                          </span>{' '}
+                          ·{' '}
+                          {new Date(item.created_at).toLocaleString('ru-RU')}
+                          <p className="mt-1 whitespace-pre-wrap">
+                            {item.comment}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                    <textarea
+                      value={comment}
+                      onChange={(event) => setComment(event.target.value)}
+                      aria-label={t('teacher.works.feedbackPlaceholder')}
+                      placeholder={t('teacher.works.feedbackPlaceholder')}
+                      maxLength={2000}
+                      rows={3}
+                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                    />
+                    {feedbackError && (
+                      <p className="mt-1 text-xs text-rose-700" role="alert">
+                        {feedbackError}
+                      </p>
+                    )}
+                    <div className="mt-2">
+                      <Button
+                        onClick={() => void submitFeedback()}
+                        loading={savingFeedback}
+                        disabled={!comment.trim()}
+                      >
+                        {t('teacher.works.feedbackSubmit')}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

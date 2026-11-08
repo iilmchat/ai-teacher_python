@@ -32,6 +32,17 @@ function notificationText(
       title: String(item.payload.title ?? ''),
     });
   }
+  if (item.type === 'attempt_feedback') {
+    return t('dashboard.notifyFeedback', {
+      title,
+      teacher: String(item.payload.teacher ?? ''),
+    });
+  }
+  if (item.type === 'announcement') {
+    return t('dashboard.notifyAnnouncement', {
+      title: String(item.payload.classroom_name ?? ''),
+    });
+  }
   return title;
 }
 

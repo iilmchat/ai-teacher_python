@@ -227,6 +227,13 @@ export interface RecommendedTaskList {
   items: RecommendedTask[];
 }
 
+export interface AttemptFeedbackItem {
+  id: string;
+  comment: string;
+  teacher_name: string;
+  created_at: string;
+}
+
 export interface AttemptItem {
   id: string;
   task_id: string;
@@ -234,6 +241,8 @@ export interface AttemptItem {
   passed_count: number;
   total_count: number;
   created_at: string;
+  /** Комментарии учителей (S46-002) */
+  feedback?: AttemptFeedbackItem[];
 }
 
 export interface AttemptDetail extends AttemptItem {
@@ -468,6 +477,7 @@ export interface TeacherAttemptDetail extends TeacherAttempt {
   student_id: string;
   code: string;
   results: TestCaseResult[];
+  feedback: AttemptFeedbackItem[];
 }
 
 export interface TeacherStudentDetail {
@@ -613,7 +623,7 @@ export interface UserStats {
 
 export interface AppNotification {
   id: string;
-  type: 'assignment' | 'deadline' | 'achievement';
+  type: 'assignment' | 'deadline' | 'achievement' | 'attempt_feedback' | 'announcement';
   payload: Record<string, unknown>;
   read_at: string | null;
   created_at: string;

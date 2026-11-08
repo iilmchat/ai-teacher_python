@@ -192,4 +192,42 @@ describe('TaskDetailPage', () => {
       screen.getAllByRole('link', { name: 'Спросить ассистента' }),
     ).toHaveLength(2);
   });
+
+  it('показывает комментарий учителя в истории попыток (S46-002)', async () => {
+    vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
+      if (path.endsWith('/attempts')) {
+        return {
+          items: [
+            {
+              id: 'att-1',
+              task_id: TASK_ID,
+              passed: true,
+              passed_count: 2,
+              total_count: 2,
+              created_at: '2026-11-05T10:00:00',
+              feedback: [
+                {
+                  id: 'fb-1',
+                  comment: 'Молодец, но проверь ввод',
+                  teacher_name: 'Иван Петров',
+                  created_at: '2026-11-06T10:00:00',
+                },
+              ],
+            },
+          ],
+          total: 1,
+        };
+      }
+      return DETAIL;
+    });
+
+    renderWithRouter(<TaskDetailPage />, { route: `/tasks/${TASK_ID}` });
+
+    expect(
+      await screen.findByText('Молодец, но проверь ввод'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Комментарий учителя Иван Петров:/),
+    ).toBeTruthy();
+  });
 });

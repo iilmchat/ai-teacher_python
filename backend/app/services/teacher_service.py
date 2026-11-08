@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AccessDeniedError, NotFoundError
 from app.models.classroom import Classroom, ClassroomMember
-from app.models.task import Task, TaskAttempt
+from app.models.task import AttemptFeedback, Task, TaskAttempt
 from app.models.user import User, UserRole
 
 
@@ -111,3 +111,64 @@ class TeacherService:
         if row is None:
             raise NotFoundError("Попытка не найдена")
         return row[0], row[1]
+
+    async def list_feedback(
+        self, attempt_id: UUID
+    ) -> list[tuple[AttemptFeedback, str]]:
+        """Комментарии к попытке с именами учителей, новые сверху"""
+        result = await self.db.execute(
+            select(AttemptFeedback, User.username)
+            .join(User, User.id == AttemptFeedback.teacher_id)
+            .where(AttemptFeedback.attempt_id == attempt_id)
+            .order_by(AttemptFeedback.created_at.desc())
+        )
+        return [(feedback, name) for feedback, name in result.all()]
+
+    async def add_feedback(
+        self, teacher: User, attempt_id: UUID, comment: str
+    ) -> tuple[AttemptFeedback, str, str]:
+        """Оставить комментарий к попытке (S46-002).
+
+        Повторная отправка тем же учителем обновляет текст. Ученику уходит
+        in-app уведомление. Возвращает комментарий, имя учителя и название
+        задачи (для уведомления и ответа).
+        """
+        attempt = await self.db.get(TaskAttempt, attempt_id)
+        if attempt is None:
+            raise NotFoundError("Попытка не найдена")
+        await self.get_student_for_teacher(teacher, attempt.user_id)
+
+        existing = (
+            await self.db.execute(
+                select(AttemptFeedback).where(
+                    AttemptFeedback.attempt_id == attempt_id,
+                    AttemptFeedback.teacher_id == teacher.id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            feedback = AttemptFeedback(
+                attempt_id=attempt_id,
+                teacher_id=teacher.id,
+                comment=comment,
+            )
+            self.db.add(feedback)
+        else:
+            feedback = existing
+            feedback.comment = comment
+        await self.db.commit()
+        await self.db.refresh(feedback)
+
+        task = await self.db.get(Task, attempt.task_id)
+        task_title = task.title if task is not None else ""
+        from app.services.engagement_service import create_feedback_notification
+
+        await create_feedback_notification(
+            self.db,
+            attempt.user_id,
+            attempt_id=attempt.id,
+            task_id=attempt.task_id,
+            task_title=task_title,
+            teacher_name=teacher.username,
+        )
+        return feedback, teacher.username, task_title

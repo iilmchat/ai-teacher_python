@@ -243,6 +243,7 @@
     "attemptDetails": "Details",
     "attemptRestore": "Restore code in the editor",
     "attemptScore": "{{passed}} of {{total}}",
+    "feedbackFrom": "Teacher {{teacher}} comment:",
     "draftSaving": "Saving draft…",
     "draftSavedAt": "Draft saved at {{time}}",
     "draftDiscard": "Discard draft",
@@ -503,7 +504,12 @@
       "solution": "Solution",
       "showSolution": "Show",
       "expected": "Expected",
-      "actual": "Actual"
+      "actual": "Actual",
+      "feedbackTitle": "Teacher comment",
+      "noFeedback": "No comments yet",
+      "feedbackPlaceholder": "What should the student fix or try?",
+      "feedbackSubmit": "Send comment",
+      "feedbackError": "Failed to send the comment"
     }
   },
   "classrooms": {
@@ -600,7 +606,9 @@
     "loadError": "Could not load dashboard",
     "notifyAssignment": "New assignment: {{title}}",
     "notifyDeadline": "Deadline approaching: {{title}}",
-    "notifyAchievement": "Achievement: {{title}}"
+    "notifyAchievement": "Achievement: {{title}}",
+    "notifyFeedback": "Teacher {{teacher}} commented on “{{title}}”",
+    "notifyAnnouncement": "Class “{{title}}” announcement"
   },
   "errors": {
     "notFoundTitle": "Page not found",

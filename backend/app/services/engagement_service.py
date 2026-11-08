@@ -265,6 +265,31 @@ async def create_assignment_notifications(
     return len(user_ids)
 
 
+async def create_feedback_notification(
+    db: AsyncSession,
+    user_id: UUID,
+    *,
+    attempt_id: UUID,
+    task_id: UUID,
+    task_title: str,
+    teacher_name: str,
+) -> None:
+    """Уведомить ученика о комментарии учителя к попытке (S46-002)"""
+    db.add(
+        Notification(
+            user_id=user_id,
+            type="attempt_feedback",
+            payload={
+                "attempt_id": str(attempt_id),
+                "task_id": str(task_id),
+                "title": task_title,
+                "teacher": teacher_name,
+            },
+        )
+    )
+    await db.commit()
+
+
 async def list_notifications(
     db: AsyncSession,
     user_id: UUID,
