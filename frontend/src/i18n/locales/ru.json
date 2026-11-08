@@ -490,7 +490,21 @@
     "save": "Сохранить",
     "validationTitle": "Название — не менее 3 символов",
     "validationDescription": "Условие — не менее 10 символов",
-    "validationCases": "Нужен хотя бы один тест-кейс"
+    "validationCases": "Нужен хотя бы один тест-кейс",
+    "works": {
+      "progressTab": "Прогресс",
+      "worksTab": "Работы",
+      "loadError": "Не удалось загрузить работы",
+      "detailError": "Не удалось открыть работу",
+      "empty": "Работ у ученика пока нет",
+      "colDate": "Дата",
+      "colResult": "Результат",
+      "open": "Открыть",
+      "solution": "Решение",
+      "showSolution": "Показать",
+      "expected": "Ожидалось",
+      "actual": "Получено"
+    }
   },
   "classrooms": {
     "title": "Классы",

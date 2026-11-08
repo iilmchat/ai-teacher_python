@@ -23,6 +23,9 @@ from app.schemas.classroom import (
 )
 from app.schemas.task import TaskAdminDetail, TestCase
 from app.schemas.teacher import (
+    TeacherAttemptDetail,
+    TeacherAttemptItem,
+    TeacherAttemptList,
     TeacherProgressItem,
     TeacherStudentDetail,
     TeacherStudentItem,
@@ -30,7 +33,9 @@ from app.schemas.teacher import (
     TeacherTaskItem,
     TeacherTaskList,
 )
+from app.schemas.task import TestCaseResult
 from app.services.classroom_service import ClassroomService
+from app.services.teacher_service import TeacherService
 
 router = APIRouter(prefix="/teacher", tags=["Teacher"])
 
@@ -136,6 +141,11 @@ async def student_progress(
                 status=status_value,
                 attempts=record.attempts if record else 0,
                 completed_at=record.completed_at if record else None,
+                best_solution=(
+                    record.best_solution
+                    if record and status_value == TaskStatus.COMPLETED
+                    else None
+                ),
             )
         )
 
@@ -147,6 +157,70 @@ async def student_progress(
         in_progress=in_progress,
         completion_rate=round(completed / total * 100, 1) if total else 0.0,
         items=items,
+    )
+
+
+@router.get(
+    "/students/{student_id}/attempts", response_model=TeacherAttemptList
+)
+async def list_student_attempts(
+    student_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    task_id: UUID | None = None,
+    skip: int = 0,
+    limit: int = 20,
+) -> TeacherAttemptList:
+    """Работы ученика (S46-001): только для владельца его класса.
+
+    Ученик состоит в классе учителя — 200; чужой ученик — 403; неизвестный —
+    404. Фильтр `task_id` необязателен.
+    """
+    rows, total = await TeacherService(db).list_attempts(
+        current_user, student_id, task_id=task_id, skip=skip, limit=limit
+    )
+    return TeacherAttemptList(
+        total=total,
+        items=[
+            TeacherAttemptItem(
+                id=attempt.id,
+                task_id=attempt.task_id,
+                task_title=title,
+                passed=attempt.passed,
+                passed_count=attempt.passed_count,
+                total_count=attempt.total_count,
+                created_at=attempt.created_at,
+            )
+            for attempt, title in rows
+        ],
+    )
+
+
+@router.get(
+    "/students/{student_id}/attempts/{attempt_id}",
+    response_model=TeacherAttemptDetail,
+)
+async def get_student_attempt(
+    student_id: UUID,
+    attempt_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+) -> TeacherAttemptDetail:
+    """Детальная работа ученика: код и разбор по тест-кейсам (S46-001)"""
+    attempt, title = await TeacherService(db).get_attempt(
+        current_user, student_id, attempt_id
+    )
+    return TeacherAttemptDetail(
+        id=attempt.id,
+        student_id=attempt.user_id,
+        task_id=attempt.task_id,
+        task_title=title,
+        passed=attempt.passed,
+        passed_count=attempt.passed_count,
+        total_count=attempt.total_count,
+        created_at=attempt.created_at,
+        code=attempt.code,
+        results=[TestCaseResult(**item) for item in (attempt.results or [])],
     )
 
 

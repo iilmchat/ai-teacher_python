@@ -490,7 +490,21 @@
     "save": "Save",
     "validationTitle": "Title must be at least 3 characters",
     "validationDescription": "Description must be at least 10 characters",
-    "validationCases": "At least one test case is required"
+    "validationCases": "At least one test case is required",
+    "works": {
+      "progressTab": "Progress",
+      "worksTab": "Works",
+      "loadError": "Failed to load works",
+      "detailError": "Failed to open the work",
+      "empty": "The student has no works yet",
+      "colDate": "Date",
+      "colResult": "Result",
+      "open": "Open",
+      "solution": "Solution",
+      "showSolution": "Show",
+      "expected": "Expected",
+      "actual": "Actual"
+    }
   },
   "classrooms": {
     "title": "Classes",

@@ -445,6 +445,29 @@ export interface TeacherProgressItem {
   status: TaskStatus;
   attempts: number;
   completed_at: string | null;
+  /** Последнее успешное решение (S46-001) */
+  best_solution?: string | null;
+}
+
+export interface TeacherAttempt {
+  id: string;
+  task_id: string;
+  task_title: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  created_at: string;
+}
+
+export interface TeacherAttemptList {
+  total: number;
+  items: TeacherAttempt[];
+}
+
+export interface TeacherAttemptDetail extends TeacherAttempt {
+  student_id: string;
+  code: string;
+  results: TestCaseResult[];
 }
 
 export interface TeacherStudentDetail {
