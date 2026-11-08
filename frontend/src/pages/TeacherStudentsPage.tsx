@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -23,6 +23,9 @@ type Tab = 'progress' | 'works';
 
 export function TeacherStudentsPage() {
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
+  const targetStudentId = searchParams.get('student');
+  const targetTab = searchParams.get('tab');
   const [students, setStudents] = useState<TeacherStudent[]>([]);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<TeacherStudentDetail | null>(null);
@@ -55,10 +58,10 @@ export function TeacherStudentsPage() {
     void load();
   }, [load]);
 
-  async function openStudent(student: TeacherStudent) {
+  async function openStudent(student: TeacherStudent, openWorks = false) {
     setDetailLoading(true);
     setError(null);
-    setTab('progress');
+    setTab(openWorks ? 'works' : 'progress');
     setAttempts(null);
     setAttemptDetail(null);
     try {
@@ -66,12 +69,37 @@ export function TeacherStudentsPage() {
         `/teacher/students/${student.id}/progress`,
       );
       setSelected(detail);
+      if (openWorks) {
+        setAttemptsLoading(true);
+        try {
+          const data = await api.get<TeacherAttemptList>(
+            `/teacher/students/${student.id}/attempts`,
+          );
+          setAttempts(data.items);
+        } catch {
+          setError(t('teacher.works.loadError'));
+        } finally {
+          setAttemptsLoading(false);
+        }
+      }
     } catch {
       setError(t('teacher.loadProgressError'));
     } finally {
       setDetailLoading(false);
     }
   }
+
+  useEffect(() => {
+    if (!targetStudentId || selected || students.length === 0) {
+      return;
+    }
+    const student = students.find((item) => item.id === targetStudentId);
+    if (student) {
+      void openStudent(student, targetTab === 'works');
+    }
+    // Намеренно только при загрузке списка: параметр используется как точка входа
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [students, targetStudentId, targetTab, selected]);
 
   async function loadAttempts(studentId: string) {
     setAttemptsLoading(true);

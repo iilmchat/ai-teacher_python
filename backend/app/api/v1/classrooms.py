@@ -5,7 +5,7 @@ Classrooms API (S16): классы, вступление, назначения, 
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,9 @@ from app.models.classroom import Classroom
 from app.models.task import Task
 from app.models.user import User, UserRole
 from app.schemas.classroom import (
+    AssignmentAnalytics,
+    AssignmentAnalyticsStudent,
+    AssignmentAttemptBucket,
     AssignmentCreate,
     AssignmentItem,
     AssignmentList,
@@ -302,6 +305,67 @@ async def class_progress(
                 completed=task.completed,
             )
             for task in data.problem_tasks
+        ],
+    )
+
+
+@router.get(
+    "/classrooms/{classroom_id}/assignments/{assignment_id}/analytics",
+    response_model=AssignmentAnalytics,
+)
+async def assignment_analytics(
+    classroom_id: UUID,
+    assignment_id: UUID,
+    current_user: TeacherUser,
+    db: DbSession,
+    problem_threshold: int = Query(default=3, ge=0, le=100),
+) -> AssignmentAnalytics:
+    """Drill-down по назначению: кто как справился (S46-003)."""
+    data = await ClassroomService(db).assignment_analytics(
+        classroom_id,
+        assignment_id,
+        current_user,
+        problem_threshold=problem_threshold,
+    )
+    return AssignmentAnalytics(
+        assignment_id=data.assignment_id,
+        task_id=data.task_id,
+        task_title=data.task_title,
+        due_at=data.due_at,
+        total_students=data.total_students,
+        completed=data.completed,
+        in_progress=data.in_progress,
+        not_started=data.not_started,
+        overdue=data.overdue,
+        attempts_total=data.attempts_total,
+        attempts_distribution=[
+            AssignmentAttemptBucket(
+                attempts=bucket.attempts, students=bucket.students
+            )
+            for bucket in data.attempts_distribution
+        ],
+        problem_threshold=data.problem_threshold,
+        problem_students=[
+            AssignmentAnalyticsStudent(
+                student_id=item.student_id,
+                username=item.username,
+                status=item.status,
+                attempts=item.attempts,
+                completed_at=item.completed_at,
+                overdue=item.overdue,
+            )
+            for item in data.problem_students
+        ],
+        students=[
+            AssignmentAnalyticsStudent(
+                student_id=item.student_id,
+                username=item.username,
+                status=item.status,
+                attempts=item.attempts,
+                completed_at=item.completed_at,
+                overdue=item.overdue,
+            )
+            for item in data.students
         ],
     )
 

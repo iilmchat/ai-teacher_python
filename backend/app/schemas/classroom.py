@@ -123,6 +123,47 @@ class ClassProgress(BaseModel):
     completion_rate: float
     problem_tasks: list[ProblemTask] = Field(default_factory=list)
 
+
+class AssignmentAnalyticsStudent(BaseModel):
+    """Ученик в drill-down по назначению (S46-003)"""
+
+    student_id: UUID
+    username: str
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None = None
+    overdue: bool = False
+
+
+class AssignmentAttemptBucket(BaseModel):
+    """Сколько учеников сделали столько-то попыток"""
+
+    attempts: int
+    students: int
+
+
+class AssignmentAnalytics(BaseModel):
+    """Аналитика одного назначения: кто как справился (S46-003)"""
+
+    assignment_id: UUID
+    task_id: UUID
+    task_title: str
+    due_at: datetime | None = None
+    total_students: int
+    completed: int
+    in_progress: int
+    not_started: int
+    overdue: int
+    attempts_total: int
+    attempts_distribution: list[AssignmentAttemptBucket] = Field(
+        default_factory=list
+    )
+    problem_threshold: int
+    problem_students: list[AssignmentAnalyticsStudent] = Field(
+        default_factory=list
+    )
+    students: list[AssignmentAnalyticsStudent] = Field(default_factory=list)
+
 class BulkAssignmentRequest(BaseModel):
     """Массовое назначение задач классу (S28-001)"""
 

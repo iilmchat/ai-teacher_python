@@ -207,4 +207,17 @@ describe('работы ученика в кабинете учителя (S46-00
     });
     expect(await screen.findByText('Молодец')).toBeInTheDocument();
   });
+
+  it('открывает работы ученика по ссылке из drill-down (S46-003)', async () => {
+    renderWithRouter(<TeacherStudentsPage />, {
+      route: '/teacher/students?student=student-1&tab=works',
+    });
+
+    expect(await screen.findByRole('tab', { name: 'Работы' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByText('Сумма двух чисел')).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith('/teacher/students/student-1/attempts');
+  });
 });

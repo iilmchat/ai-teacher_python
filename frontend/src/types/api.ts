@@ -563,6 +563,37 @@ export interface AssignmentList {
   items: Assignment[];
 }
 
+export interface AssignmentAnalyticsStudent {
+  student_id: string;
+  username: string;
+  status: TaskStatus;
+  attempts: number;
+  completed_at: string | null;
+  overdue: boolean;
+}
+
+export interface AssignmentAttemptBucket {
+  attempts: number;
+  students: number;
+}
+
+export interface AssignmentAnalytics {
+  assignment_id: string;
+  task_id: string;
+  task_title: string;
+  due_at: string | null;
+  total_students: number;
+  completed: number;
+  in_progress: number;
+  not_started: number;
+  overdue: number;
+  attempts_total: number;
+  attempts_distribution: AssignmentAttemptBucket[];
+  problem_threshold: number;
+  problem_students: AssignmentAnalyticsStudent[];
+  students: AssignmentAnalyticsStudent[];
+}
+
 export interface MyAssignment {
   id: string;
   classroom_id: string;

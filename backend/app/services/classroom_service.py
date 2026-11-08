@@ -448,6 +448,129 @@ class ClassroomService:
             problem_tasks=problem_tasks,
         )
 
+    async def assignment_analytics(
+        self,
+        classroom_id: UUID,
+        assignment_id: UUID,
+        actor: User,
+        *,
+        problem_threshold: int = 3,
+    ) -> AssignmentAnalyticsData:
+        """Drill-down по одному назначению (S46-003).
+
+        Агрегаты совпадают с матрицей прогресса класса: те же ученики, та же
+        запись `UserTaskProgress`. «Просрочили» — дедлайн прошёл, а задача не
+        завершена. «Проблемные» — ученики, сделавшие больше `problem_threshold`
+        попыток.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Аналитику назначения видит только владелец"
+            )
+        row = (
+            await self.db.execute(
+                select(Assignment, Task)
+                .join(Task, Task.id == Assignment.task_id)
+                .where(
+                    Assignment.id == assignment_id,
+                    Assignment.classroom_id == classroom_id,
+                )
+            )
+        ).one_or_none()
+        if row is None:
+            raise NotFoundError("Назначение не найдено")
+        assignment, task = row
+
+        members = await self.get_members(classroom_id)
+        students = [
+            member
+            for member in members
+            if member.role == ClassroomRole.STUDENT.value
+        ]
+        student_ids = [member.user_id for member in students]
+        users = {
+            user.id: user
+            for user in (
+                await self.db.execute(
+                    select(User).where(User.id.in_(student_ids))
+                )
+            )
+            .scalars()
+            .all()
+        } if student_ids else {}
+
+        progress_map: dict[UUID, UserTaskProgress] = {}
+        if student_ids:
+            progress_rows = (
+                await self.db.execute(
+                    select(UserTaskProgress).where(
+                        UserTaskProgress.user_id.in_(student_ids),
+                        UserTaskProgress.task_id == task.id,
+                    )
+                )
+            ).scalars().all()
+            progress_map = {record.user_id: record for record in progress_rows}
+
+        now = datetime.utcnow()
+        items: list[AssignmentAnalyticsStudentData] = []
+        completed = in_progress = not_started = overdue = 0
+        attempts_total = 0
+        distribution: dict[int, int] = {}
+        for member in students:
+            record = progress_map.get(member.user_id)
+            status_value = record.status if record else TaskStatus.NOT_STARTED
+            attempts = record.attempts if record else 0
+            is_overdue = bool(
+                assignment.due_at is not None
+                and assignment.due_at < now
+                and status_value != TaskStatus.COMPLETED
+            )
+            if status_value == TaskStatus.COMPLETED:
+                completed += 1
+            elif status_value == TaskStatus.IN_PROGRESS:
+                in_progress += 1
+            else:
+                not_started += 1
+            if is_overdue:
+                overdue += 1
+            attempts_total += attempts
+            distribution[attempts] = distribution.get(attempts, 0) + 1
+            user = users.get(member.user_id)
+            items.append(
+                AssignmentAnalyticsStudentData(
+                    student_id=member.user_id,
+                    username=user.username if user is not None else "",
+                    status=status_value,
+                    attempts=attempts,
+                    completed_at=record.completed_at if record else None,
+                    overdue=is_overdue,
+                )
+            )
+
+        problem_students = [
+            item for item in items if item.attempts > problem_threshold
+        ]
+        return AssignmentAnalyticsData(
+            assignment_id=assignment.id,
+            task_id=task.id,
+            task_title=task.title,
+            due_at=assignment.due_at,
+            total_students=len(students),
+            completed=completed,
+            in_progress=in_progress,
+            not_started=not_started,
+            overdue=overdue,
+            attempts_total=attempts_total,
+            attempts_distribution=[
+                AssignmentAttemptBucketData(attempts=attempts, students=count)
+                for attempts, count in sorted(distribution.items())
+            ],
+            problem_threshold=problem_threshold,
+            problem_students=problem_students,
+            students=items,
+        )
+
 
 # --- Внутренние dataclass-структуры (без Pydantic в сервисе) -------------
 
@@ -773,3 +896,37 @@ class GradebookData:
     cells: list[GradebookCellData]
     completion_rate: float
     overdue: int
+
+
+@dataclass(slots=True)
+class AssignmentAnalyticsStudentData:
+    student_id: UUID
+    username: str
+    status: TaskStatus
+    attempts: int
+    completed_at: datetime | None
+    overdue: bool
+
+
+@dataclass(slots=True)
+class AssignmentAttemptBucketData:
+    attempts: int
+    students: int
+
+
+@dataclass(slots=True)
+class AssignmentAnalyticsData:
+    assignment_id: UUID
+    task_id: UUID
+    task_title: str
+    due_at: datetime | None
+    total_students: int
+    completed: int
+    in_progress: int
+    not_started: int
+    overdue: int
+    attempts_total: int
+    attempts_distribution: list[AssignmentAttemptBucketData]
+    problem_threshold: int
+    problem_students: list[AssignmentAnalyticsStudentData]
+    students: list[AssignmentAnalyticsStudentData]

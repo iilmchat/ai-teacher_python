@@ -13,6 +13,7 @@ import { saveBlob } from '@/lib/download';
 import { useAuthStore } from '@/store/auth';
 import type {
   Assignment,
+  AssignmentAnalytics,
   AssignmentList,
   ClassProgress,
   ClassroomDetail,
@@ -33,6 +34,9 @@ export function ClassroomDetailPage() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [dueAt, setDueAt] = useState('');
+  const [analytics, setAnalytics] = useState<AssignmentAnalytics | null>(null);
+  const [analyticsId, setAnalyticsId] = useState('');
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -136,6 +140,22 @@ export function ClassroomDetailPage() {
       await load();
     } catch {
       setError(t('classrooms.removeError'));
+    }
+  }
+
+  async function openAnalytics(item: Assignment) {
+    setAnalyticsId(item.id);
+    setAnalyticsLoading(true);
+    setError(null);
+    try {
+      const data = await api.get<AssignmentAnalytics>(
+        `/classrooms/${classroomId}/assignments/${item.id}/analytics`,
+      );
+      setAnalytics(data);
+    } catch {
+      setError(t('classrooms.analyticsError'));
+    } finally {
+      setAnalyticsLoading(false);
     }
   }
 
@@ -274,8 +294,20 @@ export function ClassroomDetailPage() {
             </thead>
             <tbody>
               {assignments.map((item) => (
-                <Tr key={item.id} className="border-t border-slate-100">
-                  <Td className="py-2 font-medium text-slate-800">{item.title}</Td>
+                <Tr key={item.id} className={`border-t border-slate-100 ${analyticsId === item.id ? 'bg-indigo-50' : ''}`}>
+                  <Td className="py-2 font-medium text-slate-800">
+                    {isOwner ? (
+                      <button
+                        type="button"
+                        onClick={() => void openAnalytics(item)}
+                        className="text-left text-indigo-700 hover:underline"
+                      >
+                        {item.title}
+                      </button>
+                    ) : (
+                      item.title
+                    )}
+                  </Td>
                   <Td className="py-2 text-slate-600">
                     {item.due_at
                       ? new Date(item.due_at).toLocaleString('ru-RU')
@@ -297,6 +329,98 @@ export function ClassroomDetailPage() {
           </Table>
         </div>
       </Card>
+
+      {isOwner && analytics && (
+        <Card
+          title={t('classrooms.analyticsTitle', {
+            title: analytics.task_title,
+          })}
+        >
+          {analyticsLoading && <Spinner />}
+          <div className="mb-3 grid gap-2 text-sm sm:grid-cols-4">
+            <p className="rounded-lg bg-emerald-50 p-2">
+              {t('classrooms.analyticsCompleted')}: {analytics.completed}
+            </p>
+            <p className="rounded-lg bg-amber-50 p-2">
+              {t('classrooms.analyticsInProgress')}: {analytics.in_progress}
+            </p>
+            <p className="rounded-lg bg-slate-50 p-2">
+              {t('classrooms.analyticsNotStarted')}: {analytics.not_started}
+            </p>
+            <p className="rounded-lg bg-rose-50 p-2">
+              {t('classrooms.analyticsOverdue')}: {analytics.overdue}
+            </p>
+          </div>
+          <p className="mb-2 text-sm text-slate-600">
+            {t('classrooms.analyticsAttempts')}: {analytics.attempts_total} ·{' '}
+            {t('classrooms.analyticsDistribution')}:{' '}
+            {analytics.attempts_distribution
+              .map((bucket) =>
+                t('classrooms.analyticsBucket', {
+                  attempts: bucket.attempts,
+                  students: bucket.students,
+                }),
+              )
+              .join(', ')}
+          </p>
+          <p className="mb-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-800">
+            {t('classrooms.analyticsProblem', {
+              threshold: analytics.problem_threshold,
+            })}
+            :{' '}
+            {analytics.problem_students.length === 0
+              ? t('classrooms.analyticsNoProblems')
+              : analytics.problem_students
+                  .map((item) => item.username)
+                  .join(', ')}
+          </p>
+          <div className="overflow-x-auto">
+            <Table className="text-xs">
+              <thead className="text-slate-500">
+                <Tr>
+                  <Th className="py-2">{t('classrooms.student')}</Th>
+                  <Th className="py-2">{t('classrooms.analyticsStatus')}</Th>
+                  <Th className="py-2">{t('classrooms.analyticsAttemptsCol')}</Th>
+                  <Th className="py-2">{t('classrooms.analyticsWorks')}</Th>
+                </Tr>
+              </thead>
+              <tbody>
+                {analytics.students.map((item) => (
+                  <Tr key={item.student_id} className="border-t border-slate-100">
+                    <Td className="py-1 font-medium text-slate-800">
+                      {item.username}
+                    </Td>
+                    <Td
+                      className={`py-1 ${
+                        item.overdue ? 'text-rose-700' : 'text-slate-600'
+                      }`}
+                    >
+                      {t(`tasks.status.${item.status}`)}
+                      {item.overdue ? ` · ${t('classrooms.analyticsOverdue')}` : ''}
+                    </Td>
+                    <Td className="py-1 text-slate-600">{item.attempts}</Td>
+                    <Td className="py-1">
+                      <Link
+                        to={`/teacher/students?student=${item.student_id}&tab=works`}
+                        className="text-indigo-700 hover:underline"
+                      >
+                        {t('classrooms.analyticsOpenWorks')}
+                      </Link>
+                    </Td>
+                  </Tr>
+                ))}
+                {analytics.students.length === 0 && (
+                  <Tr>
+                    <Td colSpan={4} className="py-3 text-center text-slate-500">
+                      {t('classrooms.analyticsEmpty')}
+                    </Td>
+                  </Tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
+        </Card>
+      )}
 
       {isOwner && progress && (
         <Card title={t('classrooms.progress')}>
