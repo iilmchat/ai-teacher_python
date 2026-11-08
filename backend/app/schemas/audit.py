@@ -14,6 +14,8 @@ class AuditLogItem(BaseModel):
 
     id: UUID
     actor_id: UUID | None = None
+    #: Имя актора из `users`; `None` — аккаунт удалён или запись системная
+    actor_username: str | None = None
     actor_role: str
     action: str
     entity_type: str

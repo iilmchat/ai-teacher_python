@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
 import { Alert } from '@/components/ui/Alert';
 import { Button } from '@/components/ui/Button';
@@ -96,9 +97,17 @@ export function AdminPage() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-slate-900">{t('admin.title')}</h1>
-        <Button variant="secondary" onClick={() => void loadAll()} loading={loading}>
-          {t('admin.refresh')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/audit"
+            className="rounded-lg px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-50"
+          >
+            {t('admin.auditLink')}
+          </Link>
+          <Button variant="secondary" onClick={() => void loadAll()} loading={loading}>
+            {t('admin.refresh')}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}

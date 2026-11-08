@@ -909,7 +909,8 @@ not_started ──submit(неверно)──► in_progress ──submit(ве�
 | `/health/live` | 200, если процесс жив; зависимости не проверяются |
 | `/health/ready` | 200, если БД и Redis доступны (LLM — только конфиг); иначе 503 со списком `checks` |
 | `/api/v1/health` | обратно совместим: детальный статус LLM |
-| `GET /api/v1/admin/audit` | admin; пагинация `skip`/`limit` (≤200), фильтры `action`, `entity_type`, `actor_id`; новые записи сверху |
+| `GET /api/v1/admin/audit` | admin; пагинация `skip`/`limit` (≤200), фильтры `action`, `entity_type`, `actor_id`, `search` (ILIKE по `action`); в ответе `actor_username` (join `users`, `null` для удалённого аккаунта); новые записи сверху |
+| `GET /api/v1/admin/audit/export` | admin; те же фильтры, что у списка; потоковый CSV (`utf-8-sig`), колонки `created_at, action, actor_username, actor_role, entity_type, entity_id, ip`; лимит `EXPORT_MAX_ROWS`, аудит `audit.exported` (D-006) |
 
 **Аудит (таблица `audit_log`, миграция 011):** актор (`actor_id`, `actor_role`),
 действие, сущность (`entity_type`, `entity_id`), сводка `payload` (без PII),

@@ -6,7 +6,7 @@ Admin API (S10-004): пользователи, задачи, аналитика.
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -38,7 +38,11 @@ from app.schemas.admin import (
 )
 from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
-from app.services.audit_service import list_audit, record_audit
+from app.services.audit_service import (
+    list_audit,
+    record_audit,
+    stream_audit_csv,
+)
 from app.services.cache import cache_metrics
 from app.services.export_service import stream_csv, stream_json
 from app.services.feedback_service import FeedbackService
@@ -158,21 +162,95 @@ async def list_audit_log(
     action: str | None = Query(default=None, max_length=64),
     entity_type: str | None = Query(default=None, max_length=64),
     actor_id: UUID | None = None,
+    search: str | None = Query(default=None, max_length=64),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> AuditLogListResponse:
-    """Журнал действий teacher/admin (S25-004), новые сверху"""
-    items, total = await list_audit(
+    """Журнал действий teacher/admin (S25-004), новые сверху.
+
+    S47-001: поиск по `action` (ILIKE) и имя актора из `users`.
+    """
+    rows, total = await list_audit(
         db,
         action=action,
         entity_type=entity_type,
         actor_id=actor_id,
+        search=search,
         skip=skip,
         limit=limit,
     )
     return AuditLogListResponse(
-        items=[AuditLogItem.model_validate(item) for item in items],
+        items=[_audit_item(log, username) for log, username in rows],
         total=total,
+    )
+
+
+def _audit_item(log: Any, actor_username: str | None) -> AuditLogItem:
+    """Запись журнала с именем актора (join `users`)"""
+    return AuditLogItem(
+        id=log.id,
+        actor_id=log.actor_id,
+        actor_username=actor_username,
+        actor_role=log.actor_role,
+        action=log.action,
+        entity_type=log.entity_type,
+        entity_id=log.entity_id,
+        payload=log.payload or {},
+        ip=log.ip,
+        created_at=log.created_at,
+    )
+
+
+@router.get("/audit/export")
+async def export_audit(
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+    action: str | None = Query(default=None, max_length=64),
+    entity_type: str | None = Query(default=None, max_length=64),
+    actor_id: UUID | None = None,
+    search: str | None = Query(default=None, max_length=64),
+) -> StreamingResponse:
+    """CSV журнала аудита с теми же фильтрами, что и список (S47-001, D-006).
+
+    Отдельный потоковый эндпоинт: набор колонок журнала не совпадает с
+    аналитическими наборами `export_service`.
+    """
+    limit = max(0, settings.export_max_rows)
+    await record_audit(
+        db,
+        actor=admin,
+        action="audit.exported",
+        entity_type="audit",
+        payload={
+            "action": action,
+            "entity_type": entity_type,
+            "actor_id": str(actor_id) if actor_id else None,
+            "has_search": bool(search),
+            "limit": limit,
+        },
+        request=request,
+    )
+
+    async def body() -> AsyncIterator[bytes]:
+        async for chunk in stream_audit_csv(
+            db,
+            action=action,
+            entity_type=entity_type,
+            actor_id=actor_id,
+            search=search,
+            limit=limit,
+        ):
+            yield chunk
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    return StreamingResponse(
+        body(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="audit-{stamp}.csv"',
+            "X-Export-Limit": str(limit),
+        },
     )
 
 

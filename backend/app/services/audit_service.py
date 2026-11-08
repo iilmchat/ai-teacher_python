@@ -10,6 +10,9 @@ commit, что честно).
 
 from __future__ import annotations
 
+import csv
+import io
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import UUID
 
@@ -22,6 +25,17 @@ from app.models.audit import AuditLog
 from app.models.user import User
 
 logger = structlog.get_logger(__name__)
+
+#: Колонки CSV-выгрузки журнала (S47-001, D-006)
+AUDIT_CSV_COLUMNS = [
+    "created_at",
+    "action",
+    "actor_username",
+    "actor_role",
+    "entity_type",
+    "entity_id",
+    "ip",
+]
 
 
 def client_ip(request: Request | None) -> str | None:
@@ -74,27 +88,95 @@ async def list_audit(
     action: str | None = None,
     entity_type: str | None = None,
     actor_id: UUID | None = None,
+    search: str | None = None,
     skip: int = 0,
     limit: int = 50,
-) -> tuple[list[AuditLog], int]:
-    """Страница журнала + общее количество по фильтрам"""
-    query = select(AuditLog)
+) -> tuple[list[tuple[AuditLog, str | None]], int]:
+    """Страница журнала + общее количество по фильтрам.
+
+    Возвращает пары «запись + имя актора»: имя берётся из `users` по
+    `actor_id` (у удалённого пользователя FK выставлен в NULL — имя `None`).
+    """
+    query = select(AuditLog, User.username).outerjoin(
+        User, User.id == AuditLog.actor_id
+    )
     count_query = select(func.count()).select_from(AuditLog)
 
+    conditions = []
     if action:
-        query = query.where(AuditLog.action == action)
-        count_query = count_query.where(AuditLog.action == action)
+        conditions.append(AuditLog.action == action)
     if entity_type:
-        query = query.where(AuditLog.entity_type == entity_type)
-        count_query = count_query.where(AuditLog.entity_type == entity_type)
+        conditions.append(AuditLog.entity_type == entity_type)
     if actor_id:
-        query = query.where(AuditLog.actor_id == actor_id)
-        count_query = count_query.where(AuditLog.actor_id == actor_id)
+        conditions.append(AuditLog.actor_id == actor_id)
+    if search:
+        conditions.append(AuditLog.action.ilike(f"%{search.strip()}%"))
+    for condition in conditions:
+        query = query.where(condition)
+        count_query = count_query.where(condition)
 
     total = int((await db.execute(count_query)).scalar_one())
     rows = (
         await db.execute(
             query.order_by(AuditLog.created_at.desc()).offset(skip).limit(limit)
         )
-    ).scalars().all()
-    return list(rows), total
+    ).all()
+    return [(row[0], row[1]) for row in rows], total
+
+
+def _audit_csv_row(log: AuditLog, actor_username: str | None) -> dict[str, str | None]:
+    """Одна строка CSV: только действие, актор и сущность (без payload)"""
+    return {
+        "created_at": log.created_at.isoformat() if log.created_at else None,
+        "action": log.action,
+        "actor_username": actor_username,
+        "actor_role": log.actor_role,
+        "entity_type": log.entity_type,
+        "entity_id": log.entity_id,
+        "ip": log.ip,
+    }
+
+
+async def stream_audit_csv(
+    db: AsyncSession,
+    *,
+    action: str | None = None,
+    entity_type: str | None = None,
+    actor_id: UUID | None = None,
+    search: str | None = None,
+    limit: int,
+) -> AsyncIterator[bytes]:
+    """Потоковый CSV журнала (S47-001, D-006): `utf-8-sig`, серверный курсор.
+
+    Фильтры совпадают с `GET /admin/audit`, поэтому UI и файл дают один и тот
+    же набор строк.
+    """
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=AUDIT_CSV_COLUMNS)
+    writer.writeheader()
+    # BOM в первом чанке: Excel иначе ломает кириллицу (RULES §11.23).
+    yield b"\xef\xbb\xbf" + buffer.getvalue().encode("utf-8")
+
+    query = select(AuditLog, User.username).outerjoin(
+        User, User.id == AuditLog.actor_id
+    )
+    if action:
+        query = query.where(AuditLog.action == action)
+    if entity_type:
+        query = query.where(AuditLog.entity_type == entity_type)
+    if actor_id:
+        query = query.where(AuditLog.actor_id == actor_id)
+    if search:
+        query = query.where(AuditLog.action.ilike(f"%{search.strip()}%"))
+    query = query.order_by(AuditLog.created_at.desc())
+
+    result = await db.stream(query)
+    count = 0
+    async for log, actor_username in result:
+        if limit and count >= limit:
+            break
+        count += 1
+        buffer = io.StringIO()
+        writer = csv.DictWriter(buffer, fieldnames=AUDIT_CSV_COLUMNS)
+        writer.writerow(_audit_csv_row(log, actor_username))
+        yield buffer.getvalue().encode("utf-8")

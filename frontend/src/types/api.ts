@@ -359,6 +359,26 @@ export interface AdminUserItem {
   last_active: string;
 }
 
+/** Запись журнала аудита (S47-001) */
+export interface AuditLogItem {
+  id: string;
+  actor_id: string | null;
+  /** Имя актора из `users`; null — аккаунт удалён */
+  actor_username: string | null;
+  actor_role: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  payload: Record<string, unknown>;
+  ip: string | null;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[];
+  total: number;
+}
+
 export interface AdminUserListResponse {
   total: number;
   items: AdminUserItem[];

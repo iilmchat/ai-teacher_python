@@ -12,6 +12,11 @@ import { useAuthStore } from '@/store/auth';
 const AdminPage = lazy(() =>
   import('@/pages/AdminPage').then((module) => ({ default: module.AdminPage })),
 );
+const AdminAuditPage = lazy(() =>
+  import('@/pages/AdminAuditPage').then((module) => ({
+    default: module.AdminAuditPage,
+  })),
+);
 const AssignmentsPage = lazy(() =>
   import('@/pages/AssignmentsPage').then((module) => ({
     default: module.AssignmentsPage,
@@ -203,6 +208,16 @@ export function App() {
                 <ProtectedRoute>
                   <AdminRoute>
                     <AdminPage />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="admin/audit"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminAuditPage />
                   </AdminRoute>
                 </ProtectedRoute>
               }
