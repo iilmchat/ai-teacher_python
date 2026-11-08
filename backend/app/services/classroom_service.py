@@ -188,6 +188,100 @@ class ClassroomService:
         )
         await self.db.commit()
 
+    async def add_members_bulk(
+        self, classroom_id: UUID, actor: User, usernames: list[str]
+    ) -> tuple[list[str], list[str], list[str]]:
+        """Добавить учеников списком логинов (S46-005).
+
+        Существующие участники и дубликаты — `skipped`, неизвестные логины —
+        `unknown`; один запрос не ломается из-за части ошибок. Возвращает
+        (added, skipped, unknown) в порядке входного списка.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError(
+                "Добавлять участников может только владелец"
+            )
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in usernames:
+            name = raw.strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            normalized.append(name)
+        if not normalized:
+            raise ValidationError("Укажите хотя бы один логин")
+
+        users = {
+            user.username: user
+            for user in (
+                await self.db.execute(
+                    select(User).where(User.username.in_(normalized))
+                )
+            )
+            .scalars()
+            .all()
+        }
+        existing_ids = {
+            member.user_id
+            for member in await self.get_members(classroom_id)
+        }
+        added: list[str] = []
+        skipped: list[str] = []
+        unknown: list[str] = []
+        for name in normalized:
+            user = users.get(name)
+            if user is None:
+                unknown.append(name)
+            elif user.id in existing_ids:
+                skipped.append(name)
+            else:
+                self.db.add(
+                    ClassroomMember(
+                        classroom_id=classroom_id,
+                        user_id=user.id,
+                        role=ClassroomRole.STUDENT.value,
+                    )
+                )
+                existing_ids.add(user.id)
+                added.append(name)
+        if added:
+            await self.db.commit()
+        return added, skipped, unknown
+
+    async def remove_members_bulk(
+        self, classroom_id: UUID, actor: User, user_ids: list[UUID]
+    ) -> tuple[list[UUID], list[UUID]]:
+        """Снять выбранных учеников (S46-005).
+
+        Владелец и не-участники попадают в `skipped`; повторное снятие
+        идемпотентно.
+        """
+        classroom = await self._get_or_404(classroom_id)
+        if classroom.owner_id != actor.id:
+            raise AccessDeniedError("Удалять участников может только владелец")
+        member_ids = {
+            member.user_id
+            for member in await self.get_members(classroom_id)
+        }
+        removed: list[UUID] = []
+        skipped: list[UUID] = []
+        for user_id in user_ids:
+            if user_id in member_ids and user_id != classroom.owner_id:
+                removed.append(user_id)
+            else:
+                skipped.append(user_id)
+        if removed:
+            await self.db.execute(
+                delete(ClassroomMember).where(
+                    ClassroomMember.classroom_id == classroom_id,
+                    ClassroomMember.user_id.in_(removed),
+                )
+            )
+            await self.db.commit()
+        return removed, skipped
+
     # --- Назначения -----------------------------------------------------
 
     async def add_assignment(

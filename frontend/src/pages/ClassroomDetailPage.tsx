@@ -15,6 +15,8 @@ import type {
   Assignment,
   AssignmentAnalytics,
   AssignmentList,
+  BulkMembersAddResult,
+  BulkMembersRemoveResult,
   ClassProgress,
   ClassroomDetail,
   TeacherTaskItem,
@@ -42,6 +44,14 @@ export function ClassroomDetailPage() {
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<string[]>([]);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [assignmentBusy, setAssignmentBusy] = useState(false);
+  const [bulkUsernames, setBulkUsernames] = useState('');
+  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [membersBusy, setMembersBusy] = useState(false);
+  const [membersReport, setMembersReport] = useState<{
+    added: string[];
+    skipped: string[];
+    unknown: string[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -225,6 +235,65 @@ export function ClassroomDetailPage() {
     } catch {
       setError(t('classrooms.removeError'));
     }
+  }
+
+  async function addMembersBulk() {
+    const usernames = bulkUsernames
+      .split(/[\s,;]+/)
+      .map((name) => name.trim())
+      .filter(Boolean);
+    if (usernames.length === 0) {
+      return;
+    }
+    setMembersBusy(true);
+    setError(null);
+    setMembersReport(null);
+    try {
+      const result = await api.post<BulkMembersAddResult>(
+        `/classrooms/${classroomId}/members/bulk`,
+        { usernames: usernames.slice(0, 100) },
+      );
+      setMembersReport({
+        added: result.added,
+        skipped: result.skipped,
+        unknown: result.unknown,
+      });
+      setBulkUsernames('');
+      await load();
+    } catch {
+      setError(t('classrooms.bulkMembersError'));
+    } finally {
+      setMembersBusy(false);
+    }
+  }
+
+  async function removeMembersBulk() {
+    if (selectedMemberIds.length === 0) {
+      return;
+    }
+    setMembersBusy(true);
+    setError(null);
+    try {
+      const result = await api.delete<BulkMembersRemoveResult>(
+        `/classrooms/${classroomId}/members/bulk`,
+        { user_ids: selectedMemberIds },
+      );
+      setNotice(
+        t('classrooms.bulkRemovedNotice', { count: result.removed.length }),
+      );
+      setSelectedMemberIds([]);
+      await load();
+    } catch {
+      setError(t('classrooms.bulkRemoveMembersError'));
+    } finally {
+      setMembersBusy(false);
+    }
+  }
+
+  function toggleMember(userId: string, checked: boolean) {
+    setSelectedMemberIds((current) =>
+      checked ? [...current, userId] : current.filter((id) => id !== userId),
+    );
   }
 
   async function openAnalytics(item: Assignment) {
@@ -669,10 +738,104 @@ export function ClassroomDetailPage() {
       )}
 
       <Card title={t('classrooms.members')}>
+        {isOwner && (
+          <div className="mb-3 flex flex-col gap-2 border-b border-slate-100 pb-3">
+            <label
+              htmlFor="bulk-usernames"
+              className="text-xs font-medium text-slate-700"
+            >
+              {t('classrooms.bulkAddLabel')}
+            </label>
+            <textarea
+              id="bulk-usernames"
+              value={bulkUsernames}
+              onChange={(event) => setBulkUsernames(event.target.value)}
+              placeholder={t('classrooms.bulkAddPlaceholder')}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => void addMembersBulk()}
+                loading={membersBusy}
+                disabled={!bulkUsernames.trim()}
+              >
+                {t('classrooms.bulkAddSubmit')}
+              </Button>
+              <span className="text-xs text-slate-500">
+                {t('classrooms.bulkAddHint')}
+              </span>
+            </div>
+            {membersReport && (
+              <div className="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">
+                <p>
+                  {t('classrooms.bulkAdded', {
+                    names:
+                      membersReport.added.length > 0
+                        ? membersReport.added.join(', ')
+                        : t('classrooms.bulkNone'),
+                  })}
+                </p>
+                <p>
+                  {t('classrooms.bulkSkipped', {
+                    names:
+                      membersReport.skipped.length > 0
+                        ? membersReport.skipped.join(', ')
+                        : t('classrooms.bulkNone'),
+                  })}
+                </p>
+                <p>
+                  {t('classrooms.bulkUnknown', {
+                    names:
+                      membersReport.unknown.length > 0
+                        ? membersReport.unknown.join(', ')
+                        : t('classrooms.bulkNone'),
+                  })}
+                </p>
+              </div>
+            )}
+            {selectedMemberIds.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg bg-rose-50 p-2">
+                <span className="text-xs text-rose-800">
+                  {t('classrooms.selectedMembers', {
+                    count: selectedMemberIds.length,
+                  })}
+                </span>
+                <Button
+                  variant="danger"
+                  onClick={() => void removeMembersBulk()}
+                  loading={membersBusy}
+                >
+                  {t('classrooms.bulkRemoveSubmit')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setSelectedMemberIds([])}
+                >
+                  {t('classrooms.cancel')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
         <ul className="flex flex-col divide-y divide-slate-100 text-sm">
           {classroom?.members.map((member) => (
             <li key={member.user_id} className="flex items-center justify-between py-2">
-              <span>{member.username}</span>
+              <span className="flex items-center gap-2">
+                {isOwner && member.role !== 'owner' && (
+                  <input
+                    type="checkbox"
+                    aria-label={t('classrooms.selectMember', {
+                      name: member.username,
+                    })}
+                    checked={selectedMemberIds.includes(member.user_id)}
+                    onChange={(event) =>
+                      toggleMember(member.user_id, event.target.checked)
+                    }
+                  />
+                )}
+                <span>{member.username}</span>
+              </span>
               <span className="flex items-center gap-2">
                 <span className="text-xs text-slate-500">
                   {t(`classrooms.roles.${member.role}`, { defaultValue: member.role })}
@@ -688,6 +851,11 @@ export function ClassroomDetailPage() {
               </span>
             </li>
           ))}
+          {classroom?.members.length === 0 && (
+            <li className="py-2 text-slate-500">
+              {t('classrooms.noMembers')}
+            </li>
+          )}
         </ul>
       </Card>
     </div>

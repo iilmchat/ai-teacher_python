@@ -548,6 +548,19 @@ export interface ClassroomDetail extends Classroom {
   members: ClassroomMember[];
 }
 
+/** Результат массового добавления учеников (S46-005) */
+export interface BulkMembersAddResult {
+  added: string[];
+  skipped: string[];
+  unknown: string[];
+}
+
+/** Результат массового снятия учеников (S46-005) */
+export interface BulkMembersRemoveResult {
+  removed: string[];
+  skipped: string[];
+}
+
 export interface Assignment {
   id: string;
   task_id: string;

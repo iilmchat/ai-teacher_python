@@ -26,6 +26,10 @@ from app.schemas.classroom import (
     AssignmentUpdate,
     BulkAssignmentRequest,
     BulkAssignmentResult,
+    BulkMembersAddRequest,
+    BulkMembersAddResult,
+    BulkMembersRemoveRequest,
+    BulkMembersRemoveResult,
     ClassProgress,
     ClassroomCreate,
     ClassroomDetail,
@@ -170,6 +174,66 @@ async def join_classroom_by_id(
     if joined.id != classroom_id:
         raise ValidationError("Код принадлежит другому классу")
     return _classroom_response(joined, await service.members_count(joined.id))
+
+
+@router.post(
+    "/classrooms/{classroom_id}/members/bulk",
+    response_model=BulkMembersAddResult,
+)
+async def add_members_bulk(
+    classroom_id: UUID,
+    payload: BulkMembersAddRequest,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> BulkMembersAddResult:
+    """Добавить учеников списком логинов (S46-005), только владелец."""
+    added, skipped, unknown = await ClassroomService(db).add_members_bulk(
+        classroom_id, current_user, payload.usernames
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="classroom.members_bulk_added",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={
+            "added": len(added),
+            "skipped": len(skipped),
+            "unknown": len(unknown),
+        },
+        request=request,
+    )
+    return BulkMembersAddResult(
+        added=added, skipped=skipped, unknown=unknown
+    )
+
+
+@router.delete(
+    "/classrooms/{classroom_id}/members/bulk",
+    response_model=BulkMembersRemoveResult,
+)
+async def remove_members_bulk(
+    classroom_id: UUID,
+    payload: BulkMembersRemoveRequest,
+    current_user: TeacherUser,
+    db: DbSession,
+    request: Request,
+) -> BulkMembersRemoveResult:
+    """Снять выбранных учеников (S46-005), только владелец."""
+    removed, skipped = await ClassroomService(db).remove_members_bulk(
+        classroom_id, current_user, payload.user_ids
+    )
+    await record_audit(
+        db,
+        actor=current_user,
+        action="classroom.members_bulk_removed",
+        entity_type="classroom",
+        entity_id=classroom_id,
+        payload={"removed": len(removed), "skipped": len(skipped)},
+        request=request,
+    )
+    return BulkMembersRemoveResult(removed=removed, skipped=skipped)
 
 
 @router.delete(

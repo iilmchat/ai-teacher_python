@@ -38,6 +38,29 @@ class ClassroomMemberItem(BaseModel):
     joined_at: datetime
 
 
+class BulkMembersAddRequest(BaseModel):
+    """Добавление учеников списком логинов (S46-005)"""
+
+    usernames: list[str] = Field(..., min_length=1, max_length=100)
+
+
+class BulkMembersAddResult(BaseModel):
+    added: list[str] = Field(default_factory=list)
+    skipped: list[str] = Field(default_factory=list)
+    unknown: list[str] = Field(default_factory=list)
+
+
+class BulkMembersRemoveRequest(BaseModel):
+    """Массовое снятие учеников (S46-005)"""
+
+    user_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+
+
+class BulkMembersRemoveResult(BaseModel):
+    removed: list[UUID] = Field(default_factory=list)
+    skipped: list[UUID] = Field(default_factory=list)
+
+
 class ClassroomDetail(ClassroomResponse):
     """Класс с участниками"""
 
