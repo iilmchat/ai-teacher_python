@@ -49,7 +49,7 @@ pyjwt==2.15.1
 # GHSA-hp3v-5vw7-fx9w (string.Formatter field resolution, fix 8.4).
 # Побочный эффект 8.x: str.format/format_map/string.Formatter запрещены
 # (см. app/core/executor.py — RestrictedFeatureError с подсказкой).
-restrictedpython==8.5
+restrictedpython==9.0
 
 # LLM
 openai==3.42.1
