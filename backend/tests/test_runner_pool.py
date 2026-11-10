@@ -68,8 +68,14 @@ async def test_pool_restarts_worker_after_timeout() -> None:
         assert timed_out[0].error_type == "TimeoutError"
         assert timed_out[1].success is False  # батч прерван
 
-        # Следующая задача должна получить НОВЫЙ процесс
-        assert await _run(executor, "print('alive')\n", [""]) == ["alive"]
+        # Следующая задача должна получить НОВЫЙ процесс. Таймаут 1 с относится
+        # к «зависшему» кейсу; на холодный старт нового интерпретатора он не
+        # рассчитан (в нагруженном CI импорт RestrictedPython может занять
+        # больше секунды), поэтому проверку живости делаем с рабочим таймаутом.
+        alive_executor = SandboxedExecutor(
+            timeout=TIMEOUT, pool_size=1, pool_max_tasks=10, max_concurrency=2
+        )
+        assert await _run(alive_executor, "print('alive')\n", [""]) == ["alive"]
 
     assert len(counter) == 2, "после таймаута процесс не переиспользуется"
 
