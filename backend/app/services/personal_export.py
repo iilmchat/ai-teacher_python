@@ -2,7 +2,7 @@
 
 Персональные данные (PRIVACY.md, право на переносимость): профиль, прогресс
 по задачам и попытки, комментарии учителей к попыткам, сессии чата с
-сообщениями, уведомления, достижения.
+сообщениями, собственные оценки ответов ассистента, уведомления, достижения.
 
 Правила:
 
@@ -24,7 +24,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.chat import ChatMessage, ChatSession
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback
 from app.models.engagement import Notification, UserAchievement
 from app.models.task import (
     AttemptFeedback,
@@ -131,6 +131,16 @@ def _serialize_feedback(
     }
 
 
+def _serialize_message_feedback(row: MessageFeedback) -> dict[str, Any]:
+    """Собственная оценка ответа ассистента (S43-003)"""
+    return {
+        "message_id": str(row.message_id),
+        "value": row.value,
+        "comment": row.comment,
+        "created_at": _iso(row.created_at),
+    }
+
+
 def _serialize_profile(user: User) -> dict[str, Any]:
     """Профиль: то, что пользователь видит на странице настроек"""
     return {
@@ -228,6 +238,17 @@ async def collect_user_data(db: AsyncSession, user: User) -> dict[str, Any]:
         .scalars()
         .all()
     )
+    message_feedback = (
+        (
+            await db.execute(
+                select(MessageFeedback)
+                .where(MessageFeedback.user_id == user_id)
+                .order_by(MessageFeedback.created_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     attempt_ids = [attempt.id for attempt in attempts]
     feedback_rows: list[tuple[AttemptFeedback, str]] = []
     if attempt_ids:
@@ -251,6 +272,9 @@ async def collect_user_data(db: AsyncSession, user: User) -> dict[str, Any]:
             for feedback, teacher_name in feedback_rows
         ],
         "chat_sessions": session_items,
+        "message_feedback": [
+            _serialize_message_feedback(row) for row in message_feedback
+        ],
         "notifications": [_serialize_notification(row) for row in notifications],
         "achievements": [_serialize_achievement(row) for row in achievements],
     }

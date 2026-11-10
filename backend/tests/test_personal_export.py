@@ -11,7 +11,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.chat import ChatMessage, ChatSession, MessageRole
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback, MessageRole
 from app.models.engagement import Notification
 from app.models.task import (
     AttemptFeedback,
@@ -121,6 +121,7 @@ async def test_export_contains_profile_and_sections(client: AsyncClient) -> None
         "task_attempts",
         "teacher_feedback",
         "chat_sessions",
+        "message_feedback",
         "notifications",
         "achievements",
     ):
@@ -271,6 +272,54 @@ async def test_export_password_hash_not_included(client: AsyncClient) -> None:
 
     assert "hashed_password" not in text
     assert "$2b$" not in text  # префикс bcrypt
+
+
+async def test_export_includes_own_message_feedback(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Собственные оценки ответов ассистента выгружаются, чужие — нет"""
+    tokens = await _register_and_login(client, "feedbackexport")
+    user = await _get_user(db_session, "feedbackexport")
+    session = await _create_chat_session(db_session, user, "почему не работает?")
+    message = (
+        (
+            await db_session.execute(
+                select(ChatMessage).where(ChatMessage.session_id == session.id)
+            )
+        )
+        .scalars()
+        .one()
+    )
+    await _register_and_login(client, "feedbackother")
+    other_user = await _get_user(db_session, "feedbackother")
+
+    db_session.add(
+        MessageFeedback(
+            message_id=message.id,
+            user_id=user.id,
+            value=-1,
+            comment="не помогло",
+        )
+    )
+    db_session.add(
+        MessageFeedback(
+            message_id=message.id,
+            user_id=other_user.id,
+            value=1,
+            comment="чужой комментарий",
+        )
+    )
+    await db_session.commit()
+
+    response = await client.get(EXPORT_URL, headers=_auth_header(tokens["access_token"]))
+    data = json.loads(response.content)
+
+    assert len(data["message_feedback"]) == 1
+    item = data["message_feedback"][0]
+    assert item["message_id"] == str(message.id)
+    assert item["value"] == -1
+    assert item["comment"] == "не помогло"
+    assert item["created_at"]
 
 
 async def test_export_audited(client: AsyncClient, db_session: AsyncSession) -> None:
