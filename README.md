@@ -102,7 +102,7 @@ pnpm dev
 | Покрытие | backend порог 70%, frontend 70/60/70% |
 | Ruff / MyPy strict | 0 / 0 (101 файл) |
 | TypeScript | strict, 0 ошибок |
-| Размер фронтенда | entry **70.57 kB** gzip (лимит 80) |
+| Размер фронтенда | entry **70.56 kB** gzip (лимит 80) |
 | Зависимости | frontend 0 high/critical (1 moderate); Python 0 блокирующих |
 
 ---

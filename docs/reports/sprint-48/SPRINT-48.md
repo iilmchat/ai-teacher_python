@@ -70,14 +70,14 @@
 |----------|---------|-----------|
 | Ruff | `ruff check app tests scripts` | **0** |
 | MyPy strict | `mypy app --config-file ../pyproject.toml` | **0**, 101 файл |
-| Backend pytest в образе | `pytest -q` в `ai-teacher-backend` (Python 3.12, копия в `/workspace`) | **708 passed, 22 skipped** |
+| Backend pytest в образе | `pytest -q` в `ai-teacher-backend:s48-final` (Python 3.12, копия в `/workspace`) | **708 passed, 22 skipped** (8:41) |
 | Backend pytest локально | `pytest -q` (Windows, venv Python 3.12, с Docker для контейнерных тестов) | **729 passed, 1 skipped** (10:38) |
 | Frontend typecheck | `pnpm typecheck` | **0** |
 | Frontend lint | `pnpm lint` | **0** |
 | Frontend unit | `pnpm test` | **274 passed**, 46 файлов |
-| Frontend build | `pnpm build` | **OK**, entry **70.57 kB** gzip |
+| Frontend build | `pnpm build` | **OK**, entry **70.56 kB** gzip |
 | i18n | `node scripts/check-i18n.mjs` | **747 ключей**, паритет ru/en |
-| E2E | `pnpm e2e` | **37 passed, 1 skipped** (2.7 мин) |
+| E2E | `pnpm e2e` | **37 passed, 1 skipped** (2.5 мин) |
 | Alembic (чистая БД) | `upgrade head → downgrade base → upgrade head` | **OK** |
 | `alembic check` | dev и чистая БД | **No new upgrade operations** |
 | Контракт OpenAPI | `pytest tests/test_contract_openapi.py` | **12 passed** |
@@ -88,6 +88,13 @@
 **Итог Build:** backend 0 ошибок, frontend 0 ошибок; **Tests:** 708/730
 backend в образе (22 skip: контейнерная изоляция без Docker-in-Docker и
 платформенный skip), 274/274 frontend, 37/38 e2e (1 skip — платформенный).
+
+**После merge `origin/main`** (20 коммитов Dependabot: RestrictedPython 9.0,
+TypeScript 6, eslint 10, react-i18next 17 и др.) гейты перепрогнаны на финальном
+HEAD: backend **729 passed, 1 skipped** (9:40), frontend **274 passed**,
+typecheck/lint **0/0**, build **70.56 kB** gzip, e2e **37 passed, 1 skipped**.
+Новых дефектов merge не выявил; e2e на Windows требует штатного обхода
+`ESBUILD_BINARY_PATH` (копия бинарника вне pnpm-стора, `scripts/ci/e2e.ps1`).
 
 ---
 

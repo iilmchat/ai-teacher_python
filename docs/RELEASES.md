@@ -2914,9 +2914,9 @@ GitHub Release через release-workflow
 | Backend `pytest` локально (с Docker) | **729 passed, 1 skipped** (10:38) |
 | Frontend `typecheck` / `lint` | **0 / 0** |
 | Frontend unit | **274 passed** (46 файлов) |
-| Frontend `build` | **OK** (entry 70.57 kB gzip) |
+| Frontend `build` | **OK** (entry 70.56 kB gzip) |
 | i18n | **747 ключей**, паритет ru/en |
-| E2E | **37 passed, 1 skipped** (2.7 мин) |
+| E2E | **37 passed, 1 skipped** (2.5 мин) |
 | Миграции | `014`–`022`: upgrade/downgrade/upgrade, `alembic check` — чисто |
 | Контракт OpenAPI | 12 тестов, только аддитивные изменения |
 | Аудит зависимостей | Python: 0 блокирующих (6844 advisory); frontend: 0 high/critical, 1 moderate |
@@ -3047,7 +3047,7 @@ localStorage; httpOnly-cookie/BFF — v0.6.0), `KI-031` (остаточные AP
 | Ruff / MyPy strict | **0 / 0** (101 файл) |
 | Frontend `typecheck` / `lint` | **0 / 0** |
 | Frontend unit (Vitest) | **274 passed** (46 файлов) |
-| Frontend `build` | **OK**, entry **70.57 kB** gzip (лимит 80) |
+| Frontend `build` | **OK**, entry **70.56 kB** gzip (лимит 80) |
 | i18n | **747 ключей**, паритет ru/en, кириллицы вне локалей нет |
 | E2E (Playwright) | **37 passed, 1 skipped** |
 | Миграции | `upgrade head → downgrade base → upgrade head`, `alembic check` — чисто |
