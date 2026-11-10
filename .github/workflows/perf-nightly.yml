@@ -36,7 +36,7 @@ jobs:
           pwsh -NoProfile -File ./scripts/ci/perf.ps1 -Rps 2 -Duration 60
       - name: Загрузить артефакт perf
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: perf-night
           path: docs/reports/sprint-23/load-test.json
