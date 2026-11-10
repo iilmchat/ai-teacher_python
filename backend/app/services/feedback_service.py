@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import String, case, func, literal, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.chat import (
@@ -19,11 +19,21 @@ from app.db.repositories.chat import (
     MessageFeedbackRepository,
 )
 from app.errors import AccessDeniedError, NotFoundError, ValidationError
-from app.models.chat import ChatMessage, MessageFeedback, MessageRole
+from app.models.chat import (
+    ChatMessage,
+    ChatSession,
+    MessageFeedback,
+    MessageRole,
+)
+from app.models.task import Task
 from app.models.user import User
+from app.services.quality_queries import level_column, negative_contexts_cte
 
 #: Сколько негативных оценок показывать в сводке
 NEGATIVE_SAMPLES_LIMIT = 20
+
+#: Сколько проблемных тем возвращать в сводке
+TOP_PROBLEM_TOPICS_LIMIT = 10
 
 
 def _provider_column() -> Any:
@@ -34,6 +44,9 @@ def _provider_column() -> Any:
 def _model_column() -> Any:
     """Колонка модели из метаданных ответа"""
     return ChatMessage.message_metadata["model"].astext
+
+
+
 
 
 class FeedbackService:
@@ -156,6 +169,89 @@ class FeedbackService:
             )
         ).all()
 
+        # S47-004: срез по уровню помощи. Уровень хранится в сессии, не в
+        # метаданных сообщения; пустая строка у старых сессий — `unknown`.
+        level = level_column()
+        level_rows = (
+            await self.db.execute(
+                select(
+                    level.label("level"),
+                    func.count().label("total"),
+                    func.count().filter(MessageFeedback.value > 0).label("positive"),
+                    func.count().filter(MessageFeedback.value < 0).label("negative"),
+                )
+                .select_from(MessageFeedback)
+                .join(ChatMessage, ChatMessage.id == MessageFeedback.message_id)
+                .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+                .group_by(level)
+                .order_by(func.count().desc(), level)
+            )
+        ).all()
+        by_level = [
+            _breakdown(
+                str(row.level),
+                {
+                    "total": int(row.total),
+                    "positive": int(row.positive),
+                    "negative": int(row.negative),
+                },
+            )
+            for row in level_rows
+        ]
+
+        # S47-004/D-003: негативные оценки по темам задач. Связка — только
+        # через `message_metadata.task_context.task_id`; без контекста (или
+        # если задача уже удалена) ответ попадает в группу «без задачи».
+        negative_contexts = negative_contexts_cte()
+        category_kind = case(
+            (Task.id.is_(None), literal("none")),
+            else_=literal("category"),
+        )
+        category_name = case(
+            (Task.id.is_(None), literal("без задачи")),
+            else_=Task.category,
+        )
+        category_query = (
+            select(
+                category_kind.label("kind"),
+                category_name.label("name"),
+                func.count().label("negative"),
+            )
+            .select_from(negative_contexts)
+            .outerjoin(
+                Task, Task.id.cast(String) == negative_contexts.c.task_id
+            )
+            .group_by(category_kind, category_name)
+        )
+        tag_values = (
+            func.jsonb_array_elements_text(Task.tags)
+            .table_valued("value")
+            .alias("tag")
+        )
+        tag_query = (
+            select(
+                literal("tag").label("kind"),
+                tag_values.c.value.label("name"),
+                func.count().label("negative"),
+            )
+            .select_from(negative_contexts)
+            .join(Task, Task.id.cast(String) == negative_contexts.c.task_id)
+            .join(tag_values, true())
+            .group_by(tag_values.c.value)
+        )
+        topics = category_query.union_all(tag_query).subquery("topics")
+        topic_rows = (
+            await self.db.execute(
+                select(topics.c.kind, topics.c.name, topics.c.negative)
+                .order_by(
+                    topics.c.negative.desc(),
+                    topics.c.kind,
+                    topics.c.name,
+                )
+                .limit(TOP_PROBLEM_TOPICS_LIMIT)
+            )
+        ).all()
+
         return {
             "total": total,
             "positive": positive,
@@ -166,6 +262,15 @@ class FeedbackService:
             ],
             "by_model": [
                 _breakdown(name, counters) for name, counters in by_model.items()
+            ],
+            "by_level": by_level,
+            "top_problem_topics": [
+                {
+                    "kind": str(row.kind),
+                    "name": str(row.name),
+                    "negative": int(row.negative),
+                }
+                for row in topic_rows
             ],
             "negative_samples": [
                 {

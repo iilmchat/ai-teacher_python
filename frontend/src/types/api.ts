@@ -121,7 +121,17 @@ export interface QualityNegativeItem {
   created_at: string;
 }
 
-/** Сводка качества ответов для администратора (S43-003) */
+/** Вид проблемной темы: категория/тег задачи или ответ без задачи (S47-004) */
+export type QualityTopicKind = 'category' | 'tag' | 'none';
+
+/** Негативная оценка в разрезе темы задачи (S47-004) */
+export interface QualityTopic {
+  kind: QualityTopicKind;
+  name: string;
+  negative: number;
+}
+
+/** Сводка качества ответов для администратора (S43-003/S47-004) */
 export interface AdminQualityResponse {
   total: number;
   positive: number;
@@ -129,6 +139,10 @@ export interface AdminQualityResponse {
   approval_rate: number;
   by_provider: QualityBreakdown[];
   by_model: QualityBreakdown[];
+  /** Срез по уровню помощи из сессии (S47-004) */
+  by_level: QualityBreakdown[];
+  /** Топ категорий/тегов задач по негативным оценкам (S47-004) */
+  top_problem_topics: QualityTopic[];
   negative_samples: QualityNegativeItem[];
   generated_at: string;
 }
@@ -379,6 +393,88 @@ export interface AdminTaskItem {
 export interface AdminTaskListResponse {
   total: number;
   items: AdminTaskItem[];
+}
+
+/** Запись журнала действий администратора (S47-001) */
+export interface AuditLogItem {
+  id: string;
+  actor_id: string | null;
+  actor_role: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  payload: Record<string, unknown>;
+  ip: string | null;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[];
+  total: number;
+}
+
+/** Источник задачи (S47-003) */
+export type TaskSource = 'manual' | 'generated' | 'imported';
+
+/** Источник, доступный в очереди модерации (S47-003) */
+export type ModerationSource = 'generated' | 'imported';
+
+/** Действие модератора (S47-003) */
+export type ModerationAction = 'publish' | 'unpublish' | 'return_to_revision';
+
+/** Метрики «застревания» задачи (S47-003) */
+export interface ModerationMetrics {
+  attempts: number;
+  passed_attempts: number;
+  success_rate: number;
+  avg_attempts: number;
+  students: number;
+  stuck_students: number;
+}
+
+/** Последняя попытка в карточке модерации (S47-003) */
+export interface ModerationAttemptItem {
+  id: string;
+  user_id: string;
+  username: string;
+  passed: boolean;
+  passed_count: number;
+  total_count: number;
+  created_at: string;
+}
+
+/** Задача в очереди модерации (S47-003) */
+export interface AdminTaskReviewItem {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: TaskDifficulty;
+  category: string;
+  source: TaskSource;
+  is_active: boolean;
+  moderation_comment: string | null;
+  test_cases_count: number;
+  hints_count: number;
+  created_at: string;
+  metrics: ModerationMetrics;
+  recent_attempts: ModerationAttemptItem[];
+}
+
+/** Очередь модерации (S47-003) */
+export interface AdminTaskReviewResponse {
+  total: number;
+  threshold: number;
+  items: AdminTaskReviewItem[];
+}
+
+/** Результат действия модератора (S47-003) */
+export interface TaskModerateResponse {
+  id: string;
+  title: string;
+  action: ModerationAction;
+  source: TaskSource;
+  is_active: boolean;
+  moderation_comment: string | null;
 }
 
 export interface AnalyticsLLMWindow {

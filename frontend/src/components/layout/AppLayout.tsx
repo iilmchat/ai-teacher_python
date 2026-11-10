@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/Button';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { useAuthStore } from '@/store/auth';
+import { useNotificationsStore } from '@/store/notifications';
 
 const NAV_ITEMS = [
   { to: '/', labelKey: 'nav.home' },
@@ -28,8 +29,16 @@ export function AppLayout() {
   const savePreferences = useAuthStore((state) => state.savePreferences);
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const unread = useNotificationsStore((state) => state.unread);
+  const refreshUnread = useNotificationsStore((state) => state.refreshUnread);
   const isStaff = user?.role === 'teacher' || user?.role === 'admin';
   const language = i18n.language === 'en' ? 'en' : 'ru';
+
+  useEffect(() => {
+    if (user) {
+      void refreshUnread();
+    }
+  }, [user, refreshUnread]);
 
   function handleLanguage(next: 'ru' | 'en') {
     // S45-004: язык меняется сразу; авторизованному — ещё и сохраняется
@@ -81,6 +90,21 @@ export function AppLayout() {
           >
             {t('nav.assignments')}
           </NavLink>
+          <NavLink
+            to="/notifications"
+            className={navClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t('nav.notifications')}
+            {unread > 0 && (
+              <span
+                className="ml-1 rounded-full bg-rose-600 px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                aria-label={t('notifications.unreadBadge', { count: unread })}
+              >
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </NavLink>
         </>
       )}
       {isStaff && (
@@ -93,13 +117,30 @@ export function AppLayout() {
         </NavLink>
       )}
       {user?.role === 'admin' && (
-        <NavLink
-          to="/admin"
-          className={navClass}
-          onClick={() => setMenuOpen(false)}
-        >
-          {t('admin.title')}
-        </NavLink>
+        <>
+          <NavLink
+            to="/admin"
+            end
+            className={navClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t('admin.title')}
+          </NavLink>
+          <NavLink
+            to="/admin/moderation"
+            className={navClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t('nav.moderation')}
+          </NavLink>
+          <NavLink
+            to="/admin/audit"
+            className={navClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            {t('nav.audit')}
+          </NavLink>
+        </>
       )}
     </>
   );

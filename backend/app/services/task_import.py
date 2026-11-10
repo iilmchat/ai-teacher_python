@@ -14,7 +14,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.task import Task
+from app.models.task import Task, TaskSource
 from app.models.user import User
 from app.schemas.task import (
     TaskCreate,
@@ -131,6 +131,7 @@ async def import_tasks(
                 description=payload.description,
                 difficulty=payload.difficulty,
                 category=payload.category,
+                source=TaskSource.IMPORTED.value,
                 tags=list(payload.tags),
                 test_cases=[case.model_dump() for case in payload.test_cases],
                 hints=list(payload.hints),

@@ -10,7 +10,9 @@ CSV или JSON, потоково (серверный курсор SQLAlchemy), 
 * `users` — id, username, email, role, level, created_at, last_active;
 * `tasks` — id, title, difficulty, category, is_active, created_at;
 * `attempts` — прогресс учеников по задачам (status, attempts, completed_at);
-* `activity` — сообщения чата и запуски кода (тип, время, краткая сводка).
+* `activity` — сообщения чата и запуски кода (тип, время, краткая сводка);
+* `negative_feedback` — негативные оценки ответов с уровнем и задачей
+  (S47-004/D-008).
 """
 
 from __future__ import annotations
@@ -21,13 +23,14 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import String, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.chat import ChatMessage, ChatSession
+from app.models.chat import ChatMessage, ChatSession, MessageFeedback
 from app.models.code import CodeExecution
 from app.models.task import Task, UserTaskProgress
 from app.models.user import User
+from app.services.quality_queries import level_column, negative_contexts_cte
 
 #: Допустимые наборы и заголовки CSV
 DATASETS: dict[str, list[str]] = {
@@ -42,6 +45,16 @@ DATASETS: dict[str, list[str]] = {
         "updated_at",
     ],
     "activity": ["kind", "id", "user_id", "created_at", "summary"],
+    # S47-004/D-008: негативные оценки ответов ассистента
+    "negative_feedback": [
+        "message_id",
+        "comment",
+        "provider",
+        "model",
+        "level",
+        "task_id",
+        "created_at",
+    ],
 }
 
 
@@ -92,6 +105,38 @@ def _build_query(dataset: str) -> Any:
             CodeExecution.code.label("summary"),
         )
         return messages.union_all(executions).order_by("created_at")
+    if dataset == "negative_feedback":
+        negative_contexts = negative_contexts_cte()
+        task_id = case(
+            (Task.id.is_(None), "без задачи"),
+            else_=Task.id.cast(String),
+        )
+        return (
+            select(
+                negative_contexts.c.message_id.label("message_id"),
+                MessageFeedback.comment.label("comment"),
+                func.coalesce(
+                    ChatMessage.message_metadata["provider"].astext, "unknown"
+                ).label("provider"),
+                func.coalesce(
+                    ChatMessage.message_metadata["model"].astext, "unknown"
+                ).label("model"),
+                level_column().label("level"),
+                task_id.label("task_id"),
+                MessageFeedback.created_at.label("created_at"),
+            )
+            .select_from(negative_contexts)
+            .join(
+                MessageFeedback,
+                MessageFeedback.message_id == negative_contexts.c.message_id,
+            )
+            .join(ChatMessage, ChatMessage.id == negative_contexts.c.message_id)
+            .join(ChatSession, ChatSession.id == ChatMessage.session_id)
+            .outerjoin(
+                Task, Task.id.cast(String) == negative_contexts.c.task_id
+            )
+            .order_by(MessageFeedback.created_at)
+        )
     raise ValueError(f"Неизвестный набор данных: {dataset}")
 
 
@@ -105,7 +150,8 @@ def _serialize(row: Any, columns: list[str]) -> dict[str, Any]:
             data[column] = value.isoformat()
         elif hasattr(value, "value"):  # enum
             data[column] = value.value
-        data[column] = value
+        else:
+            data[column] = value
     return data
 
 

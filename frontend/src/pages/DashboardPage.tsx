@@ -8,70 +8,44 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Spinner } from '@/components/ui/Spinner';
 import { api } from '@/lib/api';
+import { notificationText } from '@/lib/notifications';
+import { useNotificationsStore } from '@/store/notifications';
 import type {
   AchievementsResponse,
-  AppNotification,
-  NotificationsResponse,
   ProgressSummary,
   UserStats,
 } from '@/types/api';
-
-function notificationText(
-  item: AppNotification,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  const title = String(item.payload.title ?? '');
-  if (item.type === 'assignment') {
-    return t('dashboard.notifyAssignment', { title });
-  }
-  if (item.type === 'deadline') {
-    return t('dashboard.notifyDeadline', { title });
-  }
-  if (item.type === 'achievement') {
-    return t('dashboard.notifyAchievement', {
-      title: String(item.payload.title ?? ''),
-    });
-  }
-  if (item.type === 'attempt_feedback') {
-    return t('dashboard.notifyFeedback', {
-      title,
-      teacher: String(item.payload.teacher ?? ''),
-    });
-  }
-  if (item.type === 'announcement') {
-    return t('dashboard.notifyAnnouncement', {
-      title: String(item.payload.classroom_name ?? ''),
-    });
-  }
-  return title;
-}
 
 export function DashboardPage() {
   const { t } = useTranslation();
   const [stats, setStats] = useState<UserStats | null>(null);
   const [achievements, setAchievements] = useState<AchievementsResponse['items']>([]);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [unread, setUnread] = useState(0);
   const [progress, setProgress] = useState<ProgressSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Уведомления живут в общем сторе: бейдж в шапке видит те же unread/items.
+  const notifications = useNotificationsStore((state) => state.items);
+  const unread = useNotificationsStore((state) => state.unread);
+  const loadNotifications = useNotificationsStore((state) => state.load);
+  const markNotificationRead = useNotificationsStore((state) => state.markRead);
+
+  useEffect(() => {
+    void loadNotifications();
+  }, [loadNotifications]);
 
   useEffect(() => {
     let active = true;
     Promise.all([
       api.get<UserStats>('/me/stats'),
       api.get<AchievementsResponse>('/me/achievements'),
-      api.get<NotificationsResponse>('/me/notifications'),
       api.get<ProgressSummary>('/tasks/progress'),
     ])
-      .then(([statsData, achievementsData, notificationsData, progressData]) => {
+      .then(([statsData, achievementsData, progressData]) => {
         if (!active) {
           return;
         }
         setStats(statsData);
         setAchievements(achievementsData.items);
-        setNotifications(notificationsData.items);
-        setUnread(notificationsData.unread);
         setProgress(progressData);
       })
       .catch(() => {
@@ -90,13 +64,7 @@ export function DashboardPage() {
   }, [t]);
 
   async function readNotification(id: string) {
-    await api.post<AppNotification>(`/me/notifications/${id}/read`);
-    setNotifications((items) =>
-      items.map((item) =>
-        item.id === id ? { ...item, read_at: new Date().toISOString() } : item,
-      ),
-    );
-    setUnread((value) => Math.max(0, value - 1));
+    await markNotificationRead(id);
   }
 
   if (loading) {

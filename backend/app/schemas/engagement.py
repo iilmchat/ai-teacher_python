@@ -48,3 +48,9 @@ class NotificationItem(BaseModel):
 class NotificationsResponse(BaseModel):
     items: list[NotificationItem] = Field(default_factory=list)
     unread: int = 0
+
+
+class NotificationsReadAllResponse(BaseModel):
+    """Результат массового прочтения уведомлений (S47-005)"""
+
+    updated: int

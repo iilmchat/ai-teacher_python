@@ -50,11 +50,18 @@
         "type": "object"
       },
       "AdminQualityResponse": {
-        "description": "Сводка качества ответов ассистента по оценкам учеников (S43-003)",
+        "description": "Сводка качества ответов ассистента по оценкам учеников (S43-003/S47-004)",
         "properties": {
           "approval_rate": {
             "title": "Approval Rate",
             "type": "number"
+          },
+          "by_level": {
+            "items": {
+              "$ref": "#/components/schemas/QualityBreakdown"
+            },
+            "title": "By Level",
+            "type": "array"
           },
           "by_model": {
             "items": {
@@ -88,6 +95,13 @@
           "positive": {
             "title": "Positive",
             "type": "integer"
+          },
+          "top_problem_topics": {
+            "items": {
+              "$ref": "#/components/schemas/QualityTopic"
+            },
+            "title": "Top Problem Topics",
+            "type": "array"
           },
           "total": {
             "title": "Total",
@@ -187,6 +201,114 @@
           "items"
         ],
         "title": "AdminTaskListResponse",
+        "type": "object"
+      },
+      "AdminTaskReviewItem": {
+        "description": "Задача в очереди модерации с метриками (S47-003)",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/TaskDifficulty"
+          },
+          "hints_count": {
+            "title": "Hints Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/ModerationMetrics"
+          },
+          "moderation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderation Comment"
+          },
+          "recent_attempts": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationAttemptItem"
+            },
+            "title": "Recent Attempts",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "test_cases_count": {
+            "title": "Test Cases Count",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "description",
+          "difficulty",
+          "category",
+          "source",
+          "is_active",
+          "test_cases_count",
+          "hints_count",
+          "created_at",
+          "metrics"
+        ],
+        "title": "AdminTaskReviewItem",
+        "type": "object"
+      },
+      "AdminTaskReviewResponse": {
+        "description": "Очередь модерации: только generated/imported (S47-003)",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminTaskReviewItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "threshold"
+        ],
+        "title": "AdminTaskReviewResponse",
         "type": "object"
       },
       "AdminUserItem": {
@@ -615,6 +737,262 @@
         "title": "AnalyzeResponse",
         "type": "object"
       },
+      "AnnouncementCreate": {
+        "description": "Публикация объявления класса (S46-006)",
+        "properties": {
+          "body": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "AnnouncementCreate",
+        "type": "object"
+      },
+      "AnnouncementItem": {
+        "description": "Объявление класса",
+        "properties": {
+          "author_id": {
+            "format": "uuid",
+            "title": "Author Id",
+            "type": "string"
+          },
+          "author_name": {
+            "title": "Author Name",
+            "type": "string"
+          },
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "can_delete": {
+            "default": false,
+            "title": "Can Delete",
+            "type": "boolean"
+          },
+          "classroom_id": {
+            "format": "uuid",
+            "title": "Classroom Id",
+            "type": "string"
+          },
+          "classroom_name": {
+            "default": "",
+            "title": "Classroom Name",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "classroom_id",
+          "author_id",
+          "author_name",
+          "title",
+          "body",
+          "created_at"
+        ],
+        "title": "AnnouncementItem",
+        "type": "object"
+      },
+      "AnnouncementList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AnnouncementItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AnnouncementList",
+        "type": "object"
+      },
+      "AssignmentAnalytics": {
+        "description": "Аналитика одного назначения: кто как справился (S46-003)",
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "attempts_distribution": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentAttemptBucket"
+            },
+            "title": "Attempts Distribution",
+            "type": "array"
+          },
+          "attempts_total": {
+            "title": "Attempts Total",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "in_progress": {
+            "title": "In Progress",
+            "type": "integer"
+          },
+          "not_started": {
+            "title": "Not Started",
+            "type": "integer"
+          },
+          "overdue": {
+            "title": "Overdue",
+            "type": "integer"
+          },
+          "problem_students": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentAnalyticsStudent"
+            },
+            "title": "Problem Students",
+            "type": "array"
+          },
+          "problem_threshold": {
+            "title": "Problem Threshold",
+            "type": "integer"
+          },
+          "students": {
+            "items": {
+              "$ref": "#/components/schemas/AssignmentAnalyticsStudent"
+            },
+            "title": "Students",
+            "type": "array"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_title": {
+            "title": "Task Title",
+            "type": "string"
+          },
+          "total_students": {
+            "title": "Total Students",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "task_id",
+          "task_title",
+          "total_students",
+          "completed",
+          "in_progress",
+          "not_started",
+          "overdue",
+          "attempts_total",
+          "problem_threshold"
+        ],
+        "title": "AssignmentAnalytics",
+        "type": "object"
+      },
+      "AssignmentAnalyticsStudent": {
+        "description": "Ученик в drill-down по назначению (S46-003)",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "overdue": {
+            "default": false,
+            "title": "Overdue",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TaskStatus"
+          },
+          "student_id": {
+            "format": "uuid",
+            "title": "Student Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "student_id",
+          "username",
+          "status",
+          "attempts"
+        ],
+        "title": "AssignmentAnalyticsStudent",
+        "type": "object"
+      },
+      "AssignmentAttemptBucket": {
+        "description": "Сколько учеников сделали столько-то попыток",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "students": {
+            "title": "Students",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "attempts",
+          "students"
+        ],
+        "title": "AssignmentAttemptBucket",
+        "type": "object"
+      },
       "AssignmentCreate": {
         "description": "Назначение задачи классу",
         "properties": {
@@ -717,6 +1095,25 @@
         "title": "AssignmentList",
         "type": "object"
       },
+      "AssignmentUpdate": {
+        "description": "Перенос срока назначения (S46-004)",
+        "properties": {
+          "due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "title": "AssignmentUpdate",
+        "type": "object"
+      },
       "AttemptDetail": {
         "description": "Попытка с кодом и разбором по кейсам",
         "properties": {
@@ -728,6 +1125,13 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptFeedbackItem"
+            },
+            "title": "Feedback",
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -772,6 +1176,53 @@
         "title": "AttemptDetail",
         "type": "object"
       },
+      "AttemptFeedbackCreate": {
+        "description": "Комментарий учителя к попытке (S46-002)",
+        "properties": {
+          "comment": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Comment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "comment"
+        ],
+        "title": "AttemptFeedbackCreate",
+        "type": "object"
+      },
+      "AttemptFeedbackItem": {
+        "description": "Комментарий учителя к попытке (S46-002)",
+        "properties": {
+          "comment": {
+            "title": "Comment",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "teacher_name": {
+            "title": "Teacher Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "comment",
+          "teacher_name",
+          "created_at"
+        ],
+        "title": "AttemptFeedbackItem",
+        "type": "object"
+      },
       "AttemptItem": {
         "description": "Попытка ученика по задаче (S42-002)",
         "properties": {
@@ -779,6 +1230,13 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptFeedbackItem"
+            },
+            "title": "Feedback",
+            "type": "array"
           },
           "id": {
             "format": "uuid",
@@ -1064,6 +1522,94 @@
           }
         },
         "title": "BulkAssignmentResult",
+        "type": "object"
+      },
+      "BulkMembersAddRequest": {
+        "description": "Добавление учеников списком логинов (S46-005)",
+        "properties": {
+          "usernames": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Usernames",
+            "type": "array"
+          }
+        },
+        "required": [
+          "usernames"
+        ],
+        "title": "BulkMembersAddRequest",
+        "type": "object"
+      },
+      "BulkMembersAddResult": {
+        "properties": {
+          "added": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "unknown": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unknown",
+            "type": "array"
+          }
+        },
+        "title": "BulkMembersAddResult",
+        "type": "object"
+      },
+      "BulkMembersRemoveRequest": {
+        "description": "Массовое снятие учеников (S46-005)",
+        "properties": {
+          "user_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "User Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "user_ids"
+        ],
+        "title": "BulkMembersRemoveRequest",
+        "type": "object"
+      },
+      "BulkMembersRemoveResult": {
+        "properties": {
+          "removed": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "title": "BulkMembersRemoveResult",
         "type": "object"
       },
       "CategoriesResponse": {
@@ -2184,6 +2730,90 @@
         "title": "MessageRole",
         "type": "string"
       },
+      "ModerationAttemptItem": {
+        "description": "Последняя попытка по задаче в карточке модератора (S47-003)",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "passed_count": {
+            "title": "Passed Count",
+            "type": "integer"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "user_id": {
+            "format": "uuid",
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "username",
+          "passed",
+          "passed_count",
+          "total_count",
+          "created_at"
+        ],
+        "title": "ModerationAttemptItem",
+        "type": "object"
+      },
+      "ModerationMetrics": {
+        "description": "Метрики «застревания» задачи в очереди модерации (S47-003)",
+        "properties": {
+          "attempts": {
+            "default": 0,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "avg_attempts": {
+            "default": 0.0,
+            "title": "Avg Attempts",
+            "type": "number"
+          },
+          "passed_attempts": {
+            "default": 0,
+            "title": "Passed Attempts",
+            "type": "integer"
+          },
+          "stuck_students": {
+            "default": 0,
+            "title": "Stuck Students",
+            "type": "integer"
+          },
+          "students": {
+            "default": 0,
+            "title": "Students",
+            "type": "integer"
+          },
+          "success_rate": {
+            "default": 0.0,
+            "title": "Success Rate",
+            "type": "number"
+          }
+        },
+        "title": "ModerationMetrics",
+        "type": "object"
+      },
       "MyAssignment": {
         "description": "Задание ученика",
         "properties": {
@@ -2308,6 +2938,20 @@
         "title": "NotificationItem",
         "type": "object"
       },
+      "NotificationsReadAllResponse": {
+        "description": "Результат массового прочтения уведомлений (S47-005)",
+        "properties": {
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated"
+        ],
+        "title": "NotificationsReadAllResponse",
+        "type": "object"
+      },
       "NotificationsResponse": {
         "properties": {
           "items": {
@@ -2324,6 +2968,29 @@
           }
         },
         "title": "NotificationsResponse",
+        "type": "object"
+      },
+      "PasswordChangeRequest": {
+        "description": "Смена пароля текущего пользователя (S45-001)",
+        "properties": {
+          "current_password": {
+            "maxLength": 72,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 72,
+            "minLength": 8,
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeRequest",
         "type": "object"
       },
       "ProblemTask": {
@@ -2600,6 +3267,35 @@
           "created_at"
         ],
         "title": "QualityNegativeItem",
+        "type": "object"
+      },
+      "QualityTopic": {
+        "description": "Негативная оценка в разрезе категории/тега задачи (S47-004).\n\n`kind=\"none\"` — ответ пришёл без контекста задачи (D-003); `name` в этом\nслучае — «без задачи».",
+        "properties": {
+          "kind": {
+            "enum": [
+              "category",
+              "tag",
+              "none"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "negative": {
+            "title": "Negative",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "negative"
+        ],
+        "title": "QualityTopic",
         "type": "object"
       },
       "RecommendedTask": {
@@ -3302,6 +3998,88 @@
         "title": "TaskListItem",
         "type": "object"
       },
+      "TaskModerateRequest": {
+        "description": "Действие модератора над задачей (S47-003)",
+        "properties": {
+          "action": {
+            "enum": [
+              "publish",
+              "unpublish",
+              "return_to_revision"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "comment": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "TaskModerateRequest",
+        "type": "object"
+      },
+      "TaskModerateResponse": {
+        "description": "Результат действия модератора (S47-003)",
+        "properties": {
+          "action": {
+            "enum": [
+              "publish",
+              "unpublish",
+              "return_to_revision"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "moderation_comment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderation Comment"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "action",
+          "source",
+          "is_active"
+        ],
+        "title": "TaskModerateResponse",
+        "type": "object"
+      },
       "TaskStatsResponse": {
         "description": "Статистика по задачам для дашборда",
         "properties": {
@@ -3538,12 +4316,163 @@
         "title": "TaskVersionList",
         "type": "object"
       },
+      "TeacherAttemptDetail": {
+        "description": "Попытка с кодом и разбором по тест-кейсам (S46-001)",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "feedback": {
+            "items": {
+              "$ref": "#/components/schemas/AttemptFeedbackItem"
+            },
+            "title": "Feedback",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "passed_count": {
+            "title": "Passed Count",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/TestCaseResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "student_id": {
+            "format": "uuid",
+            "title": "Student Id",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_title": {
+            "title": "Task Title",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "task_title",
+          "passed",
+          "passed_count",
+          "total_count",
+          "created_at",
+          "student_id",
+          "code"
+        ],
+        "title": "TeacherAttemptDetail",
+        "type": "object"
+      },
+      "TeacherAttemptItem": {
+        "description": "Попытка ученика в списке работ (S46-001)",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "passed_count": {
+            "title": "Passed Count",
+            "type": "integer"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_title": {
+            "title": "Task Title",
+            "type": "string"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "task_id",
+          "task_title",
+          "passed",
+          "passed_count",
+          "total_count",
+          "created_at"
+        ],
+        "title": "TeacherAttemptItem",
+        "type": "object"
+      },
+      "TeacherAttemptList": {
+        "description": "Работы ученика постранично",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TeacherAttemptItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total"
+        ],
+        "title": "TeacherAttemptList",
+        "type": "object"
+      },
       "TeacherProgressItem": {
         "description": "Прогресс ученика по одной задаче",
         "properties": {
           "attempts": {
             "title": "Attempts",
             "type": "integer"
+          },
+          "best_solution": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Solution"
           },
           "completed_at": {
             "anyOf": [
@@ -4097,6 +5026,56 @@
       "UserSettingsUpdate": {
         "description": "Обновление личных настроек пользователя (S43-004, S44-003).\n\nСписок настроек закрытый: в `users.settings` попадают только известные\nключи, чтобы клиент не мог записать в профиль произвольные данные.\n`prompt_template` — id выбранного шаблона промпта; `null` — сброс.\n`snippets` — полный список сниппетов кода; `null` — очистить.",
         "properties": {
+          "deadline_days": {
+            "anyOf": [
+              {
+                "maximum": 14.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Days"
+          },
+          "deadline_notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline Notifications"
+          },
+          "email_notifications": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Notifications"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ru",
+                  "en"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
           "prompt_template": {
             "anyOf": [
               {
@@ -4497,6 +5476,57 @@
         ]
       }
     },
+    "/api/v1/admin/quality/export": {
+      "get": {
+        "description": "Выгрузка негативных оценок ассистента (S47-004/D-008).\n\nПотоково, через серверный курсор; лимит — `EXPORT_MAX_ROWS`. Выгружаются\nтолько оценки `value < 0`, с уровнем помощи из сессии и задачей из\n`message_metadata.task_context` (или «без задачи»).",
+        "operationId": "export_quality_api_v1_admin_quality_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "enum": [
+                "csv",
+                "json"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export Quality",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
     "/api/v1/admin/tasks": {
       "get": {
         "description": "Все задачи, включая деактивированные",
@@ -4551,6 +5581,175 @@
           }
         ],
         "summary": "List Tasks",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tasks/review": {
+      "get": {
+        "description": "Очередь модерации: только LLM-генерация и импорт (S47-003).\n\nМетрики «застревания»: попытки, доля успешных, среднее число попыток,\nчисло учеников и число застрявших (attempts > threshold без завершения).\nСортировка — сначала самые проблемные.",
+        "operationId": "review_tasks_api_v1_admin_tasks_review_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "generated",
+                    "imported"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "difficulty",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TaskDifficulty"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Difficulty"
+            }
+          },
+          {
+            "in": "query",
+            "name": "threshold",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Threshold",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminTaskReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review Tasks",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/tasks/{task_id}/moderate": {
+      "post": {
+        "description": "Действие модератора: publish / unpublish / return_to_revision (S47-003).\n\nРучные задачи в очередь не попадают, но снять с публикации можно любую.\nАудит `task.moderated` не содержит текст комментария — только длину.",
+        "operationId": "moderate_task_api_v1_admin_tasks__task_id__moderate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskModerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskModerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Moderate Task",
         "tags": [
           "Admin"
         ]
@@ -5913,6 +7112,176 @@
         ]
       }
     },
+    "/api/v1/classrooms/{classroom_id}/announcements": {
+      "get": {
+        "description": "Объявления класса, новые сверху (видят все участники).",
+        "operationId": "list_announcements_api_v1_classrooms__classroom_id__announcements_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Announcements",
+        "tags": [
+          "Classrooms"
+        ]
+      },
+      "post": {
+        "description": "Опубликовать объявление (S46-006), только владелец класса.\n\nПубликация порождает in-app уведомление всем ученикам класса.",
+        "operationId": "create_announcement_api_v1_classrooms__classroom_id__announcements_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnouncementCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Announcement",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/announcements/{announcement_id}": {
+      "delete": {
+        "description": "Удалить объявление: автор или владелец класса (S46-006).",
+        "operationId": "delete_announcement_api_v1_classrooms__classroom_id__announcements__announcement_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "announcement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Announcement Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Announcement",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
     "/api/v1/classrooms/{classroom_id}/assignments": {
       "get": {
         "description": "Назначения класса со счётчиками выполнения",
@@ -6137,6 +7506,196 @@
         ]
       }
     },
+    "/api/v1/classrooms/{classroom_id}/assignments/{assignment_id}": {
+      "delete": {
+        "description": "Снять назначение (S46-004): прогресс сохраняется, уведомления — нет.",
+        "operationId": "delete_assignment_api_v1_classrooms__classroom_id__assignments__assignment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Assignment",
+        "tags": [
+          "Classrooms"
+        ]
+      },
+      "patch": {
+        "description": "Перенести срок назначения (S46-004), только владелец.",
+        "operationId": "update_assignment_api_v1_classrooms__classroom_id__assignments__assignment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignmentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Assignment",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/assignments/{assignment_id}/analytics": {
+      "get": {
+        "description": "Drill-down по назначению: кто как справился (S46-003).",
+        "operationId": "assignment_analytics_api_v1_classrooms__classroom_id__assignments__assignment_id__analytics_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assignment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assignment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "problem_threshold",
+            "required": false,
+            "schema": {
+              "default": 3,
+              "maximum": 100,
+              "minimum": 0,
+              "title": "Problem Threshold",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignmentAnalytics"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Assignment Analytics",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
     "/api/v1/classrooms/{classroom_id}/gradebook": {
       "get": {
         "description": "Журнал оценок класса (S28-003): матрица + completed_at + overdue",
@@ -6287,6 +7846,122 @@
           }
         ],
         "summary": "Join Classroom By Id",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/members/bulk": {
+      "delete": {
+        "description": "Снять выбранных учеников (S46-005), только владелец.",
+        "operationId": "remove_members_bulk_api_v1_classrooms__classroom_id__members_bulk_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkMembersRemoveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMembersRemoveResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove Members Bulk",
+        "tags": [
+          "Classrooms"
+        ]
+      },
+      "post": {
+        "description": "Добавить учеников списком логинов (S46-005), только владелец.",
+        "operationId": "add_members_bulk_api_v1_classrooms__classroom_id__members_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "classroom_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Classroom Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkMembersAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkMembersAddResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Members Bulk",
         "tags": [
           "Classrooms"
         ]
@@ -6763,6 +8438,57 @@
         ]
       }
     },
+    "/api/v1/me/announcements": {
+      "get": {
+        "description": "Лента объявлений всех классов пользователя (S46-006).",
+        "operationId": "my_announcements_api_v1_me_announcements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnnouncementList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My Announcements",
+        "tags": [
+          "Classrooms"
+        ]
+      }
+    },
     "/api/v1/me/assignments": {
       "get": {
         "description": "«Мои задания» по всем классам",
@@ -6792,7 +8518,7 @@
     },
     "/api/v1/me/notifications": {
       "get": {
-        "description": "Уведомления; перед выдачей добавляет напоминания о дедлайнах\n\nПагинация — additive (S19-004): дефолты сохраняют прежнее поведение.",
+        "description": "Уведомления; перед выдачей добавляет напоминания о дедлайнах.\n\nПагинация — additive (S19-004); фильтр `type` — additive (S47-005).\n`unread` всегда считается по всем уведомлениям, а не по фильтру: это\nсчётчик для бейджа.",
         "operationId": "notifications_api_v1_me_notifications_get",
         "parameters": [
           {
@@ -6803,6 +8529,23 @@
               "default": false,
               "title": "Unread Only",
               "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 30,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Type"
             }
           },
           {
@@ -6857,6 +8600,33 @@
           }
         ],
         "summary": "Notifications",
+        "tags": [
+          "Engagement"
+        ]
+      }
+    },
+    "/api/v1/me/notifications/read-all": {
+      "post": {
+        "description": "Отметить все уведомления прочитанными (S47-005).",
+        "operationId": "read_all_notifications_api_v1_me_notifications_read_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsReadAllResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Read All Notifications",
         "tags": [
           "Engagement"
         ]
@@ -8279,6 +10049,65 @@
         ]
       }
     },
+    "/api/v1/teacher/attempts/{attempt_id}/feedback": {
+      "post": {
+        "description": "Комментарий учителя к попытке ученика (S46-002).\n\nДоступ — тот же, что к работам ученика: владелец класса (или админ).\nПовторная отправка обновляет текст; ученику уходит уведомление.",
+        "operationId": "add_attempt_feedback_api_v1_teacher_attempts__attempt_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AttemptFeedbackCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptFeedbackItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add Attempt Feedback",
+        "tags": [
+          "Teacher"
+        ]
+      }
+    },
     "/api/v1/teacher/students": {
       "get": {
         "description": "Ученики с числом решённых задач и попыток",
@@ -8349,6 +10178,151 @@
           }
         ],
         "summary": "List Students",
+        "tags": [
+          "Teacher"
+        ]
+      }
+    },
+    "/api/v1/teacher/students/{student_id}/attempts": {
+      "get": {
+        "description": "Работы ученика (S46-001): только для владельца его класса.\n\nУченик состоит в классе учителя — 200; чужой ученик — 403; неизвестный —\n404. Фильтр `task_id` необязателен.",
+        "operationId": "list_student_attempts_api_v1_teacher_students__student_id__attempts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "student_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Student Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "task_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "skip",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "title": "Skip",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherAttemptList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Student Attempts",
+        "tags": [
+          "Teacher"
+        ]
+      }
+    },
+    "/api/v1/teacher/students/{student_id}/attempts/{attempt_id}": {
+      "get": {
+        "description": "Детальная работа ученика: код, разбор и комментарии (S46-001/002)",
+        "operationId": "get_student_attempt_api_v1_teacher_students__student_id__attempts__attempt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "student_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Student Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attempt_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attempt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherAttemptDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Student Attempt",
         "tags": [
           "Teacher"
         ]
@@ -8593,6 +10567,31 @@
         ]
       }
     },
+    "/api/v1/users/me/export": {
+      "get": {
+        "description": "Выгрузить все свои данные одним JSON-файлом (S45-003).\n\nПрофиль, прогресс по задачам и попытки, сессии чата с сообщениями\n(без служебных эмбеддингов), уведомления и достижения. Выгружаются\nтолько данные запрашивающего: чужого профиля/чужих чатов там нет.\nФайл отдаётся с `Content-Disposition: attachment`. Действие\nфиксируется в журнале аудита (`user.data_exported`).",
+        "operationId": "export_my_data_api_v1_users_me_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Export My Data",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/api/v1/users/me/level": {
       "get": {
         "description": "Текущий уровень и его описание",
@@ -8667,9 +10666,163 @@
         ]
       }
     },
+    "/api/v1/users/me/password": {
+      "post": {
+        "description": "Сменить пароль и отозвать чужие refresh-токены (S45-001).\n\nПроверка текущего пароля обязательна, чтобы токен с чужого устройства\nне менял пароль. Смена увеличивает `token_version`: refresh-токены,\nвыданные раньше, при обновлении получают 401. Текущая сессия не\nстрадает — новая пара возвращается в ответе (KI-028).",
+        "operationId": "change_password_api_v1_users_me_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Change Password Api V1 Users Me Password Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change Password",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/sessions": {
+      "get": {
+        "description": "Список активных сессий пользователя (S45-005)",
+        "operationId": "get_my_sessions_api_v1_users_me_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Get My Sessions Api V1 Users Me Sessions Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get My Sessions",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/sessions/revoke-others": {
+      "post": {
+        "description": "«Выйти на всех устройствах» (S45-005, KI-028).\n\nУвеличивает `token_version` (все refresh-токены, включая текущий,\nперестают работать), отзывает строки сессий и выдаёт текущему\nустройству новую пару — оно остаётся в системе.",
+        "operationId": "revoke_other_sessions_api_v1_users_me_sessions_revoke_others_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Revoke Other Sessions Api V1 Users Me Sessions Revoke Others Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke Other Sessions",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
+    "/api/v1/users/me/sessions/{session_id}": {
+      "delete": {
+        "description": "Отозвать сессию (refresh-токен) другого устройства (S45-005).\n\nТекущую сессию так не отозвать: для этого есть выход из аккаунта,\nиначе клиент остался бы без пары токенов. Чужая сессия — 404.",
+        "operationId": "revoke_my_session_api_v1_users_me_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke My Session",
+        "tags": [
+          "Users"
+        ]
+      }
+    },
     "/api/v1/users/me/settings": {
       "patch": {
-        "description": "Обновить личные настройки пользователя (S43-004).\n\nНастройки дополняются, а не заменяются: так клиент может менять одну\nнастройку, не присылая весь объект.",
+        "description": "Обновить личные настройки пользователя (S43-004, S44-003).\n\nНастройки дополняются, а не заменяются: так клиент может менять одну\nнастройку, не присылая весь объект.",
         "operationId": "update_my_settings_api_v1_users_me_settings_patch",
         "requestBody": {
           "content": {

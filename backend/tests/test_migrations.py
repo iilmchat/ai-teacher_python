@@ -161,6 +161,54 @@ def test_downgrade_and_upgrade_again(migrations_database) -> None:
     assert expected <= tables_after_second_upgrade
 
 
+def test_task_moderation_columns_upgrade_and_downgrade(
+    migrations_database,
+) -> None:
+    """022: source/модерация — additive; существующие задачи получают manual."""
+    config = _alembic_config()
+    command.upgrade(config, "021")
+
+    connection = _connect_test_db()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "INSERT INTO tasks (id, title, description) "
+                "VALUES (gen_random_uuid(), 'legacy', 'legacy task')"
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+    command.upgrade(config, "head")
+
+    connection = _connect_test_db()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT source, moderation_comment FROM tasks "
+                "WHERE title = 'legacy'"
+            )
+            source, comment = cursor.fetchone()
+    finally:
+        connection.close()
+
+    assert source == "manual"
+    assert comment is None
+
+    command.downgrade(config, "021")
+
+    connection = _connect_test_db()
+    try:
+        columns = _all_columns(connection)
+    finally:
+        connection.close()
+
+    assert "source" not in columns.get("tasks", set())
+    assert "moderation_comment" not in columns.get("tasks", set())
+
+    command.upgrade(config, "head")
+
+
 def test_head_is_single(migrations_database) -> None:
     """В цепочке ровно одна голова (нет ветвления миграций)"""
     from alembic.script import ScriptDirectory

@@ -10,10 +10,12 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.executor import ExecutionResult, SandboxedExecutor
 from app.main import app
+from app.models.task import Task
 from app.services.llm.base import LLMMessage, LLMProvider, LLMUsage
 from tests.task_helpers import (
     TASKS_URL,
@@ -124,6 +126,12 @@ async def test_generate_creates_validated_task(
     assert data["prompt_tokens"] == 100
     assert data["completion_tokens"] == 50
     assert fake_llm.closed is True
+    task = (
+        await db_session.execute(
+            select(Task).where(Task.title == "Сумма двух чисел")
+        )
+    ).scalar_one()
+    assert task.source == "generated"
 
 
 async def test_generate_rejects_task_with_broken_solution(
