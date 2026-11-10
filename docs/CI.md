@@ -307,6 +307,13 @@ Docs-only изменение не гоняет ни e2e, ни docker, ни ос�
 Проверка: PR, меняющий только `docs/**`, не запускает `CI (self-hosted
 fallback)`; PR с кодом — запускает все 7 job'ов (включая perf-smoke).
 
+**Контракт OpenAPI.** `backend/tests/test_contract_openapi.py` входит в полный
+`pytest` job'а `Test (backend)` — отдельного шага нет. Тест разрешает только
+аддитивные изменения снапшота `backend/tests/contracts/openapi.json`; при
+осознанном изменении контракта снапшот обновляется отдельным коммитом
+(`python scripts/snapshot_openapi.py`). Красный тест = красный `Test (backend)`
+= PR не мержится (RULES §2.3).
+
 ### 10.2. GitHub: required checks — заблокировано тарифом
 
 Факт (2026-10-30, повторно):

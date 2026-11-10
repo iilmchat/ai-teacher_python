@@ -95,6 +95,11 @@ S45-005, закрывает KI-028). `jti` связывает пару со ст
 | GET | `/users/{id}` | admin | `User` |
 | PATCH | `/users/{id}/role?role=` | admin | `User` |
 
+`GET /users/{id}` и `POST /users/me/activity` — **API-only/внутренние** в
+v0.5.0 (KI-031): карточка пользователя в UI строится по списку
+`GET /admin/users`, а активность обновляется сервером; отдельного вызова из
+интерфейса нет.
+
 ### 3.3 Чат
 
 | Метод | Путь | Тело | Ответ |
@@ -375,6 +380,12 @@ violations, memory_limit_enforced, output_truncated}`.
 `POST /tasks/import` и `POST /tasks/import/file`. Поле не принимается в
 `TaskCreate`/`TaskUpdate`; менять происхождение задачи нельзя.
 
+**API-only в v0.5.0 (KI-031):** `POST /tasks/generate`,
+`GET /tasks/{id}/versions`, `POST /tasks/{id}/versions/{v}/restore` и
+`GET /tasks/stats` покрыты тестами, но не вызываются интерфейсом; это
+осознанная граница этапа, а не «мёртвый» контракт. Генерация и версии —
+бэклог v0.6.0; `stats` дублируется дашбордом.
+
 `SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message, practice}`.
 `AttemptItem`: `{id, task_id, passed, passed_count, total_count, created_at}`;
 `AttemptDetail` — дополнительно `code` и `results[]` (разбор по кейсам);
@@ -641,14 +652,44 @@ S46-006). `type` фильтрует выборку, но `unread` всегда �
 | `ALLOWED_ORIGINS` | `localhost:3000`/`127.0.0.1:3000` | CORS; в prod-compose задаётся ENV, не `*` |
 | `EXECUTOR_*` | см. §5 | лимиты песочницы; `.format()` заблокирован независимо от настроек |
 
+### 3.13. Контрактный гейт OpenAPI
+
+`backend/tests/test_contract_openapi.py` сравнивает `app.openapi()` со
+снапшотом `backend/tests/contracts/openapi.json` и разрешает только аддитивные
+изменения: новые пути, методы, необязательные поля и значения enum. Удаление
+пути, метода, ответа или поля, смена типа и новое обязательное поле — падение
+теста. Осознанное изменение контракта сопровождается обновлением снапшота
+отдельным коммитом (`python scripts/snapshot_openapi.py`).
+
+**Гейт в CI есть:** тест входит в полный `pytest` job'а **Test (Backend)**
+(`.github/workflows/ci.yml`), отдельного шага для него нет. Поэтому контракт
+проверяется на каждом PR/push вместе с остальными backend-тестами; в
+`docs/CI.md` это отражено как часть обязательного набора. Локально:
+`cd backend && pytest tests/test_contract_openapi.py -q`.
+
 ---
 
-## 4. Схема БД (миграции 001–010)
+## 4. Схема БД (миграции 001–022)
 
 ```
 users(id, email*, username*, hashed_password, role, level,
-      created_at, last_active, settings JSONB)
+      created_at, last_active, settings JSONB, is_active, token_version)
    role ∈ {student, teacher, admin} · level ∈ {basic, intermediate, advanced}
+   is_active — блокировка входа и защищённых маршрутов (S26)
+   token_version — версия refresh-токенов; смена пароля и «выйти везде»
+   увеличивают её, старые refresh-токены получают 401 (S45-001/005)
+   settings: {language?, email_notifications?, deadline_notifications?,
+   deadline_days?, prompt_template?, snippets?[]}
+
+user_sessions(id, user_id→users, jti*, user_agent, ip, created_at,
+              last_used_at, revoked_at)
+   активные сессии для списка устройств и отзыва (S45-005)
+   jti — идентификатор refresh-токена, UNIQUE; revoked_at — отзыв
+
+audit_log(id, actor_id→users, actor_role, action, entity_type, entity_id,
+          payload JSONB, ip, created_at)
+   журнал действий teacher/admin и администратора (S25); payload без ПДн;
+   retention — RETENTION_AUDIT_LOG_DAYS
 
 chat_sessions(id, user_id→users, level, title, pinned, created_at, updated_at,
               metadata JSONB)
@@ -707,6 +748,9 @@ classroom_announcements(id, classroom_id→classrooms, author_id→users,
                         title, body, created_at)
    объявления класса (S46-006)
 
+assignment_templates(id, teacher_id→users, name, task_ids JSONB, created_at)
+   шаблоны массового назначения (S28); name 1…120, task_ids 1…100
+
 achievements(code*, title, description, icon)
 user_achievements(id, user_id→users, code→achievements, earned_at)
    UNIQUE(user_id, code)
@@ -729,7 +773,9 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 `task_attempts(task_id, created_at)`, `classrooms(owner_id)`,
 `classroom_members(user_id)`, `assignments(classroom_id)`,
 `attempt_feedback(attempt_id)`, `classroom_announcements(classroom_id, created_at)`,
-`user_achievements(user_id)`, `notifications(user_id, read_at)`.
+`user_achievements(user_id)`, `notifications(user_id, read_at)`,
+`user_sessions(user_id)` (S45-005), `audit_log(created_at)`,
+`assignment_templates(teacher_id)`.
 
 **Миграции 0009/0010 (S19-004/005), только аддитивные:**
 
@@ -745,10 +791,24 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
   цикл `downgrade base → upgrade head`, одна голова — `20261030_0010`.
 - EXPLAIN-обоснование индексов — [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) §3.
 
-**Миграция 022 (S47-003), аддитивная:** `tasks.source`
-(`VARCHAR(20) NOT NULL DEFAULT 'manual'`), `tasks.moderation_comment` (`TEXT
-NULL`) и индекс `idx_tasks_source_created(source, created_at)`. Существующие
-задачи получают `source='manual'`; downgrade удаляет индекс и обе колонки.
+**Миграции v0.5.0 (014–022), только аддитивные:**
+
+| Миграция | Изменение | Откат |
+|----------|-----------|-------|
+| `014` | таблица `task_attempts` + индексы `(user_id, task_id, created_at)`, `(task_id, created_at)` | `drop_table` |
+| `015` | `user_task_progress.draft_code`, `draft_updated_at` | `drop_column` |
+| `016` | `chat_sessions.title`, `pinned` + индекс `(user_id, pinned, updated_at)` | `drop_index`, `drop_column` |
+| `017` | таблица `message_feedback` (`CHECK value IN (-1,1)`, `UNIQUE(message_id, user_id)`) | `drop_table` |
+| `018` | `users.token_version` (`INTEGER NOT NULL DEFAULT 0`) | `drop_column` |
+| `019` | таблица `user_sessions` (`jti UNIQUE`, `revoked_at`) | `drop_table` |
+| `020` | таблица `attempt_feedback` (`UNIQUE(attempt_id, teacher_id)`) | `drop_table` |
+| `021` | таблица `classroom_announcements` | `drop_table` |
+| `022` | `tasks.source` (`VARCHAR(20) NOT NULL DEFAULT 'manual'`), `tasks.moderation_comment` (`TEXT NULL`), индекс `(source, created_at)` | `drop_index`, `drop_column` |
+
+Проверка: `alembic upgrade head`, `alembic check` (нет расхождений), цикл
+`downgrade base → upgrade head`, одна голова — `20261110_0022`. Тест
+`backend/tests/test_migrations.py` проверяет полный цикл и отдельно `022`
+(существующая задача получает `source='manual'`).
 
 ---
 
@@ -1029,7 +1089,7 @@ IP, время. Записываются: `user.updated`, `user.deleted`, `task.
 |-----|----------|
 | `POST /api/v1/classrooms/{id}/assignments/bulk` | teacher/admin, владелец класса; `{task_ids: [1…50], due_at?}` → `{created, skipped, unknown}`; дубликаты и уже назначенные — `skipped`, неизвестные/неактивные — `unknown`; 201 |
 | `POST /api/v1/classrooms/{id}/assignments/from-template` | `{template_id, due_at?}` → тот же результат (шаблон применяется как массовое назначение) |
-| `POST/GET /api/v1/teacher/assignment-templates`, `DELETE /{id}` | шаблоны учителя: `name` (1…120), `task_ids` (1…100); удалить может только владелец (403) |
+| `POST/GET /api/v1/teacher/assignment-templates`, `DELETE /api/v1/teacher/assignment-templates/{template_id}` | шаблоны учителя: `name` (1…120), `task_ids` (1…100); удалить может только владелец (403) |
 | `GET /api/v1/classrooms/{id}/gradebook` | матрица `students/tasks/cells` (status, attempts, completed_at), `completion_rate`, `overdue`; только владелец/админ |
 | `GET /api/v1/classrooms/{id}/gradebook/csv` | CSV-выгрузка журнала (формат как S26-002), аудит `gradebook.exported` |
 

@@ -1,14 +1,183 @@
-# UPGRADE.md — обновление до v0.3.3
+# UPGRADE.md — обновление до v0.5.0
 
+> **v0.3.3 → v0.5.0** (2026-11-10): релиз «Learning Experience & Teaching
+> Workflow», миграции `014`–`022` — §0.
 > **v0.3.2 → v0.3.3** (2026-11-05): метрики-события KI-024 и auth-hardening
-> KI-026 — §0.1.
+> KI-026 — архив ниже.
 > **v0.3.1 → v0.3.2** (2026-11-03): встроенный retention-планировщик и метрики
-> retention — §0.
+> retention — архив ниже.
 > **v0.2.0 → v0.3.0** (2026-11-01): релиз «Ops & Scale» — CI/релиз-процесс,
 > зависимости, песочница, наблюдаемость, приватность, поиск и инструменты
-> учителя — §1–6.
+> учителя — архив ниже.
 
-## 0. Обновление v0.3.1 → v0.3.2
+## 0. Обновление v0.3.3 → v0.5.0
+
+Релиз v0.5.0 — **single-node**. Этап v0.4.0 «Production & Multi-node» отложен
+(D-001), поэтому обновление выполняется сразу с v0.3.3. Все миграции
+**аддитивные**: новые таблицы, колонки и индексы; существующие данные и
+контракты API не переписываются. Проверено на чистой БД и на копии рабочей:
+`upgrade head → downgrade base → upgrade head`, `alembic check` — без
+расхождений.
+
+### 0.1. Новые объекты БД (миграции 014–022)
+
+| Миграция | Объект | Что добавляет | Назначение |
+|----------|--------|---------------|------------|
+| `014` | таблица `task_attempts` | `id`, `user_id→users`, `task_id→tasks`, `code`, `passed`, `passed_count`, `total_count`, `results JSONB`, `created_at`; индексы `(user_id, task_id, created_at)`, `(task_id, created_at)` | история засчитанных попыток (S42-002) |
+| `015` | колонки `user_task_progress.draft_code`, `draft_updated_at` | `TEXT NULL`, `TIMESTAMP NULL` | автосохранение черновика решения (S42-003) |
+| `016` | колонки `chat_sessions.title`, `pinned`; индекс `(user_id, pinned, updated_at)` | `VARCHAR(120) NULL`, `BOOLEAN NOT NULL DEFAULT false` | заголовки, переименование и закрепление чатов (S43-001) |
+| `017` | таблица `message_feedback` | `id`, `message_id→chat_messages`, `user_id→users`, `value SMALLINT` (`CHECK value IN (-1,1)`), `comment VARCHAR(500) NULL`, `created_at`; `UNIQUE(message_id, user_id)`, индекс `(message_id)` | оценка ответов ассистента (S43-003) |
+| `018` | колонка `users.token_version` | `INTEGER NOT NULL DEFAULT 0` | отзыв refresh-токенов при смене пароля и «выйти везде» (S45-001/005) |
+| `019` | таблица `user_sessions` | `id`, `user_id→users`, `jti VARCHAR(36)` (`UNIQUE`), `user_agent`, `ip`, `created_at`, `last_used_at`, `revoked_at`; индекс `(user_id)` | активные сессии и их отзыв (S45-005) |
+| `020` | таблица `attempt_feedback` | `id`, `attempt_id→task_attempts`, `teacher_id→users`, `comment TEXT`, `created_at`; `UNIQUE(attempt_id, teacher_id)`, индекс `(attempt_id)` | комментарий учителя к попытке (S46-002) |
+| `021` | таблица `classroom_announcements` | `id`, `classroom_id→classrooms`, `author_id→users`, `title VARCHAR(200)`, `body TEXT`, `created_at`; индекс `(classroom_id, created_at)` | объявления класса (S46-006) |
+| `022` | колонки `tasks.source`, `tasks.moderation_comment`; индекс `(source, created_at)` | `VARCHAR(20) NOT NULL DEFAULT 'manual'`, `TEXT NULL` | происхождение задачи и очередь модерации (S47-003) |
+
+Все внешние ключи новых таблиц — `ON DELETE CASCADE` (удаление пользователя
+или задачи уносит связанные попытки, оценки, сессии и комментарии). Существующие
+задачи после `022` получают `source='manual'`; существующие пользователи —
+`token_version=0`, поэтому выданные ранее токены продолжают работать.
+
+Отдельно: миграции `014`–`022` не меняют типы существующих колонок и не
+переименовывают таблицы. `downgrade` удаляет только добавленное (см. §0.5).
+
+### 0.2. Порядок обновления
+
+```bash
+# 0) Зафиксировать, что именно обновляем
+git fetch --tags && git checkout v0.5.0
+
+# 1) Бэкап (обязательно: downgrade удаляет данные новых таблиц)
+bash scripts/backup.sh
+
+# 2) Переменные окружения: новых обязательных нет, одна опциональная (см. §0.3)
+cp .env.example .env && $EDITOR .env
+
+# 3) Миграции: 013 → 022
+cd backend
+alembic current                  # ожидается 013 (или 022, если уже обновляли)
+alembic upgrade head
+alembic check                    # "No new upgrade operations detected."
+cd ..
+
+# 4) Пересборка и запуск (single-node)
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+
+# 5) Проверка
+curl -fsS http://127.0.0.1:8000/health/ready
+curl -fsS http://127.0.0.1:8000/api/v1/health
+docker compose -f docker-compose.prod.yml ps
+```
+
+Если БД обновляется без простоя, сначала остановите backend, примените
+миграции и поднимите новую версию: старый код совместим со схемой, но не
+умеет читать новые данные и не должен писать в новые таблицы.
+
+### 0.3. Переменные окружения
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `RETENTION_TASK_ATTEMPTS_DAYS` | `90` | срок хранения истории попыток (`0` — не удалять); остальные `RETENTION_*` не менялись |
+
+Новых обязательных переменных нет. Лимит пробных проверок
+`POST /tasks/{id}/check` — 20 в минуту на пользователя (при превышении — 429
+с `Retry-After`); это константа кода (`CHECK_LIMIT` в
+`app/core/rate_limiter.py`), а не ENV. `VERSION` в `.env` по-прежнему не
+задаёт версию приложения — она берётся из `backend/app/config.py` (теперь
+`0.5.0`).
+
+### 0.4. Обратная совместимость API
+
+Ломающих изменений нет; контрактный снапшот OpenAPI проходит проверку
+«только аддитивные изменения» (`backend/tests/test_contract_openapi.py`).
+
+- **Новые маршруты** не меняют поведение старых: `POST /tasks/{id}/check`,
+  `GET /tasks/{id}/attempts`, `PATCH|DELETE /tasks/{id}/draft`,
+  `PATCH /chat/sessions/{id}`, `POST .../messages/{id}/regenerate`,
+  `POST|DELETE /chat/messages/{id}/feedback`, `GET /chat/sessions/{id}/export`,
+  `GET /tasks/recommended`, `POST /users/me/password`,
+  `GET /users/me/export`, `GET /users/me/sessions`,
+  `PATCH /classrooms/{id}/assignments/{id}`, `.../members/bulk`,
+  `.../announcements`, `GET /me/announcements`,
+  `POST /me/notifications/read-all`, `GET /admin/tasks/review`,
+  `POST /admin/tasks/{id}/moderate`, `GET /admin/quality` (расширен).
+- **Новые поля в ответах аддитивны**: `title`/`pinned` у `ChatSession`,
+  `draft_code`/`draft_updated_at` у `TaskDetail`, `source`/`moderation_comment`
+  у `TaskAdminDetail`, `practice` у `SubmitResponse`, `by_level` и
+  `top_problem_topics` у `GET /admin/quality`.
+- **Новые поля в запросах опциональны**: `?status=` у `GET /tasks`, `type` у
+  `GET /me/notifications`, `problem_threshold` у drill-down, `source`/
+  `difficulty`/`threshold` у очереди модерации.
+- **Токены**: пары получают claim `tv`; refresh-токены без `jti` (выданные до
+  v0.5.0) принимаются один раз и получают строку `user_sessions`. Смена
+  пароля/«выйти везде» увеличивают `token_version` и инвалидируют старые
+  refresh-токены. Access-токены, как и раньше, живут до истечения срока.
+- **Поведенческие изменения**: `DELETE /tasks/{id}` при наличии прогресса
+  выполняет мягкое удаление (`is_active=false`); публикация/снятие задачи
+  модератором сразу влияет на каталог ученика; `GET /tasks` кэшируется на
+  60 с (сброс — при мутациях задач).
+
+### 0.5. Откат
+
+Есть два сценария — выбирайте по причине.
+
+**A. Откат только кода (рекомендуется).** Схема v0.5.0 аддитивна: приложение
+v0.3.3 работает с ней, не замечая новых таблиц и колонок.
+
+```bash
+git checkout v0.3.3
+docker compose -f docker-compose.prod.yml up -d --build
+# миграции НЕ откатываем: новые данные остаются и не мешают старой версии
+```
+
+**B. Полный откат схемы** (нужен, только если требуется вернуть БД к
+состоянию v0.3.3). **Удаляет** историю попыток, черновики, заголовки чатов,
+оценки ответов, активные сессии, комментарии учителей, объявления и данные
+модерации.
+
+```bash
+bash scripts/backup.sh                 # ещё раз, перед разрушительным шагом
+git checkout v0.3.3
+cd backend
+alembic downgrade 013                  # 022 → 013
+alembic check                          # на v0.3.3-моделях — чисто
+cd ..
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Проверено: `downgrade base` и повторный `upgrade head` проходят; тест
+`backend/tests/test_migrations.py` покрывает полный цикл и отдельно `022`
+(существующая задача → `manual`, downgrade убирает колонки).
+
+### 0.6. Проверка после обновления
+
+1. `/health/ready` → `status: ready`; `/api/v1/health` → `version: 0.5.0`.
+2. Старый пользователь входит; в профиле видны «Мои данные», «Активные
+   сессии»; смена пароля не разлогинивает текущее устройство.
+3. Ученик: «Пробная проверка» не увеличивает счётчик попыток; после
+   «Отправить решение» появляется запись в истории; черновик переживает
+   перезагрузку.
+4. Чат: заголовок создаётся из первого вопроса, «Стоп» и «Повторить»
+   работают, оценка сохраняется.
+5. Учитель: вкладка «Работы» показывает код попытки, комментарий уходит
+   ученику; объявление видно в «Моих заданиях».
+6. Админ: `/admin/audit`, `/admin/moderation`, `/admin/quality` открываются;
+   выгрузка аналитики скачивается; в шапке есть бейдж уведомлений.
+7. `alembic check` — без расхождений; в логах нет `alembic`-ошибок.
+
+### 0.7. Известные ограничения v0.5.0
+
+См. `docs/reports/DEVOPS_AUDIT_2026-11.md` и `docs/KNOWN_ISSUES.md`.
+Кратко: single-node (нет HA/DR/SLO 2.0), нет registry/CD и автоматических
+TLS/бэкапов, refresh-токен передаётся в query string, rate limit обходится
+подделкой `X-Forwarded-For`, нет e-mail-подтверждения и сброса пароля. Продукт
+**не готов к публичному production**; для закрытого пилота нужны меры из
+аудита (merge и артефакт, TLS, бэкапы, auth/anti-abuse, наблюдаемость).
+
+---
+
+## Архив: v0.3.1 → v0.3.2
 
 Патч без миграций и ломающих изменений: приложение само применяет retention
 (вместо cron) и отдаёт счётчики удалённых строк в Prometheus.
@@ -35,7 +204,7 @@
 
 ---
 
-## 0.1 Обновление v0.3.2 → v0.3.3
+## Архив: v0.3.2 → v0.3.3
 
 Патч без миграций и изменений API; меняются имена метрик наблюдаемости и
 поведение аутентификации для заблокированных аккаунтов.
@@ -56,7 +225,7 @@
 
 ---
 
-## 1. Что меняется для эксплуатации
+## Архив: v0.2.0 → v0.3.0 — что меняется для эксплуатации
 
 | Область | Изменение | Действие |
 |---------|-----------|----------|
@@ -73,7 +242,7 @@
 403 — поведение Starlette 1.x); `users.is_active=false` блокирует вход;
 `/metrics` не публикуется через nginx (404).
 
-## 2. Порядок обновления
+## Архив: v0.2.0 → v0.3.0 — порядок обновления
 
 ```bash
 git fetch && git checkout v0.3.0
@@ -108,7 +277,7 @@ docker run --rm -i --network none --read-only --cap-drop ALL \
 # затем EXECUTOR_MODE=container в .env
 ```
 
-## 3. Новые переменные окружения
+## Архив: v0.2.0 → v0.3.0 — новые переменные окружения
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
@@ -130,7 +299,7 @@ docker run --rm -i --network none --read-only --cap-drop ALL \
 
 Полный список — `.env.example`.
 
-## 4. После обновления
+## Архив: v0.2.0 → v0.3.0 — после обновления
 
 1. `/health/ready` → `status: ready`; `/metrics` отдаёт метрики.
 2. Аудит: действие учителя (создание задачи) видно в `GET /api/v1/admin/audit`.
@@ -138,7 +307,7 @@ docker run --rm -i --network none --read-only --cap-drop ALL \
 4. RAG (если включён): `python backend/scripts/backfill_embeddings.py --dry-run`, затем без флага.
 5. Email (если включён): назначить задачу классу — письмо в SMTP/MailHog.
 
-## 5. Откат
+## Архив: v0.2.0 → v0.3.0 — откат
 
 ```bash
 # вернуть код
@@ -151,9 +320,9 @@ docker compose -f docker-compose.prod.yml up -d --build
 `010 → 009` и ниже не требуется: новые таблицы/колонки не использовались старой
 версией. Перед откатом сделайте бэкап: `bash scripts/backup.sh`.
 
-## 6. Известные ограничения
+## Архив: v0.2.0 → v0.3.0 — известные ограничения
 
 См. [KNOWN_ISSUES.md](KNOWN_ISSUES.md): KI-023 (branch protection на GitHub Free),
-KI-018 (`.format()` в песочнице), KI-024 (метрики LLM/кэша — на процесс; план —
-v0.4.0 вместе с переходом на несколько воркеров). KI-025 (retention по cron)
+KI-018 (`.format()` в песочнице), KI-027 (токены в localStorage; httpOnly-cookie
+— v0.6.0). KI-024 закрыта в v0.3.3 (метрики-события), KI-025 (retention по cron)
 закрыта в v0.3.2 — теперь есть встроенный планировщик.
