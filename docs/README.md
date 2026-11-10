@@ -79,7 +79,7 @@
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | Миграции | head 015 (`alembic check` чист) |
-| Размер фронтенда | entry 69.56 kB gzip (react 15.30 + i18n 18.40 + stores 12.50; лимит 80) |
+| Размер фронтенда | entry 70.57 kB gzip (react 15.65 + i18n 21.25 + stores 22.88; лимит 80) |
 | Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
 | Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 

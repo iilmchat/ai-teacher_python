@@ -79,7 +79,11 @@ async def test_sandbox_recovers_after_timeout(pool_size: int) -> None:
     timed_out = await executor.execute_many(code, ["hang\n", "go\n"])
     assert timed_out[0].error_type == "TimeoutError"
 
-    recovered = await executor.execute_many("print('alive')\n", [""])
+    # Проверяем восстановление, а не скорость холодного старта: на Windows
+    # новый интерпретатор (pool_size=0) может подниматься дольше 1 с, и
+    # прежний таймаут ловил бы запуск процесса, а не зависание кода.
+    recovered_executor = _executor(pool_size)
+    recovered = await recovered_executor.execute_many("print('alive')\n", [""])
     assert recovered[0].success is True
     assert recovered[0].output.strip() == "alive"
 

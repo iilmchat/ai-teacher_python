@@ -187,9 +187,27 @@ metadata, warnings}`.
   403, неизвестное — 404, вопрос ученика — 422.
 - `GET /admin/quality` (только администратор) — сводка качества:
   `{total, positive, negative, approval_rate, by_provider[], by_model[],
-  negative_samples[]}`. Провайдер и модель берутся из `metadata` ответа,
-  `negative_samples` — последние негативные оценки с текстом ответа и
-  комментарием: это вход для LLM-as-judge (см. `docs/LLM_EVAL.md`).
+  by_level[], top_problem_topics[], negative_samples[]}`. Провайдер и модель
+  берутся из `metadata` ответа; `negative_samples` — последние негативные
+  оценки с текстом ответа и комментарием: это вход для LLM-as-judge
+  (см. `docs/LLM_EVAL.md`).
+- `by_level` (S47-004) — срез по `chat_sessions.level`: `total`, `positive`,
+  `negative`, `approval_rate`. Уровень берётся из сессии (в метаданных
+  сообщения его нет); пустая/пробельная строка у старых сессий относится к
+  `unknown`.
+- `top_problem_topics` (S47-004, D-003) — до 10 самых частых негативных тем:
+  `{kind: category|tag|none, name, negative}`. Категории и теги берутся из
+  `tasks`; связка — через `task_context.task_id` из метаданных **вопроса
+  ученика** (оценка привязана к ответу, поэтому контекст ищется в ближайшем
+  предыдущем вопросе той же сессии). Если контекста нет или задача удалена —
+  `kind="none"`, `name="без задачи"`. `negative` — число негативных оценок;
+  положительные оценки в топ не попадают.
+- `GET /admin/quality/export?format=csv|json` (S47-004, D-008) — потоковая
+  выгрузка **негативных** оценок с серверным курсором и лимитом
+  `EXPORT_MAX_ROWS`: `message_id`, `comment`, `provider`, `model`, `level`,
+  `task_id` (или `без задачи`), `created_at`. Ответ — вложение
+  (`quality-negative-<дата>.<format>`), заголовок `X-Export-Limit`; действие
+  аудируется `quality.exported` (`format`, `limit`).
 
 **Выгрузка диалога (S43-004).**
 
@@ -352,6 +370,11 @@ violations, memory_limit_enforced, output_truncated}`.
 | GET | `/tasks/{id}/versions` | — | `{items[]}` (teacher/admin) |
 | POST | `/tasks/{id}/versions/{v}/restore` | — | `TaskAdminDetail` (teacher/admin) |
 
+`source` задаётся сервером, а не клиентом (S47-003): `manual` — создание
+через `POST /tasks`, `generated` — `POST /tasks/generate`, `imported` —
+`POST /tasks/import` и `POST /tasks/import/file`. Поле не принимается в
+`TaskCreate`/`TaskUpdate`; менять происхождение задачи нельзя.
+
 `SubmitResponse`: `{passed, passed_count, total_count, attempts, status, results[], message, practice}`.
 `AttemptItem`: `{id, task_id, passed, passed_count, total_count, created_at}`;
 `AttemptDetail` — дополнительно `code` и `results[]` (разбор по кейсам);
@@ -433,6 +456,10 @@ max `100`). `GET /tasks/{id}/attempts/{attempt_id}` — детальная по�
 | PATCH | `/admin/users/{id}` | `{role?, level?}` | `AdminUserItem` |
 | DELETE | `/admin/users/{id}` | — | `{deleted: true}` |
 | GET | `/admin/tasks` | `skip`, `limit` | `{total, items[]}` |
+| GET | `/admin/tasks/review` | `source?`, `difficulty?`, `threshold`, `skip`, `limit` | `{total, threshold, items[]}` (S47-003) |
+| POST | `/admin/tasks/{id}/moderate` | `{action, comment?}` | `TaskModerateResponse` (S47-003) |
+| GET | `/admin/quality` | — | `AdminQualityResponse` (S43-003/S47-004) |
+| GET | `/admin/quality/export` | `format=csv\|json` | файл, `attachment` (S47-004) |
 | GET | `/admin/analytics` | — | `{users, tasks, learning, activity, llm, cache, generated_at}` |
 
 `llm`: `{last_hour, last_24h, fallback_used, recorded_at}`; каждое окно —
@@ -445,6 +472,36 @@ errors}`. Метрики — в памяти процесса: при неско
 показывает счётчики только своего процесса (как и `llm`).
 
 Ограничения: 400 — понижение/удаление себя; 403 — не админ; 404 — нет пользователя.
+
+**Модерация задач (S47-003).**
+
+- Очередь — только `tasks.source IN ('generated', 'imported')`: LLM-генерация
+  (`POST /tasks/generate`, source=`generated`) и импорт (`POST /tasks/import`,
+  `POST /tasks/import/file`, source=`imported`). Задачи, созданные учителем
+  вручную (`POST /tasks`), получают `source='manual'` и публикуются сразу.
+- `GET /admin/tasks/review`: фильтры `source` (`generated|imported`),
+  `difficulty` (`easy|medium|hard`), `threshold` (1…20, default 3), `skip`,
+  `limit`. Элемент содержит задачу, `metrics` и до 5 последних попыток
+  (`recent_attempts`). Сортировка — «сначала проблемные»: больше
+  `stuck_students`, затем ниже `success_rate`, затем больше `attempts`, затем
+  новые задачи.
+- `metrics`: `attempts` — засчитанные попытки из `task_attempts`;
+  `passed_attempts` — из них успешных; `success_rate = passed_attempts /
+  attempts` (0 при отсутствии попыток); `avg_attempts` — среднее число
+  попыток на ученика с прогрессом; `students` — ученики с `attempts > 0`;
+  `stuck_students` — ученики с `attempts > threshold` и незавершённой
+  задачей (`status != completed`).
+- `POST /admin/tasks/{id}/moderate`:
+  - `publish` — `is_active=true`, `moderation_comment=null`;
+  - `unpublish` — `is_active=false`, комментарий не меняется;
+  - `return_to_revision` — `is_active=false`, комментарий (1…1000 символов
+    после trim) сохраняется в `moderation_comment`;
+  - для `source='manual'` разрешён только `unpublish`, остальные действия —
+    422; задача с `manual` в очередь не попадает, но снять её можно.
+- Аудит `task.moderated`: payload `{action}` и, для возврата в доработку,
+  `{comment_length}`. Текст комментария в журнал не пишется.
+- Действия модератора инвалидируют кэш каталога задач; публикация/снятие
+  сразу видны ученику в `GET /tasks`.
 
 ### 3.7 Кабинет учителя
 
@@ -505,12 +562,22 @@ errors}`. Метрики — в памяти процесса: при неско
 |-------|------|-----------|-------|
 | GET | `/me/achievements` | — | `{items[]}` — полученные достижения |
 | GET | `/me/stats` | — | `{solved, attempts, avg_attempts, streak_days, achievements_count, chat_sessions, chat_messages}` |
-| GET | `/me/notifications` | `unread_only?`, `skip`, `limit` | `{items[], unread}`; создаёт напоминания о дедлайнах |
+| GET | `/me/notifications` | `unread_only?`, `type?`, `skip`, `limit` | `{items[], unread}`; создаёт напоминания о дедлайнах |
 | POST | `/me/notifications/{id}/read` | — | `NotificationItem`; чужое — 404 |
+| POST | `/me/notifications/read-all` | — | `{updated}`; все непрочитанные текущего пользователя |
 
 Типы уведомлений: `assignment`, `deadline`, `achievement`, `attempt_feedback`
 (комментарий учителя к попытке, S46-002), `announcement` (объявление класса,
-S46-006).
+S46-006). `type` фильтрует выборку, но `unread` всегда считается по всем
+уведомлениям — это счётчик бейджа (S47-005). `read-all` одним `UPDATE`
+ставит `read_at` только своим непрочитанным и возвращает число изменённых.
+
+В `payload` новых уведомлений (D-007) есть безопасная относительная ссылка
+`link`: `assignment`/`deadline` → `/assignments` (плюс `task_id`),
+`attempt_feedback` → `/tasks/{task_id}`, `announcement` →
+`/classrooms/{classroom_id}`. Старые уведомления без `link` получают тот же
+маршрут в UI по типу; клиент принимает только пути, начинающиеся с одного
+`/`, без `//`, `\` и схемы (`javascript:`, `http:` и т.п.).
 
 ### 3.10 Служебное
 
@@ -606,8 +673,11 @@ code_executions(id, user_id→users, code, output, error, success, execution_tim
                 created_at)
 
 tasks(id, title, description, difficulty, category, tags JSONB, test_cases JSONB,
-      hints JSONB, solution_template, created_by→users, created_at, is_active)
+      hints JSONB, solution_template, created_by→users, created_at, is_active,
+      source, moderation_comment)
    difficulty ∈ {easy, medium, hard} · tags — до 10, нижний регистр
+   source ∈ {manual, generated, imported}, not null default 'manual' (S47-003)
+   moderation_comment — nullable, комментарий модератора при возврате в доработку
 
 task_versions(id, task_id→tasks, version, snapshot JSONB, created_by→users,
               created_at)
@@ -642,6 +712,7 @@ user_achievements(id, user_id→users, code→achievements, earned_at)
    UNIQUE(user_id, code)
 notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
    type ∈ {assignment, deadline, achievement, attempt_feedback, announcement}
+   payload: {title, ..., link, task_id?} — link относительный (D-007, S47-005)
 ```
 
 Каскады: удаление пользователя → его чаты, сообщения, запуски, прогресс,
@@ -652,7 +723,8 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 `chat_sessions(user_id, pinned, updated_at)` (S43-001),
 `message_feedback(message_id)` (S43-003),
 `chat_messages(session_id)`, `code_executions(user_id)`, `tasks(difficulty)`,
-`tasks(category)`, `tasks(tags)` GIN, `task_versions(task_id)`,
+`tasks(category)`, `tasks(tags)` GIN, `tasks(source, created_at)` (S47-003),
+`task_versions(task_id)`,
 `user_task_progress(user_id)`, `task_attempts(user_id, task_id, created_at)`,
 `task_attempts(task_id, created_at)`, `classrooms(owner_id)`,
 `classroom_members(user_id)`, `assignments(classroom_id)`,
@@ -672,6 +744,11 @@ notifications(id, user_id→users, type, payload JSONB, read_at, created_at)
 - Проверка: `alembic upgrade head`, `alembic check` (нет расхождений),
   цикл `downgrade base → upgrade head`, одна голова — `20261030_0010`.
 - EXPLAIN-обоснование индексов — [reports/sprint-19/SPRINT-19.md](reports/sprint-19/SPRINT-19.md) §3.
+
+**Миграция 022 (S47-003), аддитивная:** `tasks.source`
+(`VARCHAR(20) NOT NULL DEFAULT 'manual'`), `tasks.moderation_comment` (`TEXT
+NULL`) и индекс `idx_tasks_source_created(source, created_at)`. Существующие
+задачи получают `source='manual'`; downgrade удаляет индекс и обе колонки.
 
 ---
 

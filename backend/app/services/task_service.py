@@ -22,6 +22,7 @@ from app.models.task import (
     Task,
     TaskAttempt,
     TaskDifficulty,
+    TaskSource,
     TaskStatus,
     TaskVersion,
     UserTaskProgress,
@@ -645,13 +646,20 @@ class TaskService:
         author: User,
         *,
         invalidate_cache: bool = True,
+        source: str = TaskSource.MANUAL.value,
     ) -> Task:
-        """Создать задачу (S19-003: сбрасывает кэш каталога и категорий)"""
+        """Создать задачу (S19-003: сбрасывает кэш каталога и категорий).
+
+        `source` по умолчанию `manual`: задача, созданная учителем вручную,
+        публикуется сразу. Генерация и импорт передают своё происхождение
+        (S47-003).
+        """
         task = Task(
             title=payload.title,
             description=payload.description,
             difficulty=payload.difficulty,
             category=payload.category,
+            source=source,
             tags=list(payload.tags),
             test_cases=[case.model_dump() for case in payload.test_cases],
             hints=list(payload.hints),
@@ -666,11 +674,16 @@ class TaskService:
     async def create_many(
         self, payloads: list[TaskCreate], author: User
     ) -> list[Task]:
-        """Создать несколько задач (генерация/массовый импорт)"""
+        """Создать несколько задач через LLM-генерацию (S47-003: `generated`)."""
         created: list[Task] = []
         for payload in payloads:
             created.append(
-                await self.create_task(payload, author, invalidate_cache=False)
+                await self.create_task(
+                    payload,
+                    author,
+                    invalidate_cache=False,
+                    source=TaskSource.GENERATED.value,
+                )
             )
         if created:
             await invalidate_tasks_cache()

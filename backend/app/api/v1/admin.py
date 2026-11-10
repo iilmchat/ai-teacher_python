@@ -18,12 +18,13 @@ from app.config import settings
 from app.core.security import require_role
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
-from app.models.task import Task
+from app.models.task import Task, TaskDifficulty
 from app.models.user import User, UserRole
 from app.schemas.admin import (
     AdminQualityResponse,
     AdminTaskItem,
     AdminTaskListResponse,
+    AdminTaskReviewResponse,
     AdminUserItem,
     AdminUserListResponse,
     AdminUserUpdate,
@@ -35,6 +36,9 @@ from app.schemas.admin import (
     AnalyticsTasks,
     AnalyticsUsers,
     DeleteResponse,
+    ModerationSource,
+    TaskModerateRequest,
+    TaskModerateResponse,
 )
 from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
@@ -43,6 +47,7 @@ from app.services.cache import cache_metrics
 from app.services.export_service import stream_csv, stream_json
 from app.services.feedback_service import FeedbackService
 from app.services.llm.metrics import llm_metrics
+from app.services.moderation_service import ModerationService
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -204,6 +209,69 @@ async def list_tasks(
     return AdminTaskListResponse(total=total, items=items)
 
 
+@router.get("/tasks/review", response_model=AdminTaskReviewResponse)
+async def review_tasks(
+    _: AdminUser,
+    db: DbSession,
+    source: ModerationSource | None = None,
+    difficulty: TaskDifficulty | None = None,
+    threshold: int = Query(default=3, ge=1, le=20),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> AdminTaskReviewResponse:
+    """Очередь модерации: только LLM-генерация и импорт (S47-003).
+
+    Метрики «застревания»: попытки, доля успешных, среднее число попыток,
+    число учеников и число застрявших (attempts > threshold без завершения).
+    Сортировка — сначала самые проблемные.
+    """
+    return await ModerationService(db).list_review_queue(
+        source=source,
+        difficulty=difficulty,
+        threshold=threshold,
+        skip=skip,
+        limit=limit,
+    )
+
+
+@router.post("/tasks/{task_id}/moderate", response_model=TaskModerateResponse)
+async def moderate_task(
+    task_id: UUID,
+    payload: TaskModerateRequest,
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+) -> TaskModerateResponse:
+    """Действие модератора: publish / unpublish / return_to_revision (S47-003).
+
+    Ручные задачи в очередь не попадают, но снять с публикации можно любую.
+    Аудит `task.moderated` не содержит текст комментария — только длину.
+    """
+    task = await ModerationService(db).moderate(
+        task_id, action=payload.action, comment=payload.comment
+    )
+    audit_payload: dict[str, object] = {"action": payload.action}
+    if payload.action == "return_to_revision" and payload.comment:
+        audit_payload["comment_length"] = len(payload.comment)
+    await record_audit(
+        db,
+        actor=admin,
+        action="task.moderated",
+        entity_type="task",
+        entity_id=task.id,
+        payload=audit_payload,
+        request=request,
+    )
+    return TaskModerateResponse(
+        id=task.id,
+        title=task.title,
+        action=payload.action,
+        source=task.source,
+        is_active=task.is_active,
+        moderation_comment=task.moderation_comment,
+    )
+
+
 @router.get("/quality", response_model=AdminQualityResponse)
 async def get_quality(_: AdminUser, db: DbSession) -> AdminQualityResponse:
     """Сводка качества ответов ассистента по оценкам учеников (S43-003).
@@ -213,6 +281,49 @@ async def get_quality(_: AdminUser, db: DbSession) -> AdminQualityResponse:
     """
     summary = await FeedbackService(db).quality_summary()
     return AdminQualityResponse.model_validate(summary)
+
+
+@router.get("/quality/export")
+async def export_quality(
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+    format_: Literal["csv", "json"] = Query(default="csv", alias="format"),
+) -> StreamingResponse:
+    """Выгрузка негативных оценок ассистента (S47-004/D-008).
+
+    Потоково, через серверный курсор; лимит — `EXPORT_MAX_ROWS`. Выгружаются
+    только оценки `value < 0`, с уровнем помощи из сессии и задачей из
+    `message_metadata.task_context` (или «без задачи»).
+    """
+    limit = max(0, settings.export_max_rows)
+    await record_audit(
+        db,
+        actor=admin,
+        action="quality.exported",
+        entity_type="quality",
+        payload={"format": format_, "limit": limit},
+        request=request,
+    )
+
+    async def body() -> AsyncIterator[bytes]:
+        stream = (
+            stream_csv(db, "negative_feedback", limit=limit)
+            if format_ == "csv"
+            else stream_json(db, "negative_feedback", limit=limit)
+        )
+        async for chunk in stream:
+            yield chunk
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    media_type = "text/csv; charset=utf-8" if format_ == "csv" else "application/json"
+    headers = {
+        "Content-Disposition": (
+            f'attachment; filename="quality-negative-{stamp}.{format_}"'
+        ),
+        "X-Export-Limit": str(limit),
+    }
+    return StreamingResponse(body(), media_type=media_type, headers=headers)
 
 
 @router.get("/analytics", response_model=AnalyticsResponse)

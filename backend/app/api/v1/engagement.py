@@ -15,6 +15,7 @@ from app.schemas.engagement import (
     AchievementItem,
     AchievementsResponse,
     NotificationItem,
+    NotificationsReadAllResponse,
     NotificationsResponse,
     StatsResponse,
 )
@@ -58,18 +59,22 @@ async def notifications(
     current_user: CurrentUser,
     db: DbSession,
     unread_only: bool = False,
+    type: str | None = Query(default=None, max_length=30),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=200),
 ) -> NotificationsResponse:
-    """Уведомления; перед выдачей добавляет напоминания о дедлайнах
+    """Уведомления; перед выдачей добавляет напоминания о дедлайнах.
 
-    Пагинация — additive (S19-004): дефолты сохраняют прежнее поведение.
+    Пагинация — additive (S19-004); фильтр `type` — additive (S47-005).
+    `unread` всегда считается по всем уведомлениям, а не по фильтру: это
+    счётчик для бейджа.
     """
     await engagement_service.sync_deadline_notifications(db, current_user.id)
     items, unread = await engagement_service.list_notifications(
         db,
         current_user.id,
         unread_only=unread_only,
+        notification_type=type,
         skip=skip,
         limit=limit,
     )
@@ -77,6 +82,17 @@ async def notifications(
         items=[NotificationItem.model_validate(item) for item in items],
         unread=unread,
     )
+
+
+@router.post(
+    "/notifications/read-all", response_model=NotificationsReadAllResponse
+)
+async def read_all_notifications(
+    current_user: CurrentUser, db: DbSession
+) -> NotificationsReadAllResponse:
+    """Отметить все уведомления прочитанными (S47-005)."""
+    updated = await engagement_service.mark_all_read(db, current_user.id)
+    return NotificationsReadAllResponse(updated=updated)
 
 
 @router.post(

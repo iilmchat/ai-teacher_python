@@ -5,7 +5,7 @@
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import NotFoundError
@@ -243,10 +243,11 @@ async def create_assignment_notifications(
     classroom_id: UUID,
     classroom_name: str,
     assignment_id: UUID,
+    task_id: UUID,
     task_title: str,
     due_at: datetime | None,
 ) -> int:
-    """Уведомить учеников о новом назначении"""
+    """Уведомить учеников о новом назначении (D-007: безопасная ссылка)."""
     for user_id in user_ids:
         db.add(
             Notification(
@@ -256,8 +257,10 @@ async def create_assignment_notifications(
                     "classroom_id": str(classroom_id),
                     "classroom_name": classroom_name,
                     "assignment_id": str(assignment_id),
+                    "task_id": str(task_id),
                     "title": task_title,
                     "due_at": due_at.isoformat() if due_at else None,
+                    "link": "/assignments",
                 },
             )
         )
@@ -284,6 +287,7 @@ async def create_feedback_notification(
                 "task_id": str(task_id),
                 "title": task_title,
                 "teacher": teacher_name,
+                "link": f"/tasks/{task_id}",
             },
         )
     )
@@ -310,6 +314,7 @@ async def create_announcement_notifications(
                     "classroom_name": classroom_name,
                     "announcement_id": str(announcement_id),
                     "title": title,
+                    "link": f"/classrooms/{classroom_id}",
                 },
             )
         )
@@ -321,13 +326,16 @@ async def list_notifications(
     db: AsyncSession,
     user_id: UUID,
     unread_only: bool = False,
+    notification_type: str | None = None,
     skip: int = 0,
     limit: int = 100,
 ) -> tuple[list[Notification], int]:
-    """Уведомления (с пагинацией S19-004) и число непрочитанных"""
+    """Уведомления (с пагинацией S19-004) и число непрочитанных."""
     query = select(Notification).where(Notification.user_id == user_id)
     if unread_only:
         query = query.where(Notification.read_at.is_(None))
+    if notification_type:
+        query = query.where(Notification.type == notification_type)
     result = await db.execute(
         query.order_by(Notification.created_at.desc())
         .offset(skip)
@@ -361,6 +369,22 @@ async def mark_read(
         await db.commit()
         await db.refresh(notification)
     return notification
+
+
+async def mark_all_read(db: AsyncSession, user_id: UUID) -> int:
+    """Отметить все непрочитанные уведомления одним UPDATE (S47-005)."""
+    result = await db.execute(
+        update(Notification)
+        .where(
+            Notification.user_id == user_id,
+            Notification.read_at.is_(None),
+        )
+        .values(read_at=datetime.utcnow())
+        .returning(Notification.id)
+    )
+    updated = len(result.scalars().all())
+    await db.commit()
+    return updated
 
 
 async def sync_deadline_notifications(db: AsyncSession, user_id: UUID) -> int:
@@ -427,10 +451,12 @@ async def sync_deadline_notifications(db: AsyncSession, user_id: UUID) -> int:
                     "assignment_id": str(assignment.id),
                     "classroom_id": str(classroom.id),
                     "classroom_name": classroom.name,
+                    "task_id": str(task.id),
                     "title": task.title,
                     "due_at": assignment.due_at.isoformat()
                     if assignment.due_at
                     else None,
+                    "link": "/assignments",
                 },
             )
         )

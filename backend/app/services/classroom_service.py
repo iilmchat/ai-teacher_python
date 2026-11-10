@@ -333,6 +333,7 @@ class ClassroomService:
                 classroom_id=classroom.id,
                 classroom_name=classroom.name,
                 assignment_id=assignment.id,
+                task_id=task.id,
                 task_title=task.title,
                 due_at=due_at,
             )
@@ -821,6 +822,7 @@ class ClassroomService:
                     classroom_id=classroom.id,
                     classroom_name=classroom.name,
                     assignment_id=assignment.id,
+                    task_id=task.id,
                     task_title=task.title,
                     due_at=due_at,
                 )

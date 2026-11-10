@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
+import { saveBlob } from '@/lib/download';
 import { useAuthStore } from '@/store/auth';
 import type {
   AdminQualityResponse,
@@ -42,6 +43,13 @@ export function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exporting, setExporting] = useState(false);
+  const [analyticsDataset, setAnalyticsDataset] = useState<
+    'users' | 'tasks' | 'attempts' | 'activity'
+  >('users');
+  const [analyticsFormat, setAnalyticsFormat] = useState<'csv' | 'json'>('csv');
+  const [analyticsExporting, setAnalyticsExporting] = useState(false);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -90,6 +98,51 @@ export function AdminPage() {
     } catch {
       setError(t('admin.userDeleteError'));
     }
+  }
+
+  async function downloadQuality() {
+    setExporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const blob = await api.download(
+        `/admin/quality/export?format=${exportFormat}`,
+      );
+      const stamp = new Date().toISOString().slice(0, 10);
+      saveBlob(blob, `quality-negative-${stamp}.${exportFormat}`);
+      setNotice(t('admin.qualityExported'));
+    } catch {
+      setError(t('admin.qualityExportError'));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function downloadAnalytics() {
+    setAnalyticsExporting(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const blob = await api.download(
+        `/admin/analytics/export?dataset=${analyticsDataset}&format=${analyticsFormat}`,
+      );
+      const stamp = new Date().toISOString().slice(0, 10);
+      saveBlob(blob, `analytics-${analyticsDataset}-${stamp}.${analyticsFormat}`);
+      setNotice(t('admin.analyticsExported'));
+    } catch {
+      setError(t('admin.analyticsExportError'));
+    } finally {
+      setAnalyticsExporting(false);
+    }
+  }
+
+  function levelLabel(name: string): string {
+    if (name === 'unknown') {
+      return t('admin.qualityUnknownLevel');
+    }
+    return ['basic', 'intermediate', 'advanced'].includes(name)
+      ? t(`levels.${name}`)
+      : name;
   }
 
   return (
@@ -150,69 +203,221 @@ export function AdminPage() {
         </>
       )}
 
+      <Card title={t('admin.analyticsExportTitle')}>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-slate-600">
+              {t('admin.analyticsExportDataset')}
+            </span>
+            <select
+              aria-label={t('admin.analyticsExportDataset')}
+              value={analyticsDataset}
+              onChange={(event) =>
+                setAnalyticsDataset(
+                  event.target.value as
+                    | 'users'
+                    | 'tasks'
+                    | 'attempts'
+                    | 'activity',
+                )
+              }
+              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            >
+              {(['users', 'tasks', 'attempts', 'activity'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {t(`admin.analyticsDatasets.${value}`)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-xs font-medium text-slate-600">
+              {t('admin.analyticsExportFormat')}
+            </span>
+            <select
+              aria-label={t('admin.analyticsExportFormat')}
+              value={analyticsFormat}
+              onChange={(event) =>
+                setAnalyticsFormat(event.target.value === 'json' ? 'json' : 'csv')
+              }
+              className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </label>
+          <Button
+            variant="secondary"
+            loading={analyticsExporting}
+            onClick={() => void downloadAnalytics()}
+          >
+            {t('admin.analyticsExport')}
+          </Button>
+        </div>
+      </Card>
+
       <Card title={t('admin.qualityTitle')}>
-        {quality && quality.total === 0 ? (
-          <p className="text-sm text-slate-500">{t('admin.qualityEmpty')}</p>
-        ) : (
-          quality && (
-            <>
-              <div className="grid gap-3 sm:grid-cols-4">
-                <Metric label={t('admin.qualityTotal')} value={quality.total} />
-                <Metric label={t('admin.qualityPositive')} value={quality.positive} />
-                <Metric label={t('admin.qualityNegative')} value={quality.negative} />
-                <Metric
-                  label={t('admin.qualityApproval')}
-                  value={`${Math.round(quality.approval_rate * 100)}%`}
-                />
-              </div>
+        {quality && (
+          <>
+            <div className="mb-3 flex flex-wrap items-end justify-end gap-2">
+              <label className="flex flex-col gap-1 text-sm">
+                <span className="text-xs font-medium text-slate-600">
+                  {t('admin.qualityExportFormat')}
+                </span>
+                <select
+                  aria-label={t('admin.qualityExportFormat')}
+                  value={exportFormat}
+                  onChange={(event) =>
+                    setExportFormat(event.target.value === 'json' ? 'json' : 'csv')
+                  }
+                  className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                >
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                </select>
+              </label>
+              <Button
+                variant="secondary"
+                loading={exporting}
+                onClick={() => void downloadQuality()}
+              >
+                {t('admin.qualityExport')}
+              </Button>
+            </div>
 
-              {quality.by_provider.length > 0 && (
-                <div className="mt-4 overflow-x-auto">
-                  <Table>
-                    <thead className="text-xs uppercase text-slate-500">
-                      <Tr>
-                        <Th className="py-2">{t('admin.qualityProvider')}</Th>
-                        <Th className="py-2">{t('admin.qualityTotal')}</Th>
-                        <Th className="py-2">{t('admin.qualityPositive')}</Th>
-                        <Th className="py-2">{t('admin.qualityNegative')}</Th>
-                        <Th className="py-2">{t('admin.qualityApproval')}</Th>
-                      </Tr>
-                    </thead>
-                    <tbody>
-                      {quality.by_provider.map((row) => (
-                        <Tr key={row.name} className="border-t border-slate-100">
-                          <Td className="py-2 font-medium text-slate-800">{row.name}</Td>
-                          <Td className="py-2">{row.total}</Td>
-                          <Td className="py-2">{row.positive}</Td>
-                          <Td className="py-2">{row.negative}</Td>
-                          <Td className="py-2">
-                            {Math.round(row.approval_rate * 100)}%
-                          </Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </Table>
+            {quality.total === 0 ? (
+              <p className="text-sm text-slate-500">{t('admin.qualityEmpty')}</p>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <Metric label={t('admin.qualityTotal')} value={quality.total} />
+                  <Metric label={t('admin.qualityPositive')} value={quality.positive} />
+                  <Metric label={t('admin.qualityNegative')} value={quality.negative} />
+                  <Metric
+                    label={t('admin.qualityApproval')}
+                    value={`${Math.round(quality.approval_rate * 100)}%`}
+                  />
                 </div>
-              )}
 
-              {quality.negative_samples.length > 0 && (
-                <ul className="mt-4 flex flex-col gap-2 text-sm">
-                  {quality.negative_samples.map((item) => (
-                    <li
-                      key={item.message_id}
-                      className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-xs text-slate-700"
-                    >
-                      <span className="font-medium text-rose-700">
-                        {item.provider} · {item.model}
-                      </span>
-                      {item.comment && <p className="mt-1">{item.comment}</p>}
-                      <p className="mt-1 line-clamp-2 text-slate-500">{item.content}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )
+                {quality.by_provider.length > 0 && (
+                  <div className="mt-4 overflow-x-auto">
+                    <Table>
+                      <thead className="text-xs uppercase text-slate-500">
+                        <Tr>
+                          <Th className="py-2">{t('admin.qualityProvider')}</Th>
+                          <Th className="py-2">{t('admin.qualityTotal')}</Th>
+                          <Th className="py-2">{t('admin.qualityPositive')}</Th>
+                          <Th className="py-2">{t('admin.qualityNegative')}</Th>
+                          <Th className="py-2">{t('admin.qualityApproval')}</Th>
+                        </Tr>
+                      </thead>
+                      <tbody>
+                        {quality.by_provider.map((row) => (
+                          <Tr key={row.name} className="border-t border-slate-100">
+                            <Td className="py-2 font-medium text-slate-800">{row.name}</Td>
+                            <Td className="py-2">{row.total}</Td>
+                            <Td className="py-2">{row.positive}</Td>
+                            <Td className="py-2">{row.negative}</Td>
+                            <Td className="py-2">
+                              {Math.round(row.approval_rate * 100)}%
+                            </Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </>
+            )}
+
+            {quality.by_level.length > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                  {t('admin.qualityByLevel')}
+                </h3>
+                <Table>
+                  <thead className="text-xs uppercase text-slate-500">
+                    <Tr>
+                      <Th className="py-2">{t('admin.qualityLevel')}</Th>
+                      <Th className="py-2">{t('admin.qualityTotal')}</Th>
+                      <Th className="py-2">{t('admin.qualityPositive')}</Th>
+                      <Th className="py-2">{t('admin.qualityNegative')}</Th>
+                      <Th className="py-2">{t('admin.qualityApproval')}</Th>
+                    </Tr>
+                  </thead>
+                  <tbody>
+                    {quality.by_level.map((row) => (
+                      <Tr key={row.name} className="border-t border-slate-100">
+                        <Td className="py-2 font-medium text-slate-800">
+                          {levelLabel(row.name)}
+                        </Td>
+                        <Td className="py-2">{row.total}</Td>
+                        <Td className="py-2">{row.positive}</Td>
+                        <Td className="py-2">{row.negative}</Td>
+                        <Td className="py-2">
+                          {Math.round(row.approval_rate * 100)}%
+                        </Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+
+            {quality.top_problem_topics.length > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <h3 className="mb-2 text-sm font-semibold text-slate-800">
+                  {t('admin.qualityTopics')}
+                </h3>
+                <Table>
+                  <thead className="text-xs uppercase text-slate-500">
+                    <Tr>
+                      <Th className="py-2">{t('admin.qualityTopicKind')}</Th>
+                      <Th className="py-2">{t('admin.qualityTopicName')}</Th>
+                      <Th className="py-2">{t('admin.qualityNegative')}</Th>
+                    </Tr>
+                  </thead>
+                  <tbody>
+                    {quality.top_problem_topics.map((row) => (
+                      <Tr
+                        key={`${row.kind}:${row.name}`}
+                        className="border-t border-slate-100"
+                      >
+                        <Td className="py-2 text-slate-600">
+                          {row.kind === 'none'
+                            ? '—'
+                            : t(`admin.qualityTopicKinds.${row.kind}`)}
+                        </Td>
+                        <Td className="py-2 font-medium text-slate-800">
+                          {row.kind === 'none'
+                            ? t('admin.qualityNoTask')
+                            : row.name}
+                        </Td>
+                        <Td className="py-2">{row.negative}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+
+            {quality.negative_samples.length > 0 && (
+              <ul className="mt-4 flex flex-col gap-2 text-sm">
+                {quality.negative_samples.map((item) => (
+                  <li
+                    key={item.message_id}
+                    className="rounded-lg border border-rose-100 bg-rose-50 p-2 text-xs text-slate-700"
+                  >
+                    <span className="font-medium text-rose-700">
+                      {item.provider} · {item.model}
+                    </span>
+                    {item.comment && <p className="mt-1">{item.comment}</p>}
+                    <p className="mt-1 line-clamp-2 text-slate-500">{item.content}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </Card>
 

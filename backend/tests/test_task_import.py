@@ -8,8 +8,10 @@ from typing import Any
 import pytest
 import yaml
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.task import Task
 from app.services.task_import import TaskImportFormatError, parse_task_payload
 from tests.task_helpers import (
     TASK_PAYLOAD,
@@ -58,6 +60,12 @@ async def test_import_reports_created_skipped_errors(
     assert report["skipped"] == 1
     assert len(report["errors"]) == 1
     assert report["errors"][0]["index"] == 2
+    imported = (
+        await db_session.execute(
+            select(Task).where(Task.title == TASK_PAYLOAD["title"])
+        )
+    ).scalar_one()
+    assert imported.source == "imported"
 
 
 async def test_export_round_trip_skips_existing(

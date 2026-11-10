@@ -1,11 +1,19 @@
 import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '@/i18n';
 import { api } from '@/lib/api';
+import { saveBlob } from '@/lib/download';
 import { AdminPage } from '@/pages/AdminPage';
 import { renderWithRouter } from '@/test/utils';
 import type { AdminQualityResponse, AnalyticsResponse } from '@/types/api';
+
+vi.mock('@/lib/download', () => ({
+  saveBlob: vi.fn(),
+}));
+
+const SAVED = () => vi.mocked(saveBlob);
 
 const QUALITY: AdminQualityResponse = {
   total: 3,
@@ -22,6 +30,27 @@ const QUALITY: AdminQualityResponse = {
     },
   ],
   by_model: [],
+  by_level: [
+    {
+      name: 'basic',
+      total: 2,
+      positive: 2,
+      negative: 0,
+      approval_rate: 1,
+    },
+    {
+      name: 'unknown',
+      total: 1,
+      positive: 0,
+      negative: 1,
+      approval_rate: 0,
+    },
+  ],
+  top_problem_topics: [
+    { kind: 'category', name: 'loops', negative: 2 },
+    { kind: 'tag', name: 'for', negative: 1 },
+    { kind: 'none', name: 'без задачи', negative: 1 },
+  ],
   negative_samples: [
     {
       message_id: 'm1',
@@ -71,9 +100,10 @@ const ANALYTICS = {
   generated_at: '2026-11-06T10:00:00',
 } as AnalyticsResponse;
 
-describe('AdminPage: качество ответов (S43-003)', () => {
+describe('AdminPage: качество ответов (S43-003/S47-004)', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    SAVED().mockClear();
     vi.spyOn(api, 'get').mockImplementation(async (path: string) => {
       if (path === '/admin/quality') {
         return QUALITY;
@@ -122,5 +152,43 @@ describe('AdminPage: качество ответов (S43-003)', () => {
     expect(
       await screen.findByText(/Оценок пока нет/),
     ).toBeInTheDocument();
+  });
+
+  it('показывает срез по уровням и проблемные темы (S47-004)', async () => {
+    renderWithRouter(<AdminPage />, { route: '/admin' });
+
+    expect(await screen.findByText('Качество по уровням')).toBeInTheDocument();
+    expect(screen.getByText('Базовый')).toBeInTheDocument();
+    expect(screen.getByText('Неизвестный')).toBeInTheDocument();
+    expect(screen.getByText('Проблемные темы')).toBeInTheDocument();
+    expect(screen.getByText('loops')).toBeInTheDocument();
+    expect(screen.getByText('for')).toBeInTheDocument();
+    expect(screen.getAllByText('Без задачи').length).toBeGreaterThan(0);
+  });
+
+  it('скачивает негативные оценки в выбранном формате (S47-004)', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(api, 'download').mockResolvedValue(
+      new Blob(['message_id'], { type: 'text/csv' }),
+    );
+
+    renderWithRouter(<AdminPage />, { route: '/admin' });
+    await screen.findByText('Качество ответов ассистента');
+
+    await user.selectOptions(screen.getByLabelText('Формат файла'), 'json');
+    await user.click(
+      screen.getByRole('button', { name: 'Скачать негативные оценки' }),
+    );
+
+    await waitFor(() => {
+      expect(api.download).toHaveBeenCalledWith(
+        '/admin/quality/export?format=json',
+      );
+    });
+    expect(SAVED()).toHaveBeenCalledTimes(1);
+    expect(SAVED().mock.calls[0][1]).toMatch(
+      /^quality-negative-\d{4}-\d{2}-\d{2}\.json$/,
+    );
+    expect(await screen.findByText('Файл скачан')).toBeInTheDocument();
   });
 });

@@ -5,6 +5,7 @@ import '@/i18n';
 import { api } from '@/lib/api';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { useAuthStore } from '@/store/auth';
+import { useNotificationsStore } from '@/store/notifications';
 import { renderWithRouter } from '@/test/utils';
 import type { User } from '@/types/api';
 
@@ -60,7 +61,7 @@ function mockDashboard() {
         ],
       };
     }
-    if (path === '/me/notifications') {
+    if (path.startsWith('/me/notifications')) {
       return {
         unread: 1,
         items: [
@@ -98,6 +99,13 @@ function mockDashboard() {
 describe('DashboardPage', () => {
   beforeEach(() => {
     useAuthStore.setState({ user: USER });
+    useNotificationsStore.setState({
+      items: [],
+      unread: 0,
+      filterType: '',
+      loading: false,
+      error: null,
+    });
     vi.restoreAllMocks();
   });
 

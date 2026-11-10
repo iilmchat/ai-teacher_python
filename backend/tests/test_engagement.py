@@ -208,6 +208,9 @@ async def test_assignment_notification_and_read(
     ]
     assert assignment_items
     assert data["unread"] >= 1
+    assignment_payload = assignment_items[0]["payload"]
+    assert assignment_payload["link"] == "/assignments"
+    assert assignment_payload["task_id"] == task["id"]
 
     notification_id = assignment_items[0]["id"]
     read = await client.post(
@@ -248,9 +251,12 @@ async def test_deadline_notification_created(
 
     response = await client.get("/api/v1/me/notifications", headers=auth(student))
 
-    assert any(
-        item["type"] == "deadline" for item in response.json()["items"]
-    )
+    deadline_items = [
+        item for item in response.json()["items"] if item["type"] == "deadline"
+    ]
+    assert deadline_items
+    assert deadline_items[0]["payload"]["link"] == "/assignments"
+    assert deadline_items[0]["payload"]["task_id"] == task["id"]
 
 
 async def test_notification_of_other_user_404(

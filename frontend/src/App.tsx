@@ -12,6 +12,16 @@ import { useAuthStore } from '@/store/auth';
 const AdminPage = lazy(() =>
   import('@/pages/AdminPage').then((module) => ({ default: module.AdminPage })),
 );
+const AdminModerationPage = lazy(() =>
+  import('@/pages/AdminModerationPage').then((module) => ({
+    default: module.AdminModerationPage,
+  })),
+);
+const AdminAuditPage = lazy(() =>
+  import('@/pages/AdminAuditPage').then((module) => ({
+    default: module.AdminAuditPage,
+  })),
+);
 const AssignmentsPage = lazy(() =>
   import('@/pages/AssignmentsPage').then((module) => ({
     default: module.AssignmentsPage,
@@ -59,6 +69,11 @@ const LoginPage = lazy(() =>
 );
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })),
+);
+const NotificationsPage = lazy(() =>
+  import('@/pages/NotificationsPage').then((module) => ({
+    default: module.NotificationsPage,
+  })),
 );
 const ProfilePage = lazy(() =>
   import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })),
@@ -196,6 +211,14 @@ export function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="notifications"
+              element={
+                <ProtectedRoute>
+                  <NotificationsPage />
+                </ProtectedRoute>
+              }
+            />
 
             <Route
               path="admin"
@@ -203,6 +226,28 @@ export function App() {
                 <ProtectedRoute>
                   <AdminRoute>
                     <AdminPage />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="admin/moderation"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminModerationPage />
+                  </AdminRoute>
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="admin/audit"
+              element={
+                <ProtectedRoute>
+                  <AdminRoute>
+                    <AdminAuditPage />
                   </AdminRoute>
                 </ProtectedRoute>
               }

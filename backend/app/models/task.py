@@ -32,6 +32,19 @@ class TaskDifficulty(str, enum.Enum):
     HARD = "hard"
 
 
+class TaskSource(str, enum.Enum):
+    """Происхождение задачи (S47-003).
+
+    Модерация касается только LLM-генерации и импорта (решения D-002/D-003):
+    задачи, созданные учителем вручную, публикуются сразу и в очередь не
+    попадают.
+    """
+
+    MANUAL = "manual"
+    GENERATED = "generated"
+    IMPORTED = "imported"
+
+
 class TaskStatus(str, enum.Enum):
     """Статус прохождения задачи учеником"""
 
@@ -55,6 +68,8 @@ class Task(Base):
         Index("idx_tasks_tags", "tags", postgresql_using="gin"),
         # S19-004: каталог фильтрует по is_active и сортирует по created_at
         Index("idx_tasks_active_created", "is_active", "created_at"),
+        # S47-003: очередь модерации фильтрует по source и сортирует по дате
+        Index("idx_tasks_source_created", "source", "created_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -66,6 +81,15 @@ class Task(Base):
         default=TaskDifficulty.EASY,
     )
     category: Mapped[str] = mapped_column(String(100), nullable=False, default="general")
+    #: Происхождение задачи: manual | generated | imported (S47-003)
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=TaskSource.MANUAL.value,
+        server_default=TaskSource.MANUAL.value,
+    )
+    #: Комментарий модератора при возврате в доработку (S47-003)
+    moderation_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: Теги для поиска и группировки (S14-004)
     tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
     # [{"input": "...", "expected_output": "...", "description": "..."}]
