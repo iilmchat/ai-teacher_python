@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -32,6 +33,11 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+
+
+class RefreshTokenRequest(BaseModel):
+    """Запрос на обновление токенов"""
+    refresh_token: str
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -136,9 +142,13 @@ def _user_id_from_payload(payload: dict[str, Any] | None) -> UUID:
 
 
 @router.post("/refresh")
-async def refresh_tokens(refresh_token: str, db: DbSession) -> dict[str, str]:
+async def refresh_tokens(
+    request: RefreshTokenRequest, db: DbSession, response: Response
+) -> dict[str, str]:
     """Обновление пары токенов по refresh token"""
-    payload = decode_token(refresh_token)
+    # S34-002: тело с токеном не должно кэшироваться ни браузером, ни прокси.
+    response.headers["Cache-Control"] = "no-store"
+    payload = decode_token(request.refresh_token)
     user_id = _user_id_from_payload(payload)
     user = await UserRepository(db).get(user_id)
 

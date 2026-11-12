@@ -1,5 +1,8 @@
-# UPGRADE.md — обновление до v0.5.0
+# UPGRADE.md — обновление до v0.6.0
 
+> **v0.5.0 → v0.6.0** (2026-11-11): «Auth & Edge Hardening» — breaking change
+> `POST /auth/refresh` (токен в теле JSON), `is_active` в RBAC, trusted proxy,
+> лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED` — §0.5.
 > **v0.3.3 → v0.5.0** (2026-11-10): релиз «Learning Experience & Teaching
 > Workflow», миграции `014`–`022` — §0.
 > **v0.3.2 → v0.3.3** (2026-11-05): метрики-события KI-024 и auth-hardening
@@ -118,9 +121,50 @@ docker compose -f docker-compose.prod.yml ps
   модератором сразу влияет на каталог ученика; `GET /tasks` кэшируется на
   60 с (сброс — при мутациях задач).
 
-### 0.5. Откат
+### 0.5. Ломающие изменения (v0.6.0)
+
+- **S34-002**: `POST /auth/refresh` теперь принимает `refresh_token` в теле JSON,
+  а не в query-параметрах (`?refresh_token=...`). Это breaking change для клиентов.
+  Пример:
+
+  ```json
+  // Раньше:
+  POST /api/v1/auth/refresh?refresh_token=eyJ...
+
+  // Теперь:
+  POST /api/v1/auth/refresh
+  Content-Type: application/json
+
+  {
+    "refresh_token": "eyJ..."
+  }
+  ```
+
+  **Миграция для фронтенда**: обновите `api.ts`, функция `refreshAccessToken` теперь
+  использует `json({ refresh_token })` вместо `params({ refresh_token })`.
+
+- **S34-001**: `require_role` теперь использует `get_current_active_user`, что
+  означает, что деактивированный пользователь (с `is_active=false`) получает
+  `401 Unauthorized` вместо `403 Forbidden` при попытке получить доступ к
+  защищённым эндпоинтам. Это ожидаемое поведение и соответствует политике
+  безопасности.
+
+### 0.6. Откат
 
 Есть два сценария — выбирайте по причине.
+
+**v0.6.0 → v0.5.0.** Миграций нет, схема БД не менялась: достаточно вернуть
+код и пересобрать контейнеры. Перед откатом убедитесь, что клиенты снова
+умеют передавать refresh-токен в query (или откат выполняется вместе с
+фронтендом v0.5.0).
+
+```bash
+git checkout v0.5.0
+docker compose -f docker-compose.prod.yml up -d --build
+# миграции не трогаем — их в v0.6.0 не было
+```
+
+**v0.5.0 → v0.3.3.** Есть два сценария.
 
 **A. Откат только кода (рекомендуется).** Схема v0.5.0 аддитивна: приложение
 v0.3.3 работает с ней, не замечая новых таблиц и колонок.
@@ -150,9 +194,9 @@ docker compose -f docker-compose.prod.yml up -d --build
 `backend/tests/test_migrations.py` покрывает полный цикл и отдельно `022`
 (существующая задача → `manual`, downgrade убирает колонки).
 
-### 0.6. Проверка после обновления
+### 0.7. Проверка после обновления
 
-1. `/health/ready` → `status: ready`; `/api/v1/health` → `version: 0.5.0`.
+1. `/health/ready` → `status: ready`; `/api/v1/health` → `version: 0.6.0`.
 2. Старый пользователь входит; в профиле видны «Мои данные», «Активные
    сессии»; смена пароля не разлогинивает текущее устройство.
 3. Ученик: «Пробная проверка» не увеличивает счётчик попыток; после

@@ -173,9 +173,10 @@ def require_role(
     """Фабрика зависимостей для проверки роли пользователя.
 
     Администратор имеет доступ всегда.
+    Проверяет, что пользователь активен (S34-001).
     """
 
-    async def role_checker(current_user: User = Depends(get_current_user)) -> User:
+    async def role_checker(current_user: User = Depends(get_current_active_user)) -> User:
         if current_user.role not in allowed_roles and current_user.role != UserRole.ADMIN:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

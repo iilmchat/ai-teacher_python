@@ -6,10 +6,16 @@ Rate limiting через Redis (S11-003).
 
 Лимиты:
 - `POST /auth/login` — 5 запросов в минуту на IP;
+- `POST /auth/refresh` — 30 запросов в минуту на IP (S34-004);
 - остальные запросы — 300 в минуту на IP;
 - служебные пути (`/health`, `/docs`, `/openapi.json`, `/`) не лимитируются.
 
+Per-user лимиты (не по IP): пробные проверки задачи (`CHECK_LIMIT`), запуск
+кода в песочнице (`CODE_EXECUTE_LIMIT`) — см. `is_user_limited`.
+
 В тестах лимиты отключаются флагом `RATE_LIMIT_ENABLED=false`.
+
+S34-003: IP-адрес определяется через `client_ip(request)` с учётом доверенных прокси.
 """
 
 from collections.abc import Awaitable, Callable
@@ -22,6 +28,7 @@ from fastapi.responses import JSONResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.core.ip_utils import client_ip
 
 logger = structlog.get_logger(__name__)
 
@@ -41,6 +48,16 @@ PREFIX = "rate_limit"
 #: Проверка запускает песочницу, поэтому она ограничена отдельно от
 #: общего лимита по IP: один ученик не должен выжигать ресурсы сервера.
 CHECK_LIMIT = 20
+
+#: Отдельный лимит на обновление токенов (S34-004): защищает от перебора/флуда
+#: refresh-эндпоинта, который выполняет bcrypt и работу с БД.
+REFRESH_PATH = "/api/v1/auth/refresh"
+REFRESH_LIMIT = 30
+
+#: Лимит запусков кода на пользователя в минуту (S34-004). Песочница —
+#: дорогой ресурс (процесс/контейнер), поэтому ограничена per-user, а не только
+#: общим IP-лимитом.
+CODE_EXECUTE_LIMIT = 30
 
 
 class RateLimiter:
@@ -114,13 +131,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             redis_factory = get_redis
         self.redis_factory = redis_factory
 
-    def _client_ip(self, request: Request) -> str:
-        """IP клиента: за прокси учитываем X-Forwarded-For"""
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
-
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
@@ -134,12 +144,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         is_login = request.url.path == LOGIN_PATH and request.method == "POST"
-        key = (
-            f"login:{self._client_ip(request)}"
-            if is_login
-            else f"general:{self._client_ip(request)}"
-        )
-        limit = LOGIN_LIMIT if is_login else GENERAL_LIMIT
+        is_refresh = request.url.path == REFRESH_PATH and request.method == "POST"
+        if is_login:
+            key = f"login:{client_ip(request)}"
+            limit = LOGIN_LIMIT
+        elif is_refresh:
+            key = f"refresh:{client_ip(request)}"
+            limit = REFRESH_LIMIT
+        else:
+            key = f"general:{client_ip(request)}"
+            limit = GENERAL_LIMIT
 
         try:
             limited = await limiter.is_limited(key, limit=limit)

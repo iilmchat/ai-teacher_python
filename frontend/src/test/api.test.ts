@@ -86,6 +86,15 @@ describe('api client', () => {
     expect(result.username).toBe('tester');
     expect(getAccessToken()).toBe('fresh');
     expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // S34-002: refresh-токен уходит в теле JSON, а не в query string.
+    const refreshCall = fetchMock.mock.calls[1];
+    expect(refreshCall[0]).toBe('/api/v1/auth/refresh');
+    const refreshInit = refreshCall[1] as RequestInit;
+    expect(refreshInit.method).toBe('POST');
+    expect(JSON.parse(refreshInit.body as string)).toEqual({
+      refresh_token: 'valid-refresh',
+    });
   });
 
   it('разлогинивает, если refresh невозможен', async () => {

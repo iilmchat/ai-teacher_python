@@ -3,7 +3,7 @@ AI Teacher for Python - Main FastAPI Application
 """
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Any
+from typing import Any, TypedDict
 
 import structlog
 from fastapi import FastAPI, Request
@@ -23,7 +23,7 @@ from app.api.v1 import (
     teacher,
     users,
 )
-from app.config import DEFAULT_SECRET_KEY, settings
+from app.config import settings, validate_security_settings
 from app.core.logging import configure_logging
 from app.core.metrics import HTTPMetricsMiddleware, render_metrics, set_build_info
 from app.core.rate_limiter import RateLimitMiddleware
@@ -42,17 +42,20 @@ configure_logging()
 logger = structlog.get_logger(__name__)
 
 
+class DocsConfig(TypedDict):
+    """URL-ы документации API (S34-006)."""
+
+    docs_url: str | None
+    redoc_url: str | None
+    openapi_url: str | None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Управление жизненным циклом приложения"""
+    # S34-005: fail-fast при небезопасном SECRET_KEY в production.
+    validate_security_settings()
     set_build_info(settings.version)
-    if settings.secret_key == DEFAULT_SECRET_KEY or len(settings.secret_key) < 32:
-        # Не валим старт (локальная разработка), но шумим заметно: дефолтный
-        # ключ позволяет подделать JWT любому, кто видел .env.example.
-        logger.error(
-            "insecure_secret_key",
-            hint="задайте случайный SECRET_KEY (>= 32 символов) в .env",
-        )
     redis_ok = await ping_redis()
     logger.info(
         "app_starting",
@@ -87,14 +90,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("app_stopped", app_name=settings.app_name)
 
 
+def docs_urls(enabled: bool) -> DocsConfig:
+    """URL-ы документации API с учётом флага `DOCS_ENABLED` (S34-006).
+
+    При `enabled=False` Swagger, ReDoc и OpenAPI-схема не отдаются:
+    FastAPI получает `None` и не регистрирует маршруты.
+    """
+    if not enabled:
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {
+        "docs_url": "/api/docs",
+        "redoc_url": "/api/redoc",
+        "openapi_url": "/api/openapi.json",
+    }
+
+
+_docs = docs_urls(settings.docs_enabled)
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.version,
     description="AI-ассистент для обучения школьников программированию на Python",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url=_docs["docs_url"],
+    redoc_url=_docs["redoc_url"],
+    openapi_url=_docs["openapi_url"],
 )
 
 # CORS middleware

@@ -8,6 +8,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.repositories.user import UserRepository
+from app.models.user import UserRole
 
 REGISTER_URL = "/api/v1/auth/register"
 LOGIN_URL = "/api/v1/auth/login"
@@ -155,11 +156,12 @@ async def test_refresh_token(client: AsyncClient) -> None:
 
     response = await client.post(
         "/api/v1/auth/refresh",
-        params={"refresh_token": refresh_token},
+        json={"refresh_token": refresh_token},
     )
 
     assert response.status_code == 200
     assert "access_token" in response.json()
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 async def test_refresh_with_access_token_rejected(client: AsyncClient) -> None:
@@ -169,10 +171,113 @@ async def test_refresh_with_access_token_rejected(client: AsyncClient) -> None:
 
     response = await client.post(
         "/api/v1/auth/refresh",
-        params={"refresh_token": access_token},
+        json={"refresh_token": access_token},
     )
 
     assert response.status_code == 401
+
+
+async def _make_admin(db_session: AsyncSession, username: str) -> None:
+    """Сделать пользователя администратором"""
+    user = await UserRepository(db_session).get_by_username(username)
+    assert user is not None
+    await UserRepository(db_session).update(user.id, role=UserRole.ADMIN)
+
+
+async def test_teacher_role_rejects_inactive_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Деактивированный teacher не может получить доступ к защищённым эндпоинтам"""
+    await _register(client, "teacher@example.com", "teacheruser")
+    await _make_admin(db_session, "teacheruser")
+
+    # Получаем токены для активного пользователя
+    login_response = await client.post(
+        LOGIN_URL,
+        data={"username": "teacheruser", "password": "password123"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+
+    # Деактивируем пользователя
+    await _deactivate(db_session, "teacheruser")
+
+    # Попытка получить доступ к защищённому эндпоинту учителя
+    response = await client.get(
+        "/api/v1/teacher/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+    assert "Аккаунт удалён" in response.json()["detail"]
+
+
+async def test_admin_role_rejects_inactive_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Деактивированный admin не может получить доступ к защищённым эндпоинтам"""
+    await _register(client, "admin@example.com", "adminuser")
+    await _make_admin(db_session, "adminuser")
+
+    # Получаем токены для активного пользователя
+    login_response = await client.post(
+        LOGIN_URL,
+        data={"username": "adminuser", "password": "password123"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+
+    # Деактивируем пользователя
+    await _deactivate(db_session, "adminuser")
+
+    # Попытка получить доступ к защищённому эндпоинту админа
+    response = await client.get(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 401
+    assert "Аккаунт удалён" in response.json()["detail"]
+
+
+async def test_teacher_role_allows_active_user(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Активный teacher может получить доступ к защищённым эндпоинтам"""
+    await _register(client, "teacher2@example.com", "teacher2user")
+    await _make_admin(db_session, "teacher2user")
+
+    login_response = await client.post(
+        LOGIN_URL,
+        data={"username": "teacher2user", "password": "password123"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+
+    # Успешный доступ к защищённому эндпоинту учителя
+    response = await client.get(
+        "/api/v1/teacher/tasks",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+
+async def test_admin_role_allows_active_user(client: AsyncClient, db_session: AsyncSession) -> None:
+    """Активный admin может получить доступ к защищённым эндпоинтам"""
+    await _register(client, "admin2@example.com", "admin2user")
+    await _make_admin(db_session, "admin2user")
+
+    login_response = await client.post(
+        LOGIN_URL,
+        data={"username": "admin2user", "password": "password123"},
+    )
+    assert login_response.status_code == 200
+    token = login_response.json()["access_token"]
+
+    # Успешный доступ к защищённому эндпоинту админа
+    response = await client.get(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
 
 
 async def test_protected_route_without_token(client: AsyncClient) -> None:
@@ -232,7 +337,7 @@ async def test_refresh_rejected_for_inactive_user(
     await _deactivate(db_session, "inactive2")
 
     response = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": refresh_token}
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
     )
 
     assert response.status_code == 401
@@ -255,7 +360,7 @@ async def test_refresh_rejected_after_account_deletion(client: AsyncClient) -> N
     assert deleted.status_code == 204, deleted.text
 
     response = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
 
     assert response.status_code == 401

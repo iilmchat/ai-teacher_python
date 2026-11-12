@@ -191,6 +191,6 @@ async def test_delete_account_revokes_refresh_token(client: AsyncClient) -> None
     assert deleted.status_code == 204
 
     refresh = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert refresh.status_code == 401

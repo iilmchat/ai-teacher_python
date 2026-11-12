@@ -81,10 +81,11 @@ async function refreshAccessToken(): Promise<string | null> {
   }
 
   try {
-    const response = await fetch(
-      `${API_BASE}/auth/refresh?refresh_token=${encodeURIComponent(refreshToken)}`,
-      { method: 'POST' },
-    );
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
     if (!response.ok) {
       return null;
     }

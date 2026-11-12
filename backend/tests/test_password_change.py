@@ -47,8 +47,9 @@ async def _change(
 
 
 async def _refresh_tokens(client: AsyncClient, refresh_token: str):
+    """Обновление пары: refresh-токен передаётся в теле JSON (S34-002)."""
     return await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": refresh_token}
+        "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
     )
 
 

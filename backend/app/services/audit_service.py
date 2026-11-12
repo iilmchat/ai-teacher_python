@@ -6,6 +6,8 @@
 commit, что честно).
 
 Персональные данные в payload не дублируются: только сводка (роль, id, флаги).
+
+S34-003: IP-адрес определяется через `client_ip(request)` с учётом доверенных прокси.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from fastapi import Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ip_utils import client_ip as resolve_client_ip
 from app.models.audit import AuditLog
 from app.models.user import User
 
@@ -25,13 +28,14 @@ logger = structlog.get_logger(__name__)
 
 
 def client_ip(request: Request | None) -> str | None:
-    """IP клиента с учётом `X-Forwarded-For` (за nginx)"""
+    """IP клиента с учётом `X-Forwarded-For` и `TRUSTED_PROXIES` (S34-003).
+
+    Если request нет — None. Иначе используется общий резолвер `client_ip`,
+    который доверяет заголовку только за доверенным прокси.
+    """
     if request is None:
         return None
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64] or None
-    return request.client.host[:64] if request.client else None
+    return resolve_client_ip(request)[:64] or None
 
 
 async def record_audit(

@@ -87,7 +87,7 @@ async def test_revoke_other_session(client: AsyncClient) -> None:
     assert revoked.status_code == 204
 
     refresh = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": first["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": first["refresh_token"]}
     )
     assert refresh.status_code == 401
 
@@ -97,7 +97,7 @@ async def test_revoke_other_session(client: AsyncClient) -> None:
 
     # Текущая сессия продолжает обновляться
     current_refresh = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": second["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": second["refresh_token"]}
     )
     assert current_refresh.status_code == 200
 
@@ -142,18 +142,18 @@ async def test_refresh_rotates_jti(client: AsyncClient) -> None:
     tokens = await _login(client, "rotatejti")
 
     refreshed = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert refreshed.status_code == 200
     new_tokens = refreshed.json()
 
     old_again = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
     )
     assert old_again.status_code == 401
 
     new_again = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": new_tokens["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]}
     )
     assert new_again.status_code == 200
 
@@ -176,7 +176,7 @@ async def test_legacy_refresh_without_jti_still_works(
     legacy = create_refresh_token({"sub": str(user.id), "tv": user.token_version})
 
     response = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": legacy}
+        "/api/v1/auth/refresh", json={"refresh_token": legacy}
     )
 
     assert response.status_code == 200
@@ -201,7 +201,7 @@ async def test_revoke_others_signs_out_everywhere(client: AsyncClient) -> None:
     # Обе старые сессии больше не обновляются
     for tokens in (first, second):
         refresh = await client.post(
-            "/api/v1/auth/refresh", params={"refresh_token": tokens["refresh_token"]}
+            "/api/v1/auth/refresh", json={"refresh_token": tokens["refresh_token"]}
         )
         assert refresh.status_code == 401
 
@@ -212,7 +212,7 @@ async def test_revoke_others_signs_out_everywhere(client: AsyncClient) -> None:
 
     # Новая пара текущего устройства работает
     refresh = await client.post(
-        "/api/v1/auth/refresh", params={"refresh_token": data["refresh_token"]}
+        "/api/v1/auth/refresh", json={"refresh_token": data["refresh_token"]}
     )
     assert refresh.status_code == 200
 

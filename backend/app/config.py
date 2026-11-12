@@ -14,6 +14,9 @@ ENV_FILE = PROJECT_ROOT / ".env"
 #: Значение `SECRET_KEY` из `.env.example`: не годится для production-запуска
 DEFAULT_SECRET_KEY = "change_me_secret_key_for_jwt_encoding"
 
+#: Минимальная длина `SECRET_KEY` для production (S34-005)
+SECRET_KEY_MIN_LENGTH = 32
+
 
 class Settings(BaseSettings):
     """Настройки приложения"""
@@ -27,7 +30,7 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "AI Teacher for Python"
-    version: str = "0.5.0"
+    version: str = "0.6.0"
     debug: bool = False
     #: Формат логов: `json` (production/CI) или `console` (dev) — S25-001
     log_level: str = "INFO"
@@ -100,6 +103,12 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     algorithm: str = "HS256"
+    #: Доверенные прокси (S34-003). IP из заголовка X-Forwarded-For учитываются
+    #: только если они в этом списке. Пусто — X-Forwarded-For игнорируется
+    #: (только request.client.host). Пример: ["10.0.0.1", "192.168.1.0/24"]
+    trusted_proxies: Annotated[list[str], NoDecode] = []
+    #: Включить Swagger/OpenAPI (S34-006). В production — false
+    docs_enabled: bool = True
 
     # LLM
     llm_provider: str = "deepseek"  # deepseek, lm_studio
@@ -196,3 +205,28 @@ class Settings(BaseSettings):
 
 # Глобальный экземпляр настроек
 settings = Settings()
+
+
+class InsecureSettingsError(RuntimeError):
+    """Небезопасная конфигурация при запуске в production (S34-005)."""
+
+
+def validate_security_settings() -> None:
+    """Fail-fast: не запускаемся в production с небезопасным `SECRET_KEY`.
+
+    В `DEBUG=true` (локальная разработка) проверка пропускается, чтобы
+    дефолтный ключ не мешал запуску. При `DEBUG=false` дефолтный или
+    короткий (< 32 символов) ключ позволяет подделать JWT — это фатально,
+    поэтому старт прерывается (S34-005).
+    """
+    if settings.debug:
+        return
+    if (
+        settings.secret_key == DEFAULT_SECRET_KEY
+        or len(settings.secret_key) < SECRET_KEY_MIN_LENGTH
+    ):
+        raise InsecureSettingsError(
+            "Небезопасный SECRET_KEY: задайте случайный ключ длиной "
+            f">= {SECRET_KEY_MIN_LENGTH} символов в .env "
+            "(или включите DEBUG=true для локальной разработки)."
+        )

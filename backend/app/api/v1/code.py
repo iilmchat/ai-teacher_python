@@ -9,12 +9,13 @@ from dataclasses import asdict
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.executor import SandboxedExecutor
 from app.core.linter import analyze_code, lint_code
+from app.core.rate_limiter import CODE_EXECUTE_LIMIT, WINDOW_SECONDS, is_user_limited
 from app.core.security import get_current_active_user
 from app.db.database import get_db
 from app.db.repositories.code import CodeExecutionRepository
@@ -50,7 +51,20 @@ async def execute_code(
     db: DbSession,
     executor: ExecutorDep,
 ) -> ExecutionResponse:
-    """Выполнить код ученика в песочнице и сохранить результат"""
+    """Выполнить код ученика в песочнице и сохранить результат.
+
+    Запуск ограничен per-user (S34-004): песочница — дорогой ресурс,
+    поэтому один пользователь не должен выжигать сервер.
+    """
+    if await is_user_limited(
+        "code_execute", str(current_user.id), CODE_EXECUTE_LIMIT
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Слишком много запусков кода. Попробуйте через минуту.",
+            headers={"Retry-After": str(WINDOW_SECONDS)},
+        )
+
     result = await executor.execute(payload.code, payload.stdin or "")
 
     await CodeExecutionRepository(db).create(

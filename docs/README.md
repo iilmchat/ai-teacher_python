@@ -14,7 +14,7 @@
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
-| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.6.md](../TODO_V0.6.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
+| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.7.md](../TODO_V0.7.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -43,9 +43,12 @@
 - [../TODO_V0.5.md](../TODO_V0.5.md) — **завершённый этап v0.5.0** «Learning Experience &
   Teaching Workflow» (спринты 42–48): аудит продукта по 7 срезам, план задач
   `S42-001`…`S48-003`, зависимости, оценки, DoD, риски и границы этапа
-- [../TODO_V0.6.md](../TODO_V0.6.md) — этап v0.6.0 «Engagement, Accessibility &
+- [../TODO_V0.7.md](../TODO_V0.7.md) — этап v0.7.0 «Engagement, Accessibility &
   Auth Hardening» (спринты 49–52): траектории и вовлечение, доступность и
-  PWA, перенос токенов в httpOnly-cookie (`KI-027`), релиз
+  PWA, перенос токенов в httpOnly-cookie (`KI-027`), e-mail-подтверждение и
+  сброс пароля (`KI-035`), релиз
+- [../TODO_V0.4.md](../TODO_V0.4.md) — пересобранный этап v0.6.0 «Auth & Edge
+  Hardening» (спринт 34) и остальные спринты production-плана
 - [CI.md](CI.md) — CI-платформа: self-hosted runner, гейты, релиз, эксплуатация
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 

@@ -61,7 +61,7 @@ RAG (`RAG_MIN_SCORE`) — см. [reports/sprint-19/SPRINT-19.md](reports/sprint-
 |-------|------|------|-------|
 | POST | `/auth/register` | `{email, username, password}` | 201 `User` |
 | POST | `/auth/login` | form: `username`, `password` | 200 `{access_token, refresh_token, token_type, user}`; создаёт сессию (S45-005) |
-| POST | `/auth/refresh` | query `refresh_token` | 200 `{access_token, refresh_token}`; ротирует `jti` сессии (S45-005) |
+| POST | `/auth/refresh` | body JSON `{refresh_token}` (S34-002; раньше query) | 200 `{access_token, refresh_token}`; ротирует `jti` сессии (S45-005) |
 | POST | `/auth/logout` | — | 200 `{message}` |
 | GET | `/auth/me` | — | 200 `User` |
 | PATCH | `/auth/me` | `{email?, username?, level?, settings?}` | 200 `User` |
@@ -650,7 +650,18 @@ S46-006). `type` фильтрует выборку, но `unread` всегда �
 | `RAG_EMBEDDING_TIMEOUT` | `5.0` с | таймаут запроса эмбеддинга |
 | `LM_STUDIO_URL` | `http://127.0.0.1:8034/v1` | base URL провайдера эмбеддингов |
 | `ALLOWED_ORIGINS` | `localhost:3000`/`127.0.0.1:3000` | CORS; в prod-compose задаётся ENV, не `*` |
+| `TRUSTED_PROXIES` | пусто | список IP/CIDR reverse-proxy; только им доверяем `X-Forwarded-For` (S34-003) |
+| `DOCS_ENABLED` | `true` | `false` убирает `/api/docs`, `/api/redoc`, `/api/openapi.json` (S34-006) |
 | `EXECUTOR_*` | см. §5 | лимиты песочницы; `.format()` заблокирован независимо от настроек |
+
+**Стартовые проверки (S34-005).** При `DEBUG=false` приложение не стартует,
+если `SECRET_KEY` совпадает с дефолтным или короче 32 символов
+(`InsecureSettingsError`). В `DEBUG=true` проверка пропускается.
+
+**Лимиты (S34-004).** `POST /auth/login` — 5/мин на IP, `POST /auth/refresh` —
+30/мин на IP, остальное — 300/мин на IP; `POST /code/execute` — 30/мин на
+пользователя, `POST /tasks/{id}/check` — 20/мин на пользователя. При
+превышении — `429` + `Retry-After`.
 
 ### 3.13. Контрактный гейт OpenAPI
 
