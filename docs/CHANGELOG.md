@@ -80,10 +80,10 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты, ASVS L1/gua
   `scripts/check_env_drift.py` (Settings ↔ `.env.example`, wired в
   `gates.sh --fast` и CI); актуализированы README/ARCHITECTURE/RELEASES и
   навигация `docs/README.md`.
-- **S41**: релиз v0.6.0 подготовлен: версия `0.6.0` во всех источниках,
-  `docs/releases/v0.6.0.md`, `UPGRADE.md` (v0.5.0 → v0.6.0, новых миграций
-  нет), полные гейты и dry-run отката; тег `v0.6.0` — после утверждения
-  владельцем.
+- **S41**: релиз v0.6.0 выпущен: annotated-тег `v0.6.0`, GitHub Release,
+  образы backend/frontend/sandbox-runner в GHCR (тег + digest); версия `0.6.0`
+  во всех источниках, `docs/releases/v0.6.0.md`, `UPGRADE.md` (v0.5.0 →
+  v0.6.0, новых миграций нет), полные гейты и dry-run отката.
 
 ### Изменено
 

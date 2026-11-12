@@ -1,7 +1,7 @@
 # Итог этапа v0.6.0 «Production Hardening»
 
 **Дата:** 2026-11-12
-**Фактический тег:** `v0.6.0` (ставится после утверждения владельцем)
+**Фактический тег:** `v0.6.0` (создан 2026-11-12; GitHub Release и GHCR)
 **Предыдущий релиз:** `v0.5.0` (2026-11-10)
 **Каталог отчёта:** `docs/reports/v0.4.0/` — историческое имя, чтобы не
 плодить сущности; документ описывает этап **v0.6.0**.
@@ -52,6 +52,8 @@ refresh вне query, trusted proxies и per-user лимиты, `is_active` в R
 | E2E (Playwright) | **37 passed, 1 skipped** (2.7 мин) |
 | Миграции | head **022** (22 миграции); `alembic check` — чисто; новых в v0.6.0 нет |
 | Env-drift | `Settings` 76 полей ↔ `.env.example` — OK |
+| GHCR | 3 образа (`backend`, `frontend`, `sandbox-runner`) по тегу `v0.6.0` и digest |
+| GitHub Release | <https://github.com/iilmchat/ai-teacher_python/releases/tag/v0.6.0> |
 | Версия | `0.6.0` в pyproject/package/config — 0 расхождений |
 | Откат | `rollback.sh --dry-run` — exit 0 |
 | Известные проблемы | 35 записей: 6 активных, 29 закрытых |
@@ -66,9 +68,11 @@ refresh вне query, trusted proxies и per-user лимиты, `is_active` в R
    и Dependabot.
 2. **S37** — GitFlic required checks не активированы: нужен доступ владельца
    (`KI-023`); скрипт/инструкция готовы.
-3. **GHCR publish и staging-деплой** в этой сессии не выполнялись: нет тега
-   (по требованию — сначала утверждение) и staging-контура. Workflow готов,
-   запускается по тегу `v*`.
+3. **GHCR publish** выполнен по тегу `v0.6.0`: три образа опубликованы и
+   проверены по digest ([digests](../../releases/v0.6.0-digests.txt)).
+   **Staging-деплой** не выполнялся — нет стенда/домена; workflow готов.
+   Digest-артефакт в Actions упал из-за скрытого `.digests` (исправлено в
+   `docker-publish.yml` для будущих релизов), образы не затронуты.
 4. **Restore drill** проверялся в S36; в S41 выполнен dry-run отката, реальный
    restore не запускался (нет свежего прод-бэкапа в сессии).
 5. **Perf baseline** (`measured: null`) ждёт первого nightly-прогона на
@@ -111,4 +115,5 @@ refresh вне query, trusted proxies и per-user лимиты, `is_active` в R
 **v0.7.0 «Engagement, Accessibility & Auth Hardening»** (спринты 49–52,
 [TODO_V0.7.md](../../../TODO_V0.7.md)): траектории/вовлечение, доступность и PWA,
 перенос токенов в httpOnly-cookie/BFF (`KI-027`), релиз v0.7.0. Перед стартом —
-утвердить тег `v0.6.0` и выполнить post-release smoke на staging/пилоте.
+выполнить post-release smoke на staging/пилоте и зафиксировать digest в
+`.env.prod`; тег `v0.6.0` уже создан и опубликован.

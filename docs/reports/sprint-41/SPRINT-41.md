@@ -3,7 +3,7 @@
 **Дата:** 2026-11-12
 **Этап:** v0.6.0 «Production Hardening» (финальный)
 **Задачи:** S41-001…S41-005
-**Статус:** релиз подготовлен; тег `v0.6.0` — после утверждения владельцем
+**Статус:** релиз **выпущен**; тег `v0.6.0`, GitHub Release и образы в GHCR
 
 ---
 
@@ -72,14 +72,17 @@
 | Миграции | `alembic current` / `check` | `022 (head)` / no new operations |
 | Откат | `scripts/rollback.sh --dry-run` | exit 0, план на digest |
 | Полные гейты | `gates.sh --full --ci` | **OK: 13/13 шагов** (env-drift, lint, mypy, backend/frontend coverage, build, compose, promtool, e2e) |
+| GHCR | `docker buildx imagetools inspect ...:v0.6.0` | 3 образа, тег и digest подтверждены |
+| GitHub Release | `gh release view v0.6.0` | опубликован, `targetCommitish=main` |
 
 ---
 
 ## 4. Риски и ограничения
 
-1. **Тег не создан** — по требованию владельца. После approval: тег `v0.6.0`
-   запускает `docker-publish.yml` (GHCR, SBOM/provenance, digest artifact), затем
-   GitHub/GitFlic Release и post-release smoke.
+1. **Тег и GitHub Release созданы.** `docker-publish.yml` собрал и опубликовал
+   три образа; шаг `Upload digest artifact` упал из-за скрытого `.digests`
+   (исправлено `include-hidden-files: true` в workflow). Сами образы
+   опубликованы и проверены по тегу/digest.
 2. **Staging-деплой и реальный откат** не выполнялись: нет staging-контура;
    проверен dry-run и compose-валидация. Риск — обнаружится только на стенде.
 3. **SBOM/checksums:** SBOM/provenance встроены в publish; отдельный файл
@@ -87,6 +90,8 @@
 4. **Perf baseline** ждёт nightly-runner (`measured: null`).
 5. **Публичный production** не разрешён: нужны отдельный VPS/домен, 152-ФЗ,
    multi-node/HA, e-mail-восстановление и полная LLM-модерация.
+6. **GitFlic Release** не создан: нет CLI/API-токена в локальном окружении;
+   тег в GitFlic запушен, релиз можно создать вручную из тех же заметок.
 
 ---
 
@@ -107,19 +112,22 @@
 
 ## 6. Дальнейшие шаги
 
-1. Владелец утверждает релиз-ноты и тег `v0.6.0`.
-2. Создать тег `v0.6.0` → дождаться GHCR publish (3 образа + digest artifact).
+1. ✅ Тег `v0.6.0` создан и запушен в `origin`/`gitflic`; GitHub Release
+   опубликован: <https://github.com/iilmchat/ai-teacher_python/releases/tag/v0.6.0>.
+2. ✅ GHCR: три образа опубликованы по тегу и digest
+   ([digests](../../releases/v0.6.0-digests.txt)).
 3. Зафиксировать digest в `.env.prod`, задеплоить на staging/пилот по RUNBOOK.
 4. Post-release smoke: `/health/ready`, `/api/v1/health` (`version: 0.6.0`),
    HTTPS-домен, refresh через тело, бэкап/restore drill.
-5. Создать GitHub/GitFlic Release из `docs/releases/v0.6.0.md`; приложить
-   digest/SBOM-артефакты.
+5. Создать GitFlic Release вручную (тег есть, текст — `docs/releases/v0.6.0.md`);
+   приложить digest-файл.
 6. Перейти к v0.7.0 ([TODO_V0.7.md](../../../TODO_V0.7.md)).
 
 ---
 
 ## 7. Итог шага
 
-Кодовая часть релиза v0.6.0 завершена: версии синхронизированы, документация и
-релиз-ноты готовы, полные гейты и dry-run отката зелёные. Остались действия
-владельца: утверждение, тег, публикация образов/релизов и post-release smoke.
+Релиз v0.6.0 выпущен: версии синхронизированы, документация и релиз-ноты
+готовы, полные гейты и dry-run отката зелёные, annotated-тег и GitHub Release
+созданы, образы опубликованы в GHCR и проверены по digest. Остались
+эксплуатационные шаги: staging-деплой, post-release smoke и GitFlic Release.

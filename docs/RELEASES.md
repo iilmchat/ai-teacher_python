@@ -2,15 +2,18 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Последняя версия:** v0.5.0 «Learning Experience & Teaching Workflow»
+**Текущая версия:** v0.6.0 «Production Hardening» (2026-11-12; тег
+`v0.6.0`, GitHub Release, образы в GHCR).
+**Предыдущий релиз:** v0.5.0 «Learning Experience & Teaching Workflow»
 (2026-11-10; спринты 42–48, [TODO_V0.5.md](../TODO_V0.5.md)).
-**Текущий этап:** v0.6.0 «Production Hardening» — в работе (спринты 34–41,
+**Этап v0.6.0 завершён** (спринты 34–41,
 [TODO_V0.4.md](../TODO_V0.4.md)). Закрыты 34–36 и 38–41; 37 — инженерия
-(preflight/coverage/parity готовы, GitFlic-гейт ждёт владельца); 40 — DX & Docs;
-41 — релиз v0.6.0. План пересобран после приёмки v0.5.0 с учётом DevOps-аудита
-ноября 2026 ([DEVOPS_AUDIT_2026-11.md](reports/DEVOPS_AUDIT_2026-11.md)).
-Multi-node, HA и DR остаются вне этапа (§9 плана). Следующий этап — v0.7.0
-«Engagement, Accessibility & Auth Hardening» (спринты 49–52,
+(preflight/coverage/parity готовы, GitFlic-гейт ждёт владельца); S33 —
+частично (принятое отклонение). План пересобран после приёмки v0.5.0 с учётом
+DevOps-аудита ноября 2026
+([DEVOPS_AUDIT_2026-11.md](reports/DEVOPS_AUDIT_2026-11.md)).
+Multi-node, HA и DR-SLO 2.0 остаются вне этапа (§9 плана). Следующий этап —
+v0.7.0 «Engagement, Accessibility & Auth Hardening» (спринты 49–52,
 [TODO_V0.7.md](../TODO_V0.7.md)). Предыдущий этап v0.3.0 «Ops & Scale»
 завершён, патчи v0.3.1–v0.3.3 — ниже.
 
@@ -139,7 +142,7 @@ TLS-периметр, автоматизированные деплой/бэка
 ## Спринт 41: Release v0.6.0
 
 **Период:** 2026-11-12
-**Статус:** ✅ Релиз подготовлен; тег `v0.6.0` — после утверждения владельцем
+**Статус:** ✅ Релиз выпущен; тег `v0.6.0`, GitHub Release и образы в GHCR
 
 ### Задачи
 
@@ -151,8 +154,10 @@ TLS-периметр, автоматизированные деплой/бэка
 - [x] **S41-003:** полные гейты `gates.sh --full --ci`; dry-run отката
   (`scripts/rollback.sh --dry-run`, exit 0). Сборка GHCR и staging-деплой —
   после тега/approval.
-- [x] **S41-004:** релиз-ноты и артефакты подготовлены; тег, GitHub/GitFlic
-  Release и post-release smoke — по команде владельца.
+- [x] **S41-004:** annotated-тег `v0.6.0` и GitHub Release созданы; GHCR
+  содержит backend/frontend/sandbox-runner по тегу и digest
+  ([digests](releases/v0.6.0-digests.txt)). Post-release smoke на
+  staging/пилоте — отдельный шаг (нет домена/стенда в сессии).
 - [x] **S41-005:** `docs/reports/sprint-41/SPRINT-41.md` и
   `docs/reports/v0.4.0/STAGE.md`; статусы TODO/KI/RELEASES сверены.
 
@@ -170,14 +175,14 @@ production требует отдельных шагов (аудит, 152-ФЗ, m
 
 ## Релиз v0.6.0 «Production Hardening»
 
-**Статус:** подготовлен · **Дата:** 2026-11-12 · **Тег:** `v0.6.0`
-(ставится после утверждения владельцем) · **Предыдущий:** `v0.5.0`
+**Статус:** выпущен · **Дата:** 2026-11-12 · **Тег:** `v0.6.0`
+(GitHub Release создан) · **Предыдущий:** `v0.5.0`
 **Тип релиза:** single-node · **Обратная совместимость:** частично —
 `POST /auth/refresh` принимает `refresh_token` только в теле JSON
 
-Полные релиз-ноты — [releases/v0.6.0.md](releases/v0.6.0.md). Итоговые
-цифры тестов/миграций и приёмка — в `docs/reports/sprint-41/` и
-[CHANGELOG.md](CHANGELOG.md).
+Полные релиз-ноты — [releases/v0.6.0.md](releases/v0.6.0.md). GitHub Release:
+<https://github.com/iilmchat/ai-teacher_python/releases/tag/v0.6.0>. Digest
+образов — [releases/v0.6.0-digests.txt](releases/v0.6.0-digests.txt).
 
 ### Главное
 

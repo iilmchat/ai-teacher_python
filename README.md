@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения) · последний тег — v0.5.0 · **© 2026 RuChating (iilmchat)**
+**Версия:** **v0.6.0 «Production Hardening»** (2026-11-12, тег `v0.6.0`; GitHub Release и GHCR) · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -94,8 +94,8 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0; single-node (D-001) |
-| Спринты | 1–48 завершены; v0.6.0 — закрыты 34–36 и 38–41; 37 — инженерия (GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
+| Версия | **v0.6.0 «Production Hardening»** (2026-11-12, тег `v0.6.0`; GitHub Release, GHCR); предыдущий — v0.5.0; single-node (D-001) |
+| Спринты | 1–48 завершены; v0.6.0 выпущен (34–36 и 38–41 закрыты; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
 | Тесты backend | **834 passed + 1 skip**; coverage **79%** (порог 70) |
 | Миграции | Alembic head **022** (22 миграции, `001`–`022`) |
 | Тесты frontend | **279** unit + **37** e2e (Playwright; 37 passed, 1 skipped) |

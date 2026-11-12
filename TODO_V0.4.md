@@ -1,8 +1,9 @@
 # TODO_V0.4.md — план этапа v0.6.0 «Production Hardening»
 
-> **Статус:** этап **завершён 2026-11-12**; релиз `v0.6.0` подготовлен, тег —
-> после утверждения владельцем. Спринты 34–36 и 38–41 закрыты; S33 — частично
-> (принято как отклонение), S37 — инженерия (`KI-023`, активация владельцем).
+> **Статус:** этап **завершён 2026-11-12**; релиз `v0.6.0` **выпущен**
+> (annotated-тег, GitHub Release, образы в GHCR). Спринты 34–36 и 38–41
+> закрыты; S33 — частично (принято как отклонение), S37 — инженерия
+> (`KI-023`, активация владельцем).
 
 > ## ⚠️ План обновлён 2026-11-11
 >
@@ -240,7 +241,7 @@ refresh-токенов и `user_sessions`.
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[x]` | DPIA/ASVS L1, `*_FILE`, guardrails LLM, CSP/HSTS |
 | 39 | Performance & Capacity | 35 | 3 дня | [x] | nightly health/tasks/submit, query-count тесты, кэш качества, лимиты/таймауты |
 | 40 | DX & Docs | 33-39 | 2 дня | [x] | ADR-001…007, CONTRIBUTING/CODEOWNERS/шаблоны, env-drift, актуализация docs |
-| 41 | Release v0.6.0 | 33–40 | 2,5 дня | `[x]` | версия 0.6.0, UPGRADE/release notes, полные гейты, dry-run откат, отчёт этапа; тег — после утверждения владельцем |
+| 41 | Release v0.6.0 | 33-40 | 2,5 дня | [x] | версия 0.6.0, UPGRADE/release notes, полные гейты, dry-run отката, тег v0.6.0, GitHub Release, GHCR-образы |
 
 **Статус этапа v0.6.0 «Production Hardening»:** завершён 2026-11-12.
 Спринты 34–36 и 38–41 закрыты; S33 — частично (S33-001/002, остальное
@@ -1012,7 +1013,7 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
 
 ---
 
-### Спринт 41: Release — `[x]` (релиз подготовлен 2026-11-12)
+### Спринт 41: Release — `[x]` (релиз выпущен 2026-11-12)
 
 **Цель:** воспроизводимый релиз с проверенным обновлением и откатом.
 
@@ -1060,14 +1061,18 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
       workflow `docker-publish.yml` готов, включится по тегу `v*`.
 - [x] **Зависит от:** S41-002 · **Оценка:** 6 ч (факт ~2 ч + гейты)
 
-#### S41-004: Тег и релизы — `[x]` (подготовлено; тег — после approval)
+#### S41-004: Тег и релизы — `[x]`
 
-- [x] Подготовлены релиз-ноты для GitHub/GitFlic Release и артефактов
-      (SBOM/checksums формирует `docker-publish.yml`).
-- [~] Тег **`v0.6.0`**, GitHub/GitFlic Release и post-release smoke —
-      **ожидают утверждения владельцем** (явное требование S41: не ставить
-      тег до приёмки).
-- [x] **Зависит от:** S41-003 · **Оценка:** 3 ч (факт ~1 ч)
+- [x] Создан annotated-тег **`v0.6.0`** (`v0.6.0 — Production Hardening`) и
+      запушен в `origin`/`gitflic`; GitHub Release опубликован из
+      `docs/releases/v0.6.0.md`.
+- [x] `docker-publish.yml` собрал и опубликовал backend/frontend/sandbox-runner
+      в GHCR; образы проверены по тегу и digest
+      (`docs/releases/v0.6.0-digests.txt`). Шаг artifact упал из-за скрытого
+      `.digests` — исправлено (`include-hidden-files: true`), образы не затронуты.
+- [~] Post-release smoke на HTTPS-домене/пилоте — не выполнялся (нет
+      staging/домена в сессии); инструкция — RUNBOOK §1–3.
+- [x] **Зависит от:** S41-003 · **Оценка:** 3 ч (факт ~1 ч + публикация)
 
 #### S41-005: Итоговый отчёт этапа — `[x]`
 
@@ -1078,10 +1083,10 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
       сверена нумерация со следующим этапом (`TODO_V0.7.md`).
 - [x] **Зависит от:** S41-004 · **Оценка:** 2 ч (факт ~2 ч)
 
-**DoD:** релиз подготовлен и закоммичен; версия/CHANGELOG/RELEASES/UPGRADE
-согласованы; полные гейты и dry-run отката зелёные; итоговый отчёт этапа
-заполнен. Тег, публикация образов и post-release smoke выполняются после
-утверждения владельцем (вне кодовой части S41).
+**DoD:** релиз выпущен: annotated-тег `v0.6.0`, GitHub Release и образы в
+GHCR созданы; версия/CHANGELOG/RELEASES/UPGRADE согласованы; полные гейты и
+dry-run отката зелёные; итоговый отчёт этапа заполнен. Post-release smoke на
+staging — отдельный шаг после появления домена/стенда.
 
 ---
 
@@ -1239,4 +1244,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-12 | Спринт 38 закрыт: ASVS L1 + SECURITY_AUDIT + DPIA; секреты `*_FILE`/Docker secrets; CSP/HSTS/заголовки Caddy; guardrails LLM (KI-036) и защитные промпты; PRIVACY §8 |
 | 2026-11-12 | Спринт 39 закрыт: nightly health/tasks/submit + baseline-заготовка, query-count тесты N+1, кэш `/admin/quality`, лимит 10 МБ и таймауты Caddy/nginx, `MAX_UPLOAD_BYTES`; PERFORMANCE/CAPACITY |
 | 2026-11-12 | Спринт 40 закрыт: ADR-001…007, `CONTRIBUTING.md`/CODEOWNERS/шаблоны, env-drift (`check_env_drift.py` + тест + CI), актуализация README/ARCHITECTURE/навигации и черновик релиза v0.6.0; полный онбординг на чистой машине — ручная проверка |
-| 2026-11-12 | **Этап v0.6.0 завершён:** версия `0.6.0` синхронизирована, `docs/releases/v0.6.0.md` + UPGRADE/CHANGELOG/RELEASES, полные гейты и dry-run отката; тег `v0.6.0` и публикация — после утверждения владельцем |
+| 2026-11-12 | **Этап v0.6.0 завершён:** версия `0.6.0` синхронизирована, `docs/releases/v0.6.0.md` + UPGRADE/CHANGELOG/RELEASES, полные гейты и dry-run отката; создан тег `v0.6.0`, GitHub Release, образы опубликованы в GHCR (digest зафиксированы) |

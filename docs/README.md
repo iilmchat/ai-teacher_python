@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0 · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** **v0.6.0 «Production Hardening»** (2026-11-12, тег `v0.6.0`; GitHub Release и GHCR) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -86,7 +86,7 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0; этап v0.6.0 завершён (34–36, 38–41; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
+| Версия | **v0.6.0 «Production Hardening»** (2026-11-12, тег `v0.6.0`; GitHub Release, GHCR); этап завершён (34–36, 38–41; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
 | Тесты backend | **835** (834 passed + 1 skipped); coverage 79.17% |
 | Тесты frontend | 279 unit + 37 e2e (Playwright; 37 passed, 1 skipped) |
 | Покрытие | backend порог 70% (последний замер 79.17%), frontend 82.23% строк |
