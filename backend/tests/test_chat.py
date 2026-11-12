@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.task import Task, TaskDifficulty
 from app.services.llm.base import LLMMessage
-from app.services.llm.prompt_builder import load_system_prompt
+from app.services.llm.prompt_builder import load_system_prompt, prompt_version
 from tests.fake_llm import FakeProvider, install_fake_provider, uninstall_fake_provider
 
 REGISTER_URL = "/api/v1/auth/register"
@@ -536,7 +536,7 @@ async def test_assistant_message_has_prompt_metadata(
     assert response.status_code == 201, response.text
     assistant = response.json()["assistant_message"]
     assert assistant["metadata"]["provider"] == "fake"
-    assert assistant["metadata"]["prompt_version"] == 1
+    assert assistant["metadata"]["prompt_version"] == prompt_version("basic")
     assert "model" in assistant["metadata"]
     assert assistant["warnings"] == []
     assert response.json()["user_message"]["metadata"] == {}

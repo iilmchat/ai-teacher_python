@@ -32,7 +32,9 @@ services:
     networks: [internal]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      # S38-002: ENV или файл (Docker secrets/K8s). Файл имеет приоритет.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
       POSTGRES_DB: ${POSTGRES_DB:-ai_teacher}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -72,9 +74,11 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
       POSTGRES_DB: ${POSTGRES_DB:-ai_teacher}
-      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY:-}
+      SECRET_KEY_FILE: ${SECRET_KEY_FILE:-}
       DEBUG: "false"
       SKIP_MIGRATIONS: "true"
     command: ["alembic", "upgrade", "head"]
@@ -107,15 +111,19 @@ services:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_PASSWORD_FILE: ${POSTGRES_PASSWORD_FILE:-}
       POSTGRES_DB: ${POSTGRES_DB:-ai_teacher}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY:-}
+      SECRET_KEY_FILE: ${SECRET_KEY_FILE:-}
       # S36-003: frontend и API на одном origin, CORS нужен только внешним клиентам.
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://${DOMAIN:-localhost}}
       LLM_PROVIDER: ${LLM_PROVIDER:-deepseek}
+      LLM_GUARDRAILS_ENABLED: ${LLM_GUARDRAILS_ENABLED:-true}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_API_KEY_FILE: ${DEEPSEEK_API_KEY_FILE:-}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/v1}
       DEBUG: "false"
       DOCS_ENABLED: "false"
@@ -125,9 +133,17 @@ services:
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
       METRICS_ENABLED: "true"
       SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_DSN_FILE: ${SENTRY_DSN_FILE:-}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
       SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-${IMAGE_TAG:-}}
+      # S38-002: SMTP-секрет из файла (если e-mail включат в v0.7.0).
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PASSWORD_FILE: ${SMTP_PASSWORD_FILE:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@ai-teacher.local}
       RETENTION_SCHEDULER_ENABLED: "true"
       RETENTION_SCHEDULER_AT: ${RETENTION_SCHEDULER_AT:-03:30}
       # S36-001: образ песочницы из GHCR (container-режим).

@@ -25,6 +25,7 @@ from app.models.user import User, UserLevel
 from app.services.levels import resolve_level
 from app.services.llm.base import LLMMessage, LLMProvider
 from app.services.llm.embeddings import EmbeddingProvider
+from app.services.llm.guardrails import check_user_input
 from app.services.llm.policy import (
     detect_level_policy_violations,
     extract_code_blocks,
@@ -281,6 +282,11 @@ class ChatService:
         task_context = build_task_context_message(task) if task else None
         metadata = task_context_metadata(task) if task else None
 
+        # S38-004: фильтр prompt injection/токсичности до сохранения и LLM.
+        guard = check_user_input(text)
+        if not guard.allowed:
+            raise ValidationError(guard.message)
+
         # RAG-lite: вектор считается best-effort, ошибка не ломает отправку
         user_embedding = await try_embed(self.embedding_provider, text)
         user_message = await self.messages.create_message(
@@ -337,6 +343,10 @@ class ChatService:
         if question is None:
             raise ValidationError("Нет вопроса, на который можно ответить заново")
 
+        guard = check_user_input(question.content)
+        if not guard.allowed:
+            raise ValidationError(guard.message)
+
         level = resolve_level(parse_level(session.level))
         # Старый ответ в контекст не попадает: перегенерация его не видит.
         llm_messages = build_messages(
@@ -382,6 +392,11 @@ class ChatService:
         task = await self._task_for_context(task_id)
         task_context = build_task_context_message(task) if task else None
         metadata = task_context_metadata(task) if task else None
+
+        # S38-004: тот же фильтр для WS-стриминга.
+        guard = check_user_input(text)
+        if not guard.allowed:
+            raise ValidationError(guard.message)
 
         self.last_warnings = []
         user_embedding = await try_embed(self.embedding_provider, text)

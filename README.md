@@ -95,7 +95,7 @@ pnpm dev
 | Показатель | Значение |
 |------------|----------|
 | Версия | **v0.5.0** (2026-11-10), single-node (D-001) |
-| Спринты | 1–48 завершены; v0.6.0 «Production Hardening» — спринты 34–36 закрыты, 37 — инженерия закрыта (GitFlic-гейт ждёт владельца), далее 38–41; v0.7.0 (49–52) — следующий |
+| Спринты | 1–48 завершены; v0.6.0 «Production Hardening» — спринты 34–36, 38 закрыты; 37 — инженерия (GitFlic-гейт ждёт владельца), далее 39–41; v0.7.0 (49–52) — следующий |
 | Тесты backend | **708 passed + 22 skip** в образе Python 3.12 (контейнерная изоляция без Docker-in-Docker); локально — **729 passed + 1 skip** |
 | Миграции | Alembic head **022** (22 миграции) |
 | Тесты frontend | **274** unit + **37** e2e (Playwright; 1 skip) |
@@ -125,6 +125,8 @@ pnpm dev
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/MONITORING.md](docs/MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry и runbook
 - [docs/RUNBOOK.md](docs/RUNBOOK.md) — деплой/откат, инциденты, бэкап и восстановление
+- [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) — аудит v0.6.0 и ASVS L1
+- [docs/DPIA.md](docs/DPIA.md) — оценка приватности для детской аудитории
 - [docs/SLO.md](docs/SLO.md) — SLI/SLO, error budget и burn-rate
 - [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md) — релиз-ноты v0.5.0 (single-node, D-001)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)

@@ -72,6 +72,25 @@ def test_trusted_proxies_match_docker_subnet() -> None:
     assert "${TRUSTED_PROXIES:-10.77.0.0/16}" == env
 
 
+def test_caddy_security_headers_and_docs_off() -> None:
+    """S38-003: строгие заголовки на edge, HSTS только в TLS-блоке."""
+    caddyfile = _text("deploy/caddy/Caddyfile")
+    for header in (
+        "Content-Security-Policy",
+        "X-Frame-Options",
+        "X-Content-Type-Options",
+        "Referrer-Policy",
+        "Strict-Transport-Security",
+        "Cross-Origin-Opener-Policy",
+        "worker-src 'self' blob:",
+        "https://*.ingest.sentry.io",
+    ):
+        assert header in caddyfile, header
+
+    compose = _yaml("docker-compose.prod.yml")
+    assert compose["services"]["backend"]["environment"]["DOCS_ENABLED"] == "false"
+
+
 def test_publish_workflow_tags_and_images() -> None:
     workflow = _yaml(".github/workflows/docker-publish.yml")
 
@@ -114,6 +133,24 @@ def test_backup_and_deploy_scripts_cover_s36_features() -> None:
     assert "health/ready" in deploy
     assert "rollback.sh" in deploy
     assert "last_deploy" in rollback
+
+
+def test_secret_files_are_supported() -> None:
+    """S38-002: compose и пример override поддерживают *_FILE/Docker secrets."""
+    compose = _yaml("docker-compose.prod.yml")
+    postgres_env = compose["services"]["postgres"]["environment"]
+    backend_env = compose["services"]["backend"]["environment"]
+
+    assert "POSTGRES_PASSWORD_FILE" in postgres_env
+    assert "SECRET_KEY_FILE" in backend_env
+    assert "DEEPSEEK_API_KEY_FILE" in backend_env
+    assert "SENTRY_DSN_FILE" in backend_env
+
+    override = _yaml("deploy/docker-compose.secrets.example.yml")
+    assert {"postgres_password", "secret_key", "deepseek_api_key"} <= set(
+        override["secrets"]
+    )
+    assert "secret_key" in override["services"]["backend"]["secrets"]
 
 
 def test_env_prod_example_has_required_keys() -> None:

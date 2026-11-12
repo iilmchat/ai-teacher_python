@@ -69,6 +69,16 @@ SMTP-провайдер), DoS на уровне инфраструктуры, с
 - **Образы из GHCR по digest (S36-001/002):** prod не собирается на хосте;
   `scripts/pin_images.sh` фиксирует immutable digest в `.env.prod`, деплой
   использует его. `latest` в prod запрещён.
+- **Секреты — ENV или `*_FILE` (S38-002):** `SECRET_KEY_FILE`,
+  `POSTGRES_PASSWORD_FILE`, `DEEPSEEK_API_KEY_FILE`, `SENTRY_DSN_FILE`,
+  `SMTP_PASSWORD_FILE`; файл имеет приоритет, ошибка чтения — fail-fast.
+  В prod можно использовать Docker secrets (`deploy/docker-compose.secrets.example.yml`).
+- **Детская безопасность LLM (S38-004):** системные промпты содержат запрет
+  раскрывать инструкции/менять роль; вход фильтруется от prompt injection,
+  токсичности и самоповреждения. Полная модерация ответов — `KI-036`
+  (v0.7.0); не отключать guardrails в production.
+- **ASVS L1 и DPIA:** самооценка — `docs/ASVS_L1.md`, аудит —
+  `docs/SECURITY_AUDIT.md`, оценка приватности — `docs/DPIA.md`.
 - `.env` не коммитить (в репозитории только `.env.example`); `SECRET_KEY` и
   `DEEPSEEK_API_KEY` — уникальные, ротация при подозрении на утечку;
 - **`DEBUG=false` + небезопасный `SECRET_KEY`**: приложение намеренно не

@@ -119,3 +119,6 @@ backups/
 
 # S37: локальный отчёт гейтов
 gates-report.json
+
+# S38-002: секреты локально
+secrets/

@@ -7,10 +7,10 @@
 
 ---
 
-## [0.6.0] — 2026-11-12 «Auth & Edge Hardening + Observability + Deploy/DR»
+## [0.6.0] — 2026-11-12 «Auth, Observability, Deploy/DR, Security & Privacy»
 
-**v0.6.0** — спринты 34–36: безопасность auth/edge, наблюдаемость и
-production-деплой (GHCR, TLS, бэкапы/DR).
+**v0.6.0** — спринты 34–38: безопасность auth/edge, наблюдаемость,
+production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты и ASVS L1/guardrails.
 
 **Ограничения (D-001).** Multi-node, registry, публичный pilot и e-mail подтверждение отложены на v0.7.0.
 
@@ -63,6 +63,11 @@ production-деплой (GHCR, TLS, бэкапы/DR).
   frontend `test:coverage`); паритет CI (`check_ci_parity.py`);
   GitFlic merge-gate скрипт/инструкция (`gitflic-gate.ps1`); единый локальный
   прогон `gates.sh`/`gates.ps1` + `make release-check`.
+- **S38**: ASVS L1 self-assessment (`docs/ASVS_L1.md`), аудит
+  (`docs/SECURITY_AUDIT.md`) и DPIA (`docs/DPIA.md`); секреты `*_FILE`
+  и Docker secrets; CSP/HSTS/security-headers Caddy; guardrails LLM
+  (prompt injection/токсичность) и защитные инструкции в промптах
+  (basic v2, intermediate v3, advanced v2); `KI-036` (полная модерация — v0.7.0).
 
 ### Изменено
 

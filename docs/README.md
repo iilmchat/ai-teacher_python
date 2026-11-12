@@ -61,6 +61,9 @@
 ### Для эксплуатации и LLMOps
 
 - [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) — админка, мониторинг, FinOps, guardrails
+- [SECURITY_AUDIT.md](SECURITY_AUDIT.md) — аудит v0.6.0, ASVS L1 и остаточные риски
+- [ASVS_L1.md](ASVS_L1.md) — чек-лист OWASP ASVS L1 с доказательствами
+- [DPIA.md](DPIA.md) — оценка воздействия на приватность (дети)
 - [RUNBOOK.md](RUNBOOK.md) — деплой/откат, падения БД/Caddy, бэкап и восстановление
 - [MONITORING.md](MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry, лимиты и логи
 - [SLO.md](SLO.md) — SLI/SLO, error budget и связь с алертами
@@ -80,8 +83,8 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, 37 — инженерия; GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
-| Тесты backend | **789** (788 passed + 1 skipped); coverage 79.03% |
+| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, 38; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
+| Тесты backend | **818** (817 passed + 1 skipped); coverage 79.18% |
 | Тесты frontend | 279 unit + 22 e2e (Playwright; 22/22 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |

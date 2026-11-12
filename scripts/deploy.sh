@@ -76,17 +76,29 @@ command -v docker >/dev/null 2>&1 || fail "docker не найден"
 . "${SCRIPT_DIR}/lib/env.sh"
 load_env_file "${ENV_FILE}"
 
-: "${SECRET_KEY:?SECRET_KEY обязателен}"
-: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD обязателен}"
 : "${DOMAIN:?DOMAIN обязателен}"
 
-[ "${#SECRET_KEY}" -ge 32 ] || fail "SECRET_KEY короче 32 символов"
-case "${SECRET_KEY}" in
-    *change_me*) fail "SECRET_KEY содержит change_me — задайте случайный ключ" ;;
-esac
-case "${POSTGRES_PASSWORD}" in
-    change_me*|password) fail "POSTGRES_PASSWORD не должен быть дефолтным" ;;
-esac
+# S38-002: допускаем секреты из файлов (Docker secrets/K8s). Если задан
+# *_FILE, значение ENV может быть пустым — содержимое проверит приложение.
+if [ -z "${SECRET_KEY:-}" ] && [ -z "${SECRET_KEY_FILE:-}" ]; then
+    fail "нужен SECRET_KEY или SECRET_KEY_FILE"
+fi
+if [ -z "${SECRET_KEY_FILE:-}" ]; then
+    [ "${#SECRET_KEY}" -ge 32 ] || fail "SECRET_KEY короче 32 символов"
+    case "${SECRET_KEY}" in
+        *change_me*) fail "SECRET_KEY содержит change_me — задайте случайный ключ" ;;
+    esac
+fi
+
+if [ -z "${POSTGRES_PASSWORD:-}" ] && [ -z "${POSTGRES_PASSWORD_FILE:-}" ]; then
+    fail "нужен POSTGRES_PASSWORD или POSTGRES_PASSWORD_FILE"
+fi
+if [ -z "${POSTGRES_PASSWORD_FILE:-}" ]; then
+    case "${POSTGRES_PASSWORD}" in
+        change_me*|password) fail "POSTGRES_PASSWORD не должен быть дефолтным" ;;
+    esac
+fi
+
 case "${DOMAIN}" in
     teacher.example.com|example.com) fail "DOMAIN не заполнен (сейчас ${DOMAIN})" ;;
 esac

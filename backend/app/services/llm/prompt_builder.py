@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.models.user import UserLevel
 from app.services.llm.base import LLMMessage
+from app.services.llm.guardrails import SECURITY_INSTRUCTIONS
 
 PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 VERSIONS_FILE = PROMPTS_DIR / "versions.json"
@@ -58,7 +59,9 @@ def load_system_prompt(level: UserLevel | str) -> str:
     path = PROMPTS_DIR / f"{level_value}.txt"
     if not path.is_file():
         raise PromptError(f"Промпт для уровня '{level_value}' не найден: {path}")
-    return path.read_text(encoding="utf-8").strip()
+    base = path.read_text(encoding="utf-8").strip()
+    # S38-004: единые защитные правила для всех уровней и провайдеров.
+    return f"{base}\n\n{SECURITY_INSTRUCTIONS}"
 
 
 def build_messages(

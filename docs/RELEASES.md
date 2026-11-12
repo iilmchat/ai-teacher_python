@@ -88,7 +88,7 @@ TLS-периметр, автоматизированные деплой/бэка
 | 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[x]` завершён |
 | 36 | Registry, Deploy, TLS & Backup/DR | 35, 34 | 5,5 дня | `[x]` завершён |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[~]` preflight/coverage/parity; GitFlic-гейт ждёт владельца |
-| 38 | Security & Privacy | 34, 36 | 3,5 дня | `[ ]` |
+| 38 | Security & Privacy | 34, 36 | 3,5 дня | `[x]` завершён |
 | 39 | Performance & Capacity | 35 | 3 дня | `[ ]` |
 | 40 | DX & Docs | 33–39 | 2 дня | `[ ]` |
 | 41 | Release v0.6.0 | 33–40 | 2,5 дня | `[ ]` |

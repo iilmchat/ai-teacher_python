@@ -4,7 +4,7 @@
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # .env лежит в корне проекта (на два уровня выше backend/app)
@@ -64,7 +64,40 @@ class Settings(BaseSettings):
     postgres_port: int = 5434
     postgres_user: str = "ai_teacher"
     postgres_password: str = "change_me_password"
+    #: S38-002: пароль из файла (Docker secret/K8s). Приоритет выше ENV.
+    postgres_password_file: str = ""
     postgres_db: str = "ai_teacher"
+
+    @model_validator(mode="after")
+    def _load_secret_files(self) -> "Settings":
+        """S38-002: загрузить секреты из `*_FILE`, если путь задан.
+
+        Приоритет файла выше ENV (стандарт Docker secrets/K8s). Переводы
+        строк в конце файла отбрасываются, внутренние пробелы сохраняются.
+        Ошибка чтения — фатальная: не стартуем с пустым/чужим секретом.
+        """
+        pairs = {
+            "postgres_password": "postgres_password_file",
+            "secret_key": "secret_key_file",
+            "deepseek_api_key": "deepseek_api_key_file",
+            "smtp_password": "smtp_password_file",
+            "sentry_dsn": "sentry_dsn_file",
+        }
+        for field, file_field in pairs.items():
+            raw_path = getattr(self, file_field)
+            if not raw_path:
+                continue
+            path = Path(raw_path)
+            try:
+                value = path.read_text(encoding="utf-8").rstrip("\r\n")
+            except OSError as exc:
+                raise ValueError(
+                    f"Не удалось прочитать секрет {file_field}={path}: {exc}"
+                ) from exc
+            if not value:
+                raise ValueError(f"Файл секрета {file_field} пуст: {path}")
+            setattr(self, field, value)
+        return self
 
     @property
     def database_url(self) -> str:
@@ -100,6 +133,8 @@ class Settings(BaseSettings):
 
     # Security
     secret_key: str = DEFAULT_SECRET_KEY
+    #: S38-002: ключ из файла (Docker secret/K8s). Приоритет выше ENV.
+    secret_key_file: str = ""
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     algorithm: str = "HS256"
@@ -113,6 +148,8 @@ class Settings(BaseSettings):
     # Sentry (S35-002): пустой DSN — SDK не инициализируется (no-op).
     #: PII не отправляется никогда: send_default_pii=False + before_send-фильтр.
     sentry_dsn: str = ""
+    #: S38-002: DSN из файла (приоритет выше ENV).
+    sentry_dsn_file: str = ""
     sentry_environment: str = "development"
     #: Доля транзакций для performance-трейсинга (0 — только ошибки)
     sentry_traces_sample_rate: float = 0.0
@@ -124,12 +161,17 @@ class Settings(BaseSettings):
     #: Резервный провайдер при недоступности основного (S12-002); пусто — выключен
     llm_fallback_provider: str = ""
     deepseek_api_key: str = "change_me_api_key"
+    #: S38-002: API-ключ из файла (приоритет выше ENV).
+    deepseek_api_key_file: str = ""
     deepseek_base_url: str = "https://api.deepseek.com/v1"
     lm_studio_url: str = "http://localhost:1234/v1"
     #: Модель локального сервера (LM Studio отдаёт её в /v1/models)
     lm_studio_model: str = "local-model"
     llm_max_tokens: int = 2000
     llm_temperature: float = 0.7
+    #: S38-004: базовый фильтр prompt injection/токсичности и защитные
+    #: инструкции в системном промпте. Отключать только для отладки.
+    llm_guardrails_enabled: bool = True
 
     # Code Execution (S13)
     executor_timeout: int = 5  # секунд
@@ -180,6 +222,8 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
+    #: S38-002: SMTP-пароль из файла.
+    smtp_password_file: str = ""
     smtp_from: str = "noreply@ai-teacher.local"
     #: Окно напоминания о дедлайне (S28-004)
     notifications_deadline_hours: int = 72

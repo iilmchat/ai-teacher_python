@@ -1478,6 +1478,24 @@ Deep-link `/chat?task=<task_id>` и кнопка «Спросить ассист
 - **SLO и runbook.** `docs/SLO.md` — SLI/SLO/error budget; `docs/MONITORING.md`
   — как поднять стек и что делать по каждому алерту.
 
+### 11.51. Секреты из файлов и guardrails LLM (S38)
+
+- **`*_FILE` приоритетнее ENV** (`config.py`): `SECRET_KEY_FILE`,
+  `POSTGRES_PASSWORD_FILE`, `DEEPSEEK_API_KEY_FILE`, `SENTRY_DSN_FILE`,
+  `SMTP_PASSWORD_FILE`. Ошибка чтения/пустой файл — фатальная при старте; не
+  заменять на «тихий» fallback в ENV.
+- **Docker secrets** — `deploy/docker-compose.secrets.example.yml`; файлы
+  `secrets/` в `.gitignore`, права `0600`. В логи и Sentry секреты не попадают.
+- **Системный промпт** всегда содержит блок «Безопасность и границы»
+  (`guardrails.SECURITY_INSTRUCTIONS`); при изменении промптов поднимать
+  версию в `versions.json`.
+- **Вход ученика** проверяется `check_user_input` до сохранения/LLM:
+  injection/токсичность/самоповреждение → `ValidationError` с безопасным
+  сообщением; текст попытки не логируется. Не отключать
+  `LLM_GUARDRAILS_ENABLED` в production.
+- Полная модерация ответов для детей — `KI-036`; новые правила контента
+  фиксировать в `PRIVACY.md`/`ASVS_L1.md`.
+
 ---
 
 ## 12. Отчёты по шагам спринта
