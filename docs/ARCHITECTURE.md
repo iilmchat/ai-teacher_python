@@ -276,6 +276,11 @@ GET /api/v1/chat/search?q=<текст>&limit=<1..50>
 `notifications(user_id, read_at)`, `task_versions.task_id`) не дублируются.
 Миграция **0010** добавляет HNSW-индекс `chat_messages.embedding`
 (`ADD COLUMN IF NOT EXISTS` — страховка, колонка есть с 001).
+Дальнейшие миграции (`0011`–`0022`) добавили индексы `audit_log`
+(`created/action/actor`), `task_attempts`, `user_sessions`,
+`classroom_announcements` и поля модерации/источника задач (`tasks.source`,
+`moderation_comment`). Новые индексы — только под подтверждённые запросы
+(S39-002), «на всякий случай» не добавляются.
 
 ## 7. Данные
 
@@ -292,7 +297,12 @@ GET /api/v1/chat/search?q=<текст>&limit=<1..50>
 | `assignments` | назначения задач классам |
 | `achievements` / `user_achievements` | справочник и полученные достижения |
 | `notifications` | in-app уведомления |
-| `alembic_version` | миграции (001 → 010) |
+| `audit_log` | журнал действий teacher/admin (S25-004) |
+| `message_feedback` | оценки ответов ассистента (S43-003) |
+| `user_sessions` | сессии/refresh-токены и `token_version` (S45) |
+| `attempt_feedback` | комментарии учителя к попыткам (S46) |
+| `classroom_announcements` | объявления класса (S46) |
+| `alembic_version` | миграции (`001` → `022`) |
 
 Миграции: `backend/alembic/versions/`. Перед коммитом —
 `alembic upgrade head && alembic check`.

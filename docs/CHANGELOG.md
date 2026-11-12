@@ -7,12 +7,15 @@
 
 ---
 
-## [0.6.0] — 2026-11-12 «Auth, Observability, Deploy/DR, Security & Privacy»
+## [0.6.0] — 2026-11-12 «Production Hardening»
 
-**v0.6.0** — спринты 34–38: безопасность auth/edge, наблюдаемость,
-production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты и ASVS L1/guardrails.
+**v0.6.0** — спринты 34–40: безопасность auth/edge, наблюдаемость,
+production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты, ASVS L1/guardrails,
+производительность и DX/документация.
 
-**Ограничения (D-001).** Multi-node, registry, публичный pilot и e-mail подтверждение отложены на v0.7.0.
+**Ограничения (D-001).** Multi-node/HA, публичный pilot и e-mail-подтверждение
+отложены на v0.7.0 (`KI-035`); GitFlic required checks — до доступа владельца
+(`KI-023`).
 
 ### Добавлено
 
@@ -72,6 +75,11 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты и ASVS L1/g
   с artifact/baseline; query-count тесты против N+1; кэш `/admin/quality`
   (TTL 60 c + инвалидация); Caddy `request_body 10MB`, таймауты upstream и
   `MAX_UPLOAD_BYTES` (413/415); `docs/PERFORMANCE.md`, `docs/CAPACITY.md`.
+- **S40**: `docs/adr/` — ADR-001…007 (GHCR/digest, Caddy, trusted proxies и
+  refresh, бэкапы, guardrails, `*_FILE`, CI-гейты); `CONTRIBUTING.md`;
+  `scripts/check_env_drift.py` (Settings ↔ `.env.example`, wired в
+  `gates.sh --fast` и CI); актуализированы README/ARCHITECTURE/RELEASES и
+  навигация `docs/README.md`.
 
 ### Изменено
 
@@ -103,6 +111,12 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты и ASVS L1/g
 - `CHANGELOG.md`: добавлена запись для v0.6.0.
 - `docs/SLO.md`, `docs/MONITORING.md`, `docs/PRIVACY.md` §7, `docs/RULES.md`
   §11.50, `docs/DESIGN_ADMIN_AND_OPS.md` §10.
+- `docs/adr/` — Architecture Decision Records (ADR-001…007) и шаблон;
+  `CONTRIBUTING.md` — ветки, коммиты, гейты, PR и отчёты;
+  `docs/GETTING_STARTED.md` §2 — настройки v0.6.0 (`TRUSTED_PROXIES`,
+  `SENTRY_DSN`, `DOCS_ENABLED`, `*_FILE`, `MAX_UPLOAD_BYTES`);
+  `docs/PERFORMANCE.md`/`docs/CAPACITY.md` (S39);
+  `docs/RELEASES.md` — черновик релиза v0.6.0.
 
 ---
 

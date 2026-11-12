@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** v0.5.0 (2026-11-10) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** последний релиз — **v0.5.0** (2026-11-10) · текущий этап — **v0.6.0 «Production Hardening»** (в работе) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -34,6 +34,8 @@
 - [../Design.md](../Design.md) — архитектура и принятые решения (исходный документ)
 - [ARCHITECTURE.md](ARCHITECTURE.md) — как система устроена сейчас: модули, потоки, контракты
 - [RULES.md](RULES.md) — правила кода, тестов, коммитов, окружения
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) — ветки, коммиты, гейты, PR и отчёты
+- [adr/README.md](adr/README.md) — Architecture Decision Records (ADR-001…007)
 - [../TODO.md](../TODO.md) — завершённый этап v0.1.0 (спринты 1–10)
 - [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
 - [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
@@ -85,12 +87,12 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, 38–39; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
-| Тесты backend | **831** (830 passed + 1 skipped); coverage 79.17% |
+| Версия | последний релиз — **v0.5.0** (2026-11-10); текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, 38–40; 37 — инженерия, GitFlic-гейт ждёт владельца; 41 — релиз); v0.7.0 (49–52) — следующий |
+| Тесты backend | **835** (834 passed + 1 skipped); coverage 79.17% |
 | Тесты frontend | 279 unit + 22 e2e (Playwright; 22/22 green) |
-| Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
-| Ruff / MyPy strict | 0 / 0 |
-| Миграции | head 015 (`alembic check` чист) |
+| Покрытие | backend порог 70% (последний замер 79.17%), frontend 73.6% строк |
+| Ruff / MyPy strict | 0 / 0 (104 файла) |
+| Миграции | head 022 (`001`–`022`, `alembic check` чист) |
 | Размер фронтенда | entry 70.57 kB gzip (react 15.65 + i18n 21.25 + stores 22.88; лимит 80) |
 | Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
 | Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |

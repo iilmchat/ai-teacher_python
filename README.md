@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** v0.5.0 · **© 2026 RuChating (iilmchat)**
+**Версия:** последний релиз — **v0.5.0** · текущий этап — **v0.6.0 «Production Hardening»** (в работе) · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -94,13 +94,13 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.5.0** (2026-11-10), single-node (D-001) |
-| Спринты | 1–48 завершены; v0.6.0 «Production Hardening» — закрыты 34–36, 38–39; 37 — инженерия (GitFlic-гейт ждёт владельца), далее 40–41; v0.7.0 (49–52) — следующий |
-| Тесты backend | **708 passed + 22 skip** в образе Python 3.12 (контейнерная изоляция без Docker-in-Docker); локально — **729 passed + 1 skip** |
-| Миграции | Alembic head **022** (22 миграции) |
+| Версия | последний релиз — **v0.5.0** (2026-11-10); текущий этап — **v0.6.0 «Production Hardening»**, single-node (D-001) |
+| Спринты | 1–48 завершены; v0.6.0 — закрыты 34–36, 38–40; 37 — инженерия (GitFlic-гейт ждёт владельца); 41 — релиз; v0.7.0 (49–52) — следующий |
+| Тесты backend | **834 passed + 1 skip**; coverage **79%** (порог 70) |
+| Миграции | Alembic head **022** (22 миграции, `001`–`022`) |
 | Тесты frontend | **274** unit + **37** e2e (Playwright; 1 skip) |
 | Покрытие | backend порог 70%, frontend 70/60/70% |
-| Ruff / MyPy strict | 0 / 0 (101 файл) |
+| Ruff / MyPy strict | 0 / 0 (104 файла) |
 | TypeScript | strict, 0 ошибок |
 | Размер фронтенда | entry **70.56 kB** gzip (лимит 80) |
 | Зависимости | frontend 0 high/critical (1 moderate); Python 0 блокирующих |
@@ -145,6 +145,8 @@ pnpm dev
   и [TODO.md](TODO.md) — v0.1.0
 - [SECURITY.md](SECURITY.md) — политика безопасности и контакт для уязвимостей;
   [LICENSE](LICENSE) — MIT
+- [CONTRIBUTING.md](CONTRIBUTING.md) — как контрибьютить, гейты и PR
+- [docs/adr/](docs/adr/README.md) — Architecture Decision Records
 
 ---
 

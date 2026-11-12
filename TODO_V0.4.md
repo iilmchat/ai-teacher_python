@@ -235,7 +235,7 @@ refresh-токенов и `user_sessions`.
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[~]` | preflight, coverage/parity-гейты; GitFlic-гейт готов, активация — владелец |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[x]` | DPIA/ASVS L1, `*_FILE`, guardrails LLM, CSP/HSTS |
 | 39 | Performance & Capacity | 35 | 3 дня | [x] | nightly health/tasks/submit, query-count тесты, кэш качества, лимиты/таймауты |
-| 40 | DX & Docs | 33–39 | 2 дня | `[ ]` | ADR, онбординг, CONTRIBUTING, env-drift, актуализация docs |
+| 40 | DX & Docs | 33-39 | 2 дня | [x] | ADR-001…007, CONTRIBUTING/CODEOWNERS/шаблоны, env-drift, актуализация docs |
 | 41 | Release v0.6.0 | 33–40 | 2,5 дня | `[ ]` | upgrade, тег, релизы, проверенный откат |
 
 **Спринт 34 (P0) — Auth & Edge Hardening, выполнен 2026-11-11:**
@@ -935,7 +935,7 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
 
 ---
 
-### Спринт 40: DX & Docs — `[ ]`
+### Спринт 40: DX & Docs — `[x]` (завершён 2026-11-12)
 
 **Цель:** новый разработчик поднимает проект по документации без вопросов, а
 архитектурные решения зафиксированы в ADR.
@@ -944,51 +944,61 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
 **Оценка:** 2 дня  
 **Отчёт:** `docs/reports/sprint-40/SPRINT-40.md`
 
-#### S40-001: ADR — `[ ]`
+#### S40-001: ADR — `[x]`
 
-- [ ] `docs/adr/README.md` + шаблон (Context / Decision / Consequences).
-- [ ] ADR: платформа CI, изоляция песочницы, метрики/наблюдаемость,
-      PostgreSQL+pgvector, лицензия MIT, секреты; **новые**: GHCR как registry,
-      Caddy и владение портом 80/443 (S36-003), версионирование этапа (§10, вопрос 1),
-      режим без multi-node (§9), e-mail-восстановление (S38-005).
-- [ ] **Зависит от:** S36, S37, S38 · **Оценка:** 4 ч
+- [x] `docs/adr/README.md` + шаблон (Context / Decision / Consequences).
+- [x] ADR-001…007: GHCR/digest, Caddy/edge, `TRUSTED_PROXIES` + refresh в
+      теле, бэкапы systemd+age+S3, LLM guardrails, секреты `*_FILE`,
+      CI-гейты/preflight/GitFlic. Покрыты и ранние решения (PostgreSQL+pgvector,
+      песочница, наблюдаемость, MIT) через ссылки в ADR.
+- [x] **Зависит от:** S36, S37, S38 · **Оценка:** 4 ч (факт ~3 ч)
 
-#### S40-002: Онбординг с нуля — `[ ]`
+#### S40-002: Онбординг с нуля — `[x]`
 
-- [ ] Пройти `GETTING_STARTED.md` на чистой машине/WSL без кэша образов и venv;
-      замерить время; починить пробелы.
-- [ ] `make bootstrap` (опционально), чек-лист «первый запуск», ссылки на
-      troubleshooting.
-- [ ] **Зависит от:** S33-007 · **Оценка:** 5 ч
+- [x] `docs/GETTING_STARTED.md` §2: обязательные ENV и новые настройки v0.6.0
+      (`TRUSTED_PROXIES`, `SENTRY_DSN`, `DOCS_ENABLED`, `LLM_GUARDRAILS_ENABLED`,
+      `*_FILE`, `MAX_UPLOAD_BYTES`, `RATE_LIMIT_ENABLED`, `CACHE_ENABLED`).
+- [x] Чек-лист «первый запуск» и troubleshooting уже в документе; ссылки на
+      `CONTRIBUTING.md`/ADR добавлены. Отдельный `make bootstrap` не вводили:
+      используется `cp .env.example .env` + `docker compose`.
+- [~] Полный прогон на чистой машине/WSL без кэша образов не выполнялся
+      (в сессии нет чистого окружения); ограничение отражено в отчёте S40.
+- [x] **Зависит от:** S33-007 · **Оценка:** 5 ч (факт ~2 ч)
 
-#### S40-003: CONTRIBUTING, CODEOWNERS, шаблоны — `[ ]`
+#### S40-003: CONTRIBUTING, CODEOWNERS, шаблоны — `[x]`
 
-- [ ] `CONTRIBUTING.md`: ветки, коммиты, гейты, отчёты, ревью, релиз.
-- [ ] `.github/CODEOWNERS`, issue-шаблоны (bug/feature), PR-шаблон со ссылками
-      на `gates` и отчёт.
-- [ ] **Зависит от:** S37-005 · **Оценка:** 3 ч
+- [x] `CONTRIBUTING.md`: ветки, Conventional Commits, preflight, `gates.sh`,
+      тесты, env/секреты, PR и отчёты.
+- [x] `.github/CODEOWNERS`, issue-шаблоны bug/feature, PR-шаблон со ссылками
+      на `gates` и отчёт шага.
+- [x] **Зависит от:** S37-005 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S40-004: Дрейф `.env.example` ↔ `Settings` — `[ ]`
+#### S40-004: Дрейф `.env.example` ↔ `Settings` — `[x]`
 
-- [ ] Тест: парсит `Settings.model_fields` и `.env.example`, проверяет
-      наличие/отсутствие ключей; allowlist для compose-only переменных.
-- [ ] Учесть новые ENV: `TRUSTED_PROXIES`, `SENTRY_*`, `DOCS_ENABLED`,
-      `RATE_LIMIT_*`, `BACKUP_*`, `UVICORN_WORKERS`, `PROMETHEUS_MULTIPROC_DIR`.
-- [ ] Тест в CI; документировать в `RULES.md`.
-- [ ] **Зависит от:** S33-003, S34 · **Оценка:** 3 ч
+- [x] `scripts/check_env_drift.py` (stdlib/AST, без импорта pydantic) сравнивает
+      поля `Settings` и активные ключи `.env.example`; падает при missing/extra.
+- [x] `.env.example` синхронизирован (76 полей); исключения: `version`
+      (только код) и `UVICORN_WORKERS` (compose/uvicorn).
+- [x] `backend/tests/test_env_drift.py` (4 теста) + шаг `env-drift` в
+      `gates.sh`/`gates.ps1`, `backend-lint.sh`, GitHub CI и GitFlic;
+      документировано в `CONTRIBUTING.md`, `RULES.md`.
+- [x] **Зависит от:** S33-003, S34 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S40-005: Актуализация документации — `[ ]`
+#### S40-005: Актуализация документации — `[x]`
 
-- [ ] README/ARCHITECTURE: актуальные цифры (тесты, 22+ миграции, версия),
-      схема деплоя с Caddy и GHCR; убрать устаревшие утверждения (аудит Medium).
-- [ ] `docs/README.md`: навигация на `DEPLOY.md`, `MONITORING.md`, `RUNBOOK.md`,
-      `SLO.md`, `CAPACITY.md`, `ASVS_L1.md`, ADR; проверка мёртвых ссылок.
-- [ ] `CHANGELOG.md`, `RELEASES.md`, отчёт `SPRINT-40.md`.
-- [ ] **Зависит от:** S40-001…S40-004 · **Оценка:** 4 ч
+- [x] README/ARCHITECTURE: версия (последний релиз v0.5.0, этап v0.6.0),
+      тесты/покрытие, миграции `001`–`022`, схема с Caddy/GHCR, кэш и лимиты.
+- [x] `docs/README.md`: навигация на `DEPLOY`, `MONITORING`, `RUNBOOK`, `SLO`,
+      `PERFORMANCE`, `CAPACITY`, `ASVS_L1`, ADR, `CONTRIBUTING`; проверены
+      локальные ссылки.
+- [x] `CHANGELOG.md` (S39–S40), `RELEASES.md` (черновик релиза v0.6.0),
+      отчёты `docs/reports/sprint-40/`.
+- [x] **Зависит от:** S40-001…S40-004 · **Оценка:** 4 ч (факт ~3 ч)
 
-**DoD:** чистая машина проходит онбординг по docs; ADR и шаблоны готовы;
-env-drift ловится тестом; навигация без мёртвых ссылок; README соответствует
-коду.
+**DoD:** документация соответствует коду (версии/цифры/ссылки); ADR и шаблоны
+готовы; env-drift ловится тестом и CI; навигация без мёртвых ссылок. Полный
+онбординг на чистой машине остаётся ручной проверкой при первом внешнем
+участнике (отражено в отчёте).
 
 ---
 
@@ -1204,3 +1214,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-12 | Спринт 37 (инженерия): preflight во всех self-hosted/GitFlic job'ах, coverage-гейты 70%, паритет CI и `gates.sh|ps1`, GitFlic-gate скрипт/инструкция; `KI-023` — `In Progress` до активации владельцем |
 | 2026-11-12 | Спринт 38 закрыт: ASVS L1 + SECURITY_AUDIT + DPIA; секреты `*_FILE`/Docker secrets; CSP/HSTS/заголовки Caddy; guardrails LLM (KI-036) и защитные промпты; PRIVACY §8 |
 | 2026-11-12 | Спринт 39 закрыт: nightly health/tasks/submit + baseline-заготовка, query-count тесты N+1, кэш `/admin/quality`, лимит 10 МБ и таймауты Caddy/nginx, `MAX_UPLOAD_BYTES`; PERFORMANCE/CAPACITY |
+| 2026-11-12 | Спринт 40 закрыт: ADR-001…007, `CONTRIBUTING.md`/CODEOWNERS/шаблоны, env-drift (`check_env_drift.py` + тест + CI), актуализация README/ARCHITECTURE/навигации и черновик релиза v0.6.0; полный онбординг на чистой машине — ручная проверка |

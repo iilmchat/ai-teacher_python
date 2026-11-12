@@ -11,6 +11,10 @@ set -euo pipefail
 export PIP_DEFAULT_TIMEOUT="${PIP_DEFAULT_TIMEOUT:-60}"
 export PIP_RETRIES="${PIP_RETRIES:-5}"
 
+# S40-003: Settings ↔ .env.example (stdlib, до установки зависимостей).
+echo "==> python scripts/check_env_drift.py --root /src"
+python /src/scripts/check_env_drift.py --root /src
+
 # S33-001: тег образа — изменяемая ссылка; сборка воспроизводима только с
 # digest. Проверяем Dockerfile'ы и compose до сборки (stdlib, без зависимостей).
 echo "==> python backend/scripts/check_image_pins.py --root /src"

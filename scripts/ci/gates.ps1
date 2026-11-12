@@ -47,6 +47,7 @@ function Invoke-Step {
 
 Invoke-Step 'image-pins' { python backend/scripts/check_image_pins.py }
 Invoke-Step 'ci-parity' { python scripts/ci/check_ci_parity.py }
+Invoke-Step 'env-drift' { python scripts/check_env_drift.py }
 Invoke-Step 'backend-lint' { Push-Location backend; try { ruff check app tests scripts } finally { Pop-Location } }
 Invoke-Step 'backend-mypy' { Push-Location backend; try { python -m mypy app } finally { Pop-Location } }
 Invoke-Step 'frontend-typecheck' { Push-Location frontend; try { pnpm typecheck } finally { Pop-Location } }

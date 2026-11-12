@@ -59,6 +59,7 @@ run_step() {
 
 run_step "image-pins" python backend/scripts/check_image_pins.py
 run_step "ci-parity" python scripts/ci/check_ci_parity.py
+run_step "env-drift" python scripts/check_env_drift.py
 run_step "backend-lint" bash -c "cd backend && ruff check app tests scripts"
 run_step "backend-mypy" bash -c "cd backend && python -m mypy app"
 run_step "frontend-typecheck" bash -c "cd frontend && pnpm typecheck"

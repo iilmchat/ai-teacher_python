@@ -2,20 +2,17 @@
 
 > Этот документ содержит историю всех спринтов и релизов проекта.
 
-**Текущая версия:** v0.5.0 (2026-11-10; тег — после приёмки релиз-нот)  
-**Текущий этап:** v0.5.0 «Learning Experience & Teaching Workflow» завершён
-**Текущая версия:** v0.5.0 (2026-11-10; тег — после приёмки релиз-нот)  
-**Текущий этап:** v0.5.0 «Learning Experience & Teaching Workflow» завершён
-(спринты 42–48, [TODO_V0.5.md](../TODO_V0.5.md)). Этап **v0.4.0 «Production
-Hardening» официально возобновлён 2026-11-11** (решение владельца): после
-приёмки v0.5.0 работы продолжаются по спринтам 34–41, план пересобран с учётом
-DevOps-аудита ноября 2026
-([DEVOPS_AUDIT_2026-11.md](reports/DEVOPS_AUDIT_2026-11.md)) —
-[TODO_V0.4.md](../TODO_V0.4.md). Релиз этапа — **v0.6.0**; спринт 34
-(Auth & Edge Hardening) закрыт. Multi-node, HA и DR остаются вне этапа
-(§9 плана). Следующий после него этап — v0.7.0 «Engagement, Accessibility &
-Auth Hardening» (спринты 49–52, [TODO_V0.7.md](../TODO_V0.7.md)). Предыдущий
-этап v0.3.0 «Ops & Scale» завершён, патчи v0.3.1–v0.3.3 — ниже.
+**Последняя версия:** v0.5.0 «Learning Experience & Teaching Workflow»
+(2026-11-10; спринты 42–48, [TODO_V0.5.md](../TODO_V0.5.md)).
+**Текущий этап:** v0.6.0 «Production Hardening» — в работе (спринты 34–41,
+[TODO_V0.4.md](../TODO_V0.4.md)). Закрыты 34–36 и 38–40; 37 — инженерия
+(preflight/coverage/parity готовы, GitFlic-гейт ждёт владельца); 40 — DX & Docs;
+41 — релиз v0.6.0. План пересобран после приёмки v0.5.0 с учётом DevOps-аудита
+ноября 2026 ([DEVOPS_AUDIT_2026-11.md](reports/DEVOPS_AUDIT_2026-11.md)).
+Multi-node, HA и DR остаются вне этапа (§9 плана). Следующий этап — v0.7.0
+«Engagement, Accessibility & Auth Hardening» (спринты 49–52,
+[TODO_V0.7.md](../TODO_V0.7.md)). Предыдущий этап v0.3.0 «Ops & Scale»
+завершён, патчи v0.3.1–v0.3.3 — ниже.
 
 ---
 
@@ -24,6 +21,7 @@ Auth Hardening» (спринты 49–52, [TODO_V0.7.md](../TODO_V0.7.md)). Пр
 - [План этапа v0.4.0](#план-этапа-v040)
 - [План этапа v0.5.0](#план-этапа-v050)
 - [План этапа v0.6.0](#план-этапа-v060)
+- [Релиз v0.6.0 (черновик)](#релиз-v060-production-hardening-черновик)
 - [Спринт 1: Project Setup](#спринт-1-project-setup)
 - [Спринт 2: Backend Core](#спринт-2-backend-core)
 - [Спринт 3: Authentication](#спринт-3-authentication)
@@ -33,7 +31,6 @@ Auth Hardening» (спринты 49–52, [TODO_V0.7.md](../TODO_V0.7.md)). Пр
 - [Спринт 7: Task System](#спринт-7-task-system)
 - [Спринт 8: Frontend Base](#спринт-8-frontend-base)
 - [Спринт 9: Frontend Features](#спринт-9-frontend-features)
-- [Спринт 10: Admin & Polish — релиз v0.1.0](#спринт-10-admin--polish--релиз-v010)
 - [Спринт 10: Admin & Polish — релиз v0.1.0](#спринт-10-admin--polish--релиз-v010)
 - [Этап v0.2.0 «Classroom»](#этап-v020-classroom--релиз)
 - [Спринт 11: Quality Gates & E2E](#спринт-11-quality-gates--e2e)
@@ -79,7 +76,8 @@ TLS-периметр, автоматизированные деплой/бэка
 > и лимиты, спринт 36 — GHCR/digest/Caddy/TLS/deploy/бэкапы, спринт 38 — ASVS и
 > решения по e-mail/LLM-safety. Multi-node вынесен за границы этапа (TODO §9).
 > Оценка этапа — ~29 инженерных дней. Спринт 34 **завершён 2026-11-11**
-> (`KI-032`…`KI-034` закрыты), спринты 35–41 остаются в статусе `[ ]`.
+> (`KI-032`…`KI-034` закрыты); 35–36 и 38–39 закрыты, 40 — DX & Docs,
+> 37 — инженерия (GitFlic-гейт ждёт владельца), 41 — релиз.
 
 | Спринт | Тема | Зависит от | Оценка | Статус |
 |--------|------|------------|--------|--------|
@@ -89,8 +87,8 @@ TLS-периметр, автоматизированные деплой/бэка
 | 36 | Registry, Deploy, TLS & Backup/DR | 35, 34 | 5,5 дня | `[x]` завершён |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[~]` preflight/coverage/parity; GitFlic-гейт ждёт владельца |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[x]` завершён |
-| 39 | Performance & Capacity | 35 | 3 дня | [x] завершён |
-| 40 | DX & Docs | 33–39 | 2 дня | `[ ]` |
+| 39 | Performance & Capacity | 35 | 3 дня | `[x]` завершён |
+| 40 | DX & Docs | 33–39 | 2 дня | `[x]` завершён |
 | 41 | Release v0.6.0 | 33–40 | 2,5 дня | `[ ]` |
 
 **Критический путь:** 33 → 34 → 35 → 36 → 41. Спринт 37 зависит от доступа
@@ -125,7 +123,7 @@ TLS-периметр, автоматизированные деплой/бэка
 
 ---
 
-## План этапа v0.6.0 «Auth & Edge Hardening»
+## План этапа v0.6.0 «Production Hardening»
 
 **Цель:** закрыть риски аутентификации и edge-слоя перед пилотом: проверка
 `is_active` в `require_role`, refresh-токен только в теле запроса, доверенные
@@ -134,6 +132,47 @@ TLS-периметр, автоматизированные деплой/бэка
 за границы этапа; registry — GHCR; пилот — текущий VPS с Caddy на 8080/8443.
 
 **Детали задач, зависимости, DoD и риски:** [TODO_V0.4.md](../TODO_V0.4.md).
+
+---
+
+## Релиз v0.6.0 «Production Hardening» (черновик)
+
+**Статус:** черновик · **Целевая дата:** ноябрь 2026 · **Тег:** `v0.6.0`
+(ставится в S41 после приёмки) · **Предыдущий:** `v0.5.0`
+**Тип релиза:** single-node · **Обратная совместимость:** частично —
+`POST /auth/refresh` принимает `refresh_token` только в теле JSON
+
+Раздел фиксирует содержание релиза до финальных релиз-нот S41. Итоговые
+цифры тестов/миграций и приёмка — в `docs/reports/sprint-41/`,
+`docs/releases/v0.6.0.md` и [CHANGELOG.md](CHANGELOG.md).
+
+### Главное
+
+- **Auth & Edge (S34):** `require_role` проверяет `is_active`; refresh-токен
+  только в теле; `TRUSTED_PROXIES` и единый разбор `X-Forwarded-For`;
+  per-user лимиты; fail-fast при небезопасном `SECRET_KEY`; `DOCS_ENABLED`.
+- **Наблюдаемость (S35):** `UVICORN_WORKERS=2` с multiprocess-метриками,
+  Sentry с PII-фильтром, Prometheus-алерты/recording rules, Grafana, лимиты
+  RAM/CPU и ротация логов, `SLO.md`/`MONITORING.md`.
+- **Registry, Deploy, TLS & Backup/DR (S36):** GHCR + digest-пиннинг,
+  Caddy как единственный edge (TLS, WS, заголовки), one-shot миграции,
+  `deploy.sh`/`rollback.sh`, бэкапы systemd + age + S3, restore drill.
+- **CI-гейты (S37, инженерия):** preflight, coverage 70%, паритет GitHub/GitFlic,
+  `gates.sh`/`gates.ps1`, GitFlic merge-gate (активация — владелец, `KI-023`).
+- **Security & Privacy (S38):** ASVS L1, аудит и DPIA; секреты `*_FILE`;
+  CSP/HSTS; guardrails LLM (prompt injection/токсичность), `KI-036`.
+- **Performance & Capacity (S39):** nightly health/tasks/submit, query-count
+  тесты против N+1, кэш `/admin/quality`, лимит тела 10 МБ и таймауты.
+- **DX & Docs (S40):** ADR-001…007, `CONTRIBUTING.md`, env-drift-гейт,
+  актуализированные README/ARCHITECTURE/навигация.
+
+### Breaking changes и ограничения
+
+- `POST /auth/refresh`: query-параметр удалён, только JSON-тело (см.
+  [UPGRADE.md](UPGRADE.md) §0.6).
+- Multi-node, HA, DR и SLO 2.0 вне этапа (D-001); пилот — один VPS.
+- Полная модерация ответов LLM — `KI-036` (v0.7.0+).
+- GitFlic required checks не активированы до доступа владельца (`KI-023`).
 
 ---
 

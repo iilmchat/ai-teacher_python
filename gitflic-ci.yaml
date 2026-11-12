@@ -89,6 +89,8 @@ lint:
     # (ruff==0.8.1, mypy==1.13.0): unpinned ruff ломал lint (54 новых правила).
     - pip install -r backend/requirements.txt
   script:
+    - echo "==> python scripts/check_env_drift.py"
+    - python scripts/check_env_drift.py
     - echo "==> python backend/scripts/check_image_pins.py"
     - python backend/scripts/check_image_pins.py
     - echo "==> python scripts/ci/check_ci_parity.py"

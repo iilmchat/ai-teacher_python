@@ -1,0 +1,13 @@
+# CODEOWNERS — кто ревьюит изменения (S40-003)
+#
+# Владелец проекта — единственный обязательный ревьюер. При появлении
+# со-мейнтейнеров добавьте их по путям (backend/, frontend/, deploy/).
+
+* @iilmchat
+
+# Инфраструктура и безопасность — только владелец
+/deploy/ @iilmchat
+/.github/ @iilmchat
+/scripts/ci/ @iilmchat
+/docs/adr/ @iilmchat
+/SECURITY.md @iilmchat

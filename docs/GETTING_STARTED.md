@@ -44,6 +44,22 @@ Copy-Item .env.example .env            # Windows
 - `SEED_ON_START=true` — наполнить БД стартовым набором задач при запуске
   (идемпотентно; в Docker Compose включено по умолчанию).
 
+**Новые настройки v0.6.0 (необязательные для dev):**
+
+- `TRUSTED_PROXIES=` — пусто в dev (IP берётся из TCP-peer). Если поднимаете
+  локальный Caddy/nginx перед backend, укажите его адрес (`127.0.0.1`), иначе
+  `X-Forwarded-For` игнорируется (S34-003);
+- `SENTRY_DSN=` — пусто, Sentry выключен; для проверки PII-фильтра задайте
+  DSN тестового проекта (S35-002);
+- `DOCS_ENABLED=true` — Swagger/OpenAPI в dev; в prod-compose `false`;
+- `LLM_GUARDRAILS_ENABLED=true` — не отключайте в production: фильтр
+  prompt injection/токсичности и защитные инструкции (S38-004);
+- `MAX_UPLOAD_BYTES=10485760` — лимит импорта задач (S39-004);
+- `SECRET_KEY_FILE`/`POSTGRES_PASSWORD_FILE`/`DEEPSEEK_API_KEY_FILE` — пусто;
+  альтернатива ENV для Docker secrets (S38-002);
+- `RATE_LIMIT_ENABLED=true`, `CACHE_ENABLED=true` — в тестах выключаются
+  фикстурами.
+
 > **Важно:** в `.env.example` порты `POSTGRES_PORT=5434` и `REDIS_PORT=6381`.
 > Канонические 5432/6379 на машине разработки часто заняты другими проектами
 > (см. `docs/KNOWN_ISSUES.md`, KI-001). Если они свободны — можно вернуть канон.
