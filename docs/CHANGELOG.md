@@ -80,6 +80,10 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты, ASVS L1/gua
   `scripts/check_env_drift.py` (Settings ↔ `.env.example`, wired в
   `gates.sh --fast` и CI); актуализированы README/ARCHITECTURE/RELEASES и
   навигация `docs/README.md`.
+- **S41**: релиз v0.6.0 подготовлен: версия `0.6.0` во всех источниках,
+  `docs/releases/v0.6.0.md`, `UPGRADE.md` (v0.5.0 → v0.6.0, новых миграций
+  нет), полные гейты и dry-run отката; тег `v0.6.0` — после утверждения
+  владельцем.
 
 ### Изменено
 
@@ -117,6 +121,9 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты, ASVS L1/gua
   `SENTRY_DSN`, `DOCS_ENABLED`, `*_FILE`, `MAX_UPLOAD_BYTES`);
   `docs/PERFORMANCE.md`/`docs/CAPACITY.md` (S39);
   `docs/RELEASES.md` — черновик релиза v0.6.0.
+- `docs/releases/v0.6.0.md` — релиз-ноты; `docs/UPGRADE.md` §0.3.1/§0.7.2 —
+  переменные и лимиты S38–S40; `docs/reports/sprint-41/` и
+  `docs/reports/v0.4.0/STAGE.md` — итог релиза и этапа.
 
 ---
 

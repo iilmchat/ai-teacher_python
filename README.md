@@ -4,7 +4,7 @@
 Помогает **думать**, а не списывать: три уровня помощи, безопасная песочница кода
 и задачи с автопроверкой.
 
-**Версия:** последний релиз — **v0.5.0** · текущий этап — **v0.6.0 «Production Hardening»** (в работе) · **© 2026 RuChating (iilmchat)**
+**Версия:** **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения) · последний тег — v0.5.0 · **© 2026 RuChating (iilmchat)**
 
 [![CI](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml/badge.svg?branch=main)](https://github.com/iilmchat/ai-teacher_python/actions/workflows/ci-selfhosted.yml)
 — 7 job'ов: lint, test, frontend, security, e2e, docker, perf (self-hosted runner;
@@ -94,15 +94,15 @@ pnpm dev
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | последний релиз — **v0.5.0** (2026-11-10); текущий этап — **v0.6.0 «Production Hardening»**, single-node (D-001) |
-| Спринты | 1–48 завершены; v0.6.0 — закрыты 34–36, 38–40; 37 — инженерия (GitFlic-гейт ждёт владельца); 41 — релиз; v0.7.0 (49–52) — следующий |
+| Версия | **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0; single-node (D-001) |
+| Спринты | 1–48 завершены; v0.6.0 — закрыты 34–36 и 38–41; 37 — инженерия (GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
 | Тесты backend | **834 passed + 1 skip**; coverage **79%** (порог 70) |
 | Миграции | Alembic head **022** (22 миграции, `001`–`022`) |
-| Тесты frontend | **274** unit + **37** e2e (Playwright; 1 skip) |
+| Тесты frontend | **279** unit + **37** e2e (Playwright; 37 passed, 1 skipped) |
 | Покрытие | backend порог 70%, frontend 70/60/70% |
 | Ruff / MyPy strict | 0 / 0 (104 файла) |
 | TypeScript | strict, 0 ошибок |
-| Размер фронтенда | entry **70.56 kB** gzip (лимит 80) |
+| Размер фронтенда | entry **71.37 kB** gzip (лимит 80) |
 | Зависимости | frontend 0 high/critical (1 moderate); Python 0 блокирующих |
 
 ---
@@ -130,13 +130,14 @@ pnpm dev
 - [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md) — аудит v0.6.0 и ASVS L1
 - [docs/DPIA.md](docs/DPIA.md) — оценка приватности для детской аудитории
 - [docs/SLO.md](docs/SLO.md) — SLI/SLO, error budget и burn-rate
+- [docs/releases/v0.6.0.md](docs/releases/v0.6.0.md) — релиз-ноты v0.6.0 (Production Hardening)
 - [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md) — релиз-ноты v0.5.0 (single-node, D-001)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.6.0 (auth & edge hardening,
+- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.6.0 (Production Hardening,
   breaking refresh; архив v0.3.3 → v0.5.0);
-- [TODO_V0.4.md](TODO_V0.4.md) — **текущий этап v0.6.0** «Production
-  Hardening»: спринт 34 закрыт, спринты 35–41 по плану; multi-node вынесен
-  за границы этапа;
+- [TODO_V0.4.md](TODO_V0.4.md) — **завершённый этап v0.6.0** «Production
+  Hardening»: спринты 34–36 и 38–41 закрыты, 37 — инженерия (GitFlic-гейт
+  ждёт владельца); multi-node вынесен за границы этапа;
 - [TODO_V0.5.md](TODO_V0.5.md) — **завершённый этап v0.5.0** (спринты 42–48):
   аудит продукта и план задач `S42-001`…`S48-003`;
 - [TODO_V0.7.md](TODO_V0.7.md) — этап v0.7.0 (спринты 49–52): траектории,

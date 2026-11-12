@@ -1,8 +1,10 @@
 # UPGRADE.md — обновление до v0.6.0
 
-> **v0.5.0 → v0.6.0** (2026-11-11): «Auth & Edge Hardening» — breaking change
+> **v0.5.0 → v0.6.0** (2026-11-12): «Production Hardening» — breaking change
 > `POST /auth/refresh` (токен в теле JSON), `is_active` в RBAC, trusted proxy,
-> лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED` — §0.5.
+> лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED`, GHCR/TLS/бэкапы/наблюдаемость,
+> guardrails LLM и лимиты загрузок — §0.3.1, §0.5, §0.7.1–0.7.2.
+> Схема БД остаётся на head **022** (новых миграций в v0.6.0 нет).
 > **v0.3.3 → v0.5.0** (2026-11-10): релиз «Learning Experience & Teaching
 > Workflow», миграции `014`–`022` — §0.
 > **v0.3.2 → v0.3.3** (2026-11-05): метрики-события KI-024 и auth-hardening
@@ -90,17 +92,25 @@ docker compose -f docker-compose.prod.yml ps
 задаёт версию приложения — она берётся из `backend/app/config.py` (теперь
 `0.6.0`).
 
-### 0.3.1. Новые переменные v0.6.0 (S34–S35)
+### 0.3.1. Новые переменные v0.6.0 (S34–S40)
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
 | `TRUSTED_PROXIES` | пусто | IP/CIDR reverse-proxy, которым доверяем `X-Forwarded-For` (S34-003); в prod-compose — `127.0.0.1` |
 | `DOCS_ENABLED` | `true` | `false` убирает Swagger/ReDoc/OpenAPI (S34-006); в prod — `false` |
+| `RATE_LIMIT_ENABLED` | `true` | включает rate limiting; в тестах выключается (S34) |
 | `UVICORN_WORKERS` | `1` (prod — `2`) | число воркеров (S35-001) |
 | `PROMETHEUS_MULTIPROC_DIR` | пусто | каталог multiprocess-метрик; в prod — `/tmp/prometheus-multiproc` |
 | `METRICS_ENABLED` | `true` | публикация `/metrics` (S35-001); в prod обязателен |
 | `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_TRACES_SAMPLE_RATE` / `SENTRY_RELEASE` | пусто / `development` / `0` / версия | ошибки и трейсы без PII (S35-002); пустой DSN — выключено |
+| `SECRET_KEY_FILE`, `POSTGRES_PASSWORD_FILE`, `DEEPSEEK_API_KEY_FILE`, `SENTRY_DSN_FILE`, `SMTP_PASSWORD_FILE` | пусто | альтернатива ENV для Docker secrets/K8s; файл имеет приоритет (S38-002) |
+| `LLM_GUARDRAILS_ENABLED` | `true` | фильтр prompt injection/токсичности и защитные инструкции; не отключать в production (S38-004) |
+| `MAX_UPLOAD_BYTES` | `10485760` | лимит импорта задач (JSON/YAML), 413 при превышении (S39-004) |
 | `GRAFANA_ADMIN_PASSWORD` | — | только для профиля `monitoring`; задать перед запуском |
+
+Переменные бэкапов (`BACKUP_DIR`, `AGE_RECIPIENT`, `S3_BUCKET`, `AWS_*`,
+`RETENTION_DAYS`) читает `scripts/backup.sh`, а не `Settings`; они описаны в
+`deploy/systemd/backup.env.example` и `RUNBOOK.md` §5.
 
 Обязательных переменных по-прежнему нет, кроме production-секретов
 (`SECRET_KEY`, `POSTGRES_PASSWORD`), которые проверяет `${VAR:?}` в
@@ -247,15 +257,43 @@ bash scripts/deploy.sh                    # бэкап → migrate → up → he
   `scripts/restore_drill.sh`.
 - Подробно: `docs/RUNBOOK.md`, `docs/GETTING_STARTED.md` §7–8.
 
+### 0.7.2. Лимиты, производительность и DX (S39–S40)
+
+- **Тело запроса:** Caddy `request_body { max_size 10MB }`, nginx
+  `client_max_body_size 10m`; импорт задач дополнительно ограничен
+  `MAX_UPLOAD_BYTES` (10 МБ): проверка `UploadFile.size` и чтение `limit+1`,
+  ответы **413** (размер) / **415** (тип).
+- **Таймауты:** Caddy `dial 5s`, `response_header 60s`, `read 600s`,
+  `flush_interval -1`; nginx `proxy_connect 5s`, `send 60s`, `read 3600s`.
+- **Нагрузка:** `backend/scripts/load_test.py` — health 20, tasks 10,
+  submit 5 RPS; nightly `.github/workflows/perf-nightly.yml` + сравнение с
+  `docs/reports/perf/baseline.json` (регресс > 20%). Первый baseline
+  заполняется после прогона на self-hosted runner.
+- **N+1:** `backend/tests/test_query_counts.py` — число SELECT не должно
+  расти с числом строк для `/admin/users`, `/admin/audit`,
+  `/admin/tasks/review`, `/me/notifications`.
+- **Кэш:** `/admin/quality` — TTL 60 c, инвалидация при изменении оценок;
+  списки/справочники — прежний namespace `cache:tasks:*`.
+- **DX:** ADR-001…007 (`docs/adr/`), `CONTRIBUTING.md`, env-drift
+  (`scripts/check_env_drift.py`, `gates.sh --fast`, CI).
+
 ### 0.8. Известные ограничения v0.6.0
+
+**Готовность:** после закрытия блокеров DevOps-аудита (GHCR/digest, TLS/Caddy,
+автоматические бэкапы age/S3/systemd, refresh в теле, trusted proxies,
+`is_active` в RBAC, наблюдаемость, guardrails) продукт **допустим к
+безопасному закрытому пилоту в режиме single-node**. Это не разрешение на
+публичный production: нужны отдельный VPS/домен, юридическая проверка
+(152-ФЗ), многоузловая схема/HA и эксплуатационная готовность — см.
+[DEVOPS_AUDIT_2026-11.md](reports/DEVOPS_AUDIT_2026-11.md) и
+[RUNBOOK.md](RUNBOOK.md).
 
 Multi-node/HA/DR-SLO 2.0 не входят. Merge-gate на GitHub Free не обеспечен
 (`KI-023`, действие владельца). Access-токен не отзывается, JWT в
 localStorage (`KI-027`); e-mail-подтверждение и сброс пароля отложены
-(`KI-035`, v0.7.0). Guardrails LLM — частично. TLS и автоматические бэкапы
-**реализованы** (S36), refresh-токен больше не в query, rate limit защищён
-trusted proxy (S34). Для публичного production нужен отдельный VPS и
-юридическая проверка (152-ФЗ).
+(`KI-035`, v0.7.0). Полная модерация ответов LLM — `KI-036` (v0.7.0). TLS и
+автоматические бэкапы **реализованы** (S36), refresh-токен больше не в query,
+rate limit защищён trusted proxy (S34).
 
 ---
 

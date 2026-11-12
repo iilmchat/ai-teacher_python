@@ -2,7 +2,7 @@
 
 Навигационный хаб. Здесь собрано, что читать в зависимости от роли.
 
-**Версия:** последний релиз — **v0.5.0** (2026-11-10) · текущий этап — **v0.6.0 «Production Hardening»** (в работе) · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
+**Версия:** **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0 · **Стек:** Python 3.12 + FastAPI · React 19 · PostgreSQL 17 + pgvector · Redis · Docker Compose
 
 ---
 
@@ -40,9 +40,9 @@
 - [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
 - [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
   патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
-- [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.6.0** «Production
-  Hardening» (спринты 33–41): закрыты 34–36 (auth/edge, monitoring, deploy/DR),
-  multi-node вынесен за границы
+- [../TODO_V0.4.md](../TODO_V0.4.md) — **завершённый этап v0.6.0** «Production
+  Hardening» (спринты 33–41): 34–36 и 38–41 закрыты, 37 — инженерия
+  (`KI-023`), multi-node вынесен за границы; итог — [reports/v0.4.0/STAGE.md](reports/v0.4.0/STAGE.md)
 - [../TODO_V0.5.md](../TODO_V0.5.md) — **завершённый этап v0.5.0** «Learning Experience &
   Teaching Workflow» (спринты 42–48): аудит продукта по 7 срезам, план задач
   `S42-001`…`S48-003`, зависимости, оценки, DoD, риски и границы этапа
@@ -50,8 +50,6 @@
   Auth Hardening» (спринты 49–52): траектории и вовлечение, доступность и
   PWA, перенос токенов в httpOnly-cookie (`KI-027`), e-mail-подтверждение и
   сброс пароля (`KI-035`), релиз
-- [../TODO_V0.4.md](../TODO_V0.4.md) — пересобранный этап v0.6.0 «Auth & Edge
-  Hardening» (спринт 34) и остальные спринты production-плана
 - [CI.md](CI.md) — CI-платформа: self-hosted runner, гейты, релиз, эксплуатация
 - [GETTING_STARTED.md](GETTING_STARTED.md) — развёртывание за ~20 минут
 
@@ -76,6 +74,7 @@
 ### История и проблемы
 
 - [RELEASES.md](RELEASES.md) — журнал спринтов и релизов
+- [releases/v0.6.0.md](releases/v0.6.0.md) — релиз-ноты v0.6.0
 - [CHANGELOG.md](CHANGELOG.md) — история изменений (Keep a Changelog)
 - [KNOWN_ISSUES.md](KNOWN_ISSUES.md) — реестр известных проблем (`KI-NNN`)
 - [reports/](reports/) — отчёты по спринтам: [sprint-19](reports/sprint-19/SPRINT-19.md),
@@ -87,13 +86,13 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | последний релиз — **v0.5.0** (2026-11-10); текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, 38–40; 37 — инженерия, GitFlic-гейт ждёт владельца; 41 — релиз); v0.7.0 (49–52) — следующий |
+| Версия | **v0.6.0 «Production Hardening»** подготовлен (тег — после утверждения); последний тег — v0.5.0; этап v0.6.0 завершён (34–36, 38–41; 37 — инженерия, GitFlic-гейт ждёт владельца); v0.7.0 (49–52) — следующий |
 | Тесты backend | **835** (834 passed + 1 skipped); coverage 79.17% |
-| Тесты frontend | 279 unit + 22 e2e (Playwright; 22/22 green) |
-| Покрытие | backend порог 70% (последний замер 79.17%), frontend 73.6% строк |
+| Тесты frontend | 279 unit + 37 e2e (Playwright; 37 passed, 1 skipped) |
+| Покрытие | backend порог 70% (последний замер 79.17%), frontend 82.23% строк |
 | Ruff / MyPy strict | 0 / 0 (104 файла) |
 | Миграции | head 022 (`001`–`022`, `alembic check` чист) |
-| Размер фронтенда | entry 70.57 kB gzip (react 15.65 + i18n 21.25 + stores 22.88; лимит 80) |
+| Размер фронтенда | entry 71.37 kB gzip (react 15.65 + i18n 22.35 + stores 22.89; лимит 80) |
 | Зависимости | frontend 0 vulns; backend 0 critical (KI-015/KI-016 — принятые остатки) |
 | Активные проблемы | 6 (см. [KNOWN_ISSUES.md](KNOWN_ISSUES.md)) |
 

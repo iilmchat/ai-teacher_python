@@ -43,6 +43,10 @@ export default defineConfig({
         LLM_PROVIDER: 'echo',
         RATE_LIMIT_ENABLED: 'false',
         DEBUG: 'false',
+        // S34-005: при DEBUG=false SECRET_KEY обязан быть >= 32 символов.
+        // CI может передать свой; локальный fallback — только для e2e.
+        SECRET_KEY:
+          process.env.SECRET_KEY ?? 'e2e_secret_key_do_not_use_in_production_32',
       },
     },
     {
