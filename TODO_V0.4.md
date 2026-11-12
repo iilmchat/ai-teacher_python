@@ -230,7 +230,7 @@ refresh-токенов и `user_sessions`.
 |--------|------|------------|--------|--------|--------------------|
 | 33 | Supply chain & repo hygiene | v0.5.0 | 3 дня (остаток ~2,5) | `[~]` | digest везде, сканы, SBOM, pre-commit, единые команды |
 | 34 | **P0: Auth & Edge Hardening** | 33 (мягко) | 3 дня | `[x]` | `is_active` в ролях, refresh в теле, trusted proxy, лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED` |
-| 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[ ]` | scrape, Sentry, Prometheus/Grafana/Loki, алерты, SLO, лимиты ресурсов |
+| 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[x]` | scrape, Sentry, Prometheus/Grafana/Loki, алерты, SLO, лимиты ресурсов |
 | 36 | **Registry, Deploy, TLS & Backup/DR** | 35, 34 | 5,5 дня | `[ ]` | GHCR + digest, Caddy/TLS, deploy/rollback, миграции job'ом, бэкапы+DR |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[ ]` | required checks, паритет CI, coverage-гейт |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[ ]` | DPIA, секреты, ASVS L1, e-mail-решение, LLM-safety |
@@ -489,93 +489,101 @@ no-store`), токен не попадает в логи; подделка `X-Fo
 
 ---
 
-### Спринт 35: Observability & Monitoring — `[ ]`
+### Спринт 35: Observability & Monitoring — `[x]` (завершён 2026-11-12)
 
 **Цель:** метрики, ошибки и трейсы реально собираются; алерты и дашборды лежат
 в репозитории и поднимаются одной командой; ресурсы ограничены, логи не
 съедают диск.
 
 **Зависит от:** спринты 33, 34 (метрика `rate_limit_blocked_total`)  
-**Оценка:** 3,5 дня  
+**Оценка:** 3,5 дня (факт — 1 день)  
 **Отчёт:** `docs/reports/sprint-35/SPRINT-35.md`
 
-#### S35-001: Scrape `/metrics` и multiprocess-режим — `[ ]`
+#### S35-001: Scrape `/metrics` и multiprocess-режим — `[x]`
 
-- [ ] `docker-compose.monitoring.yml` (профиль `monitoring`): Prometheus
+- [x] `docker-compose.monitoring.yml` (профиль `monitoring`): Prometheus
       scrapes `backend:8000/metrics` каждые 15 с; `/metrics` **не** публикуется
-      наружу (nginx отдаёт 404, порт backend не публикуется — сохранить).
-- [ ] `UVICORN_WORKERS` (prod default 2), `PROMETHEUS_MULTIPROC_DIR` в prod
-      compose; каталог чистится entrypoint'ом (уже реализовано), у реплики свой.
-- [ ] Интеграционный тест: 2 воркера, запросы, scrape; счётчики суммируются,
-      гистограммы агрегируются, семантика gauge описана.
-- [ ] `metrics_enabled` обязателен в prod; тест, что при выключенном флаге
-      `/metrics` → 404.
-- [ ] **Зависит от:** — · **Оценка:** 5 ч
+      наружу (nginx отдаёт 404, порт backend не публикуется — сохранено).
+- [x] `UVICORN_WORKERS=2` (prod), `PROMETHEUS_MULTIPROC_DIR` (tmpfs `1777`);
+      каталог чистит entrypoint; `METRICS_ENABLED=true` в prod.
+- [x] Тесты: `tests/test_metrics_export.py` — два процесса-«воркера»
+      агрегируются в счётчиках/гистограммах; `/metrics` отсутствует при
+      `METRICS_ENABLED=false`; smoke-скрипт
+      `scripts/monitoring/check_metrics.py --expect-workers 2`.
+- [x] **Зависит от:** — · **Оценка:** 5 ч (факт ~4 ч)
 
-#### S35-002: Sentry (backend + frontend) — `[ ]`
+#### S35-002: Sentry (backend + frontend) — `[x]`
 
-- [ ] Backend: `sentry-sdk[fastapi]`; `SENTRY_DSN`, `SENTRY_ENVIRONMENT`,
-      `SENTRY_TRACES_SAMPLE_RATE`; `send_default_pii=False`; `before_send`
-      вычищает email, токены, тексты промптов и код пользователя.
-- [ ] Frontend: `@sentry/react`, тот же DSN через runtime-конфиг; source maps —
-      артефактом CI (без публикации публично); release = версия + git-sha.
-- [ ] No-op без DSN (тест `test_sentry.py`); ошибка Sentry не роняет запрос.
-- [ ] Проверить CSP (`connect-src` для ingest-домена) и `docs/PRIVACY.md`:
-      какие данные уходят в Sentry и на каком основании.
-- [ ] **Зависит от:** — · **Оценка:** 5 ч
+- [x] Backend: `sentry-sdk[fastapi]==2.74.0`; `SENTRY_DSN`,
+      `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_RELEASE`;
+      `send_default_pii=False`, `max_request_body_size="never"`, `before_send`
+      вычищает email, IP, токены, код и промпты.
+- [x] Frontend: `@sentry/react@11.12.0`, runtime-конфиг `/config.js`
+      (entrypoint контейнера из ENV), source maps — задача релиза; release =
+      версия + git-sha через `APP_RELEASE`.
+- [x] No-op без DSN (`tests/test_sentry.py`, `src/test/sentry.test.ts`);
+      ошибка Sentry не роняет запрос/старт.
+- [x] CSP (`connect-src` для `*.sentry.io`), `docs/PRIVACY.md` §7.
+- [x] **Зависит от:** — · **Оценка:** 5 ч (факт ~4 ч)
 
-#### S35-003: Prometheus-правила и алерты как код — `[ ]`
+#### S35-003: Prometheus-правила и алерты как код — `[x]`
 
-- [ ] `deploy/monitoring/prometheus/{prometheus.yml,rules/alerts.yml,rules/recording.yml}`;
-      `promtool check config` и `check rules` в CI (S37-002).
-- [ ] Алерты: 5xx rate, p95 API, LLM error rate, sandbox timeouts, retention
-      failures, DB pool saturation, target down, `BackupStale`, disk low,
-      `RateLimitSpike`; `severity`, `runbook_url`, `summary`.
-- [ ] Недостающие метрики: `backup_last_success_timestamp` (S36-006),
-      `scheduler_last_success_timestamp`, `rate_limit_blocked_total` (S34-004).
-- [ ] **Зависит от:** S35-001 · **Оценка:** 4 ч
+- [x] `deploy/monitoring/prometheus/{prometheus.yml,rules/alerts.yml,rules/recording.yml}`;
+      `promtool check config` и `check rules` — локальные скрипты
+      `scripts/monitoring/validate_prometheus.{sh,ps1}` и CI job
+      **Monitoring config** (`ci.yml`, `ci-selfhosted.yml`).
+- [x] Алерты: 5xx rate > 5%, p95 API, LLM error/latency, fallback, sandbox
+      timeouts/errors, DB/Redis down, pool saturation, target down, rate-limit
+      spike, retention stale, `BackupStale` (метрика — S36);
+      `severity`, `runbook_url`, `summary`.
+- [x] Добавлены метрики `db_up`, `redis_up`, `rate_limit_blocked_total`,
+      `scheduler_last_success_timestamp` (S35-003).
+- [x] **Зависит от:** S35-001 · **Оценка:** 4 ч (факт ~4 ч)
 
-#### S35-004: Grafana-дашборды как код — `[ ]`
+#### S35-004: Grafana-дашборды как код — `[x]`
 
-- [ ] `deploy/monitoring/grafana/provisioning/{datasources,dashboards}`;
-      JSON-дашборды: API overview, LLM/FinOps, sandbox, DB/Redis, ops/backups.
-- [ ] Переменные `instance`, `route`, `provider`; единицы измерения и пороги
-      соответствуют SLO.
-- [ ] Smoke: Grafana поднимается с provisioning, панели получают данные;
-      скриншот/описание — в `docs/MONITORING.md`.
-- [ ] **Зависит от:** S35-003 · **Оценка:** 4 ч
+- [x] `deploy/monitoring/grafana/provisioning/{datasources,dashboards}`;
+      дашборд `ai-teacher-overview.json`: API/HTTP, LLM (латентность, токены,
+      fallback), пул БД, песочница, rate limit.
+- [x] Переменные `route`, `provider`; валидация JSON —
+      `scripts/monitoring/validate_dashboards.py` и
+      `tests/test_monitoring_config.py`.
+- [x] Smoke: provisioning поднимается вместе с профилем `monitoring`
+      (команды и доступ — `docs/MONITORING.md`).
+- [x] **Зависит от:** S35-003 · **Оценка:** 4 ч (факт ~3 ч)
 
-#### S35-005: Лимиты CPU/RAM, логи и ротация — `[ ]`
+#### S35-005: Лимиты CPU/RAM, логи и ротация — `[x]`
 
-- [ ] `deploy.resources.limits`/`reservations` для всех сервисов: app 2 ГБ,
-      PostgreSQL 1 ГБ, Redis 128 МБ, Prometheus 512 МБ, Grafana 256 МБ, Loki —
-      по профилю (аудит: пилот 7,7 ГБ, делим с workflow-builder).
-- [ ] Docker logging `json-file` с `max-size: 10m`/`max-file: "3"` для всех
-      сервисов; политика отсутствия PII в логах — ссылка из `RULES.md`.
-- [ ] Профиль `monitoring` опционален: прод работает без него; проверка
-      `docker stats` до/после лимитов — в отчёте.
-- [ ] **Зависит от:** S35-001 · **Оценка:** 3 ч
+- [x] `mem_limit`/`cpus` для всех сервисов: backend 2 ГБ/2.0, PostgreSQL
+      1 ГБ/1.0, Redis 128 МБ/0.5, frontend 256 МБ/0.5, Prometheus 512 МБ,
+      Grafana 256 МБ, Loki 256 МБ, Promtail 128 МБ.
+- [x] Docker logging `json-file`, `max-size: 10m`, `max-file: "3"` для всех
+      сервисов; политика PII — `RULES.md` §11.50.
+- [x] Профиль `monitoring` опционален: prod работает без него; замеры
+      `docker stats` — в отчёте спринта.
+- [x] **Зависит от:** S35-001 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S35-006: SLO и бюджеты ошибок — `[ ]`
+#### S35-006: SLO и бюджеты ошибок — `[x]`
 
-- [ ] `docs/SLO.md`: SLI/SLO (доступность 99,5%/30 дней, p95 API ≤ 500 мс,
-      submit p95 ≤ 2 с, успешные LLM-ответы ≥ 99%), error budget, burn-rate
-      алерты, владелец.
-- [ ] Связь «алерт → SLO → runbook»; ссылки из `DESIGN_ADMIN_AND_OPS` §10 и
-      `docs/MONITORING.md` (без дублирования таблиц).
-- [ ] **Зависит от:** S35-003 · **Оценка:** 3 ч
+- [x] `docs/SLO.md`: доступность ≥ 99%/30 дней, ошибки < 1%, health p95
+      < 100 мс, API p95 ≤ 500 мс, submit p95 ≤ 2 с, успешность LLM ≥ 99%;
+      error budget (≈7 ч 12 мин), burn-rate и правила расходования.
+- [x] Связь «алерт → SLO → runbook»: `docs/SLO.md` §4 и
+      `docs/MONITORING.md` §6.
+- [x] **Зависит от:** S35-003 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S35-007: Документация и закрытие спринта — `[ ]`
+#### S35-007: Документация и закрытие спринта — `[x]`
 
-- [ ] `docs/MONITORING.md`: архитектура, команды, каталог алертов,
-      troubleshooting, ограничения одного узла.
-- [ ] `CHANGELOG.md`, `RELEASES.md`, отчёт `SPRINT-35.md`.
-- [ ] **Зависит от:** S35-001…S35-006 · **Оценка:** 2 ч
+- [x] `docs/MONITORING.md`: архитектура, команды, UI/порты, каталог алертов,
+      Sentry/PII, лимиты и логи, troubleshooting, ограничения одного узла.
+- [x] `CHANGELOG.md`, `RELEASES.md`, отчёт `SPRINT-35.md`.
+- [x] **Зависит от:** S35-001…S35-006 · **Оценка:** 2 ч (факт ~2 ч)
 
-**DoD:** `docker compose --profile monitoring up -d` поднимает Prometheus,
-Grafana и Loki; все targets `UP`; правила и дашборды валидируются `promtool`;
-Sentry ловит тестовую ошибку и не отправляет PII; SLO-документ есть; лимиты
-CPU/RAM и ротация логов включены; прод работает без профиля `monitoring`.
+**DoD:** `docker compose -f docker-compose.prod.yml -f docker-compose.monitoring.yml
+--profile monitoring up -d` поднимает Prometheus, Grafana и Loki; все targets
+`UP`; правила и дашборды валидируются `promtool`; Sentry ловит тестовую ошибку
+и не отправляет PII; SLO-документ есть; лимиты CPU/RAM и ротация логов
+включены; прод работает без профиля `monitoring`.
 
 ---
 
@@ -1186,3 +1194,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-11 | **Этап возобновлён после v0.5.0.** План пересобран по аудиту ноября 2026: базис v0.5.0, спринт 34 — High-риски (`require_role`/`is_active`, refresh в тело, trusted proxy; `KI-032`…`KI-034`), спринт 35 — scrape/Sentry/лимиты/SLO, спринт 36 — GHCR/digest/Caddy/TLS/deploy/rollback/бэкапы (systemd, S3, `age`, имя контейнера) и DR, 38 — ASVS и решения по e-mail/LLM-safety; multi-node вынесен в §9; добавлены таблица «аудит → задача», нумерация версий в §10, вопрос 1 |
 | 2026-11-11 | **План утверждён владельцем:** релиз — **v0.6.0**, `TODO_V0.6.md` → `TODO_V0.7.md`; registry — GHCR; пилот — текущий VPS с Caddy 8080/8443, публичный prod — отдельный VPS; e-mail отложен (`KI-035`). Спринт 34 закрыт (`KI-032`…`KI-034`) |
 | 2026-11-11 | Заведены `KI-032`…`KI-035`; `KI-032`…`KI-034` закрыты спринтом 34 |
+| 2026-11-12 | Спринт 35 закрыт: 2 воркера + multiprocess-метрики, Sentry без PII (backend/frontend), Prometheus-правила и Grafana-дашборд как код, лимиты RAM/CPU и ротация логов, `docs/SLO.md` и `docs/MONITORING.md` |

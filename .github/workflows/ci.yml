@@ -46,6 +46,29 @@ jobs:
           cd backend
           mypy app --config-file ../pyproject.toml
 
+  monitoring:
+    name: Monitoring config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: promtool check config/rules
+        run: |
+          docker run --rm -v "$PWD/deploy/monitoring/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v3.5.0 \
+            check config /etc/prometheus/prometheus.yml
+          docker run --rm -v "$PWD/deploy/monitoring/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:v3.5.0 \
+            check rules /etc/prometheus/rules/alerts.yml /etc/prometheus/rules/recording.yml
+
+      - name: Validate Grafana dashboards
+        run: python scripts/monitoring/validate_dashboards.py
+
   test:
     name: Test (Backend)
     runs-on: ubuntu-latest

@@ -1,0 +1,31 @@
+# Prometheus для AI Teacher (S35-003).
+# Запуск: docker compose -f docker-compose.prod.yml \
+#           -f docker-compose.monitoring.yml --profile monitoring up -d
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: ai-teacher
+    environment: production
+
+rule_files:
+  - /etc/prometheus/rules/alerts.yml
+  - /etc/prometheus/rules/recording.yml
+
+# Alertmanager не обязателен для пилота: алерты видны в Prometheus UI.
+# При появлении Alertmanager раскомментируйте блок:
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: backend
+    metrics_path: /metrics
+    scrape_interval: 15s
+    static_configs:
+      - targets: ["backend:8000"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

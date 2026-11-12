@@ -207,6 +207,50 @@ BUILD_INFO = Gauge(
     registry=_metric_registry,
 )
 
+#: Доступность зависимостей (S35-003): обновляется в `/health/ready`.
+#: `min` — если хотя бы один воркер видит зависимость недоступной, алерт
+#: срабатывает; `max` скрыл бы деградацию одного воркера.
+DB_UP = Gauge(
+    "db_up",
+    "PostgreSQL доступен (1/0)",
+    multiprocess_mode="min",
+    registry=_metric_registry,
+)
+REDIS_UP = Gauge(
+    "redis_up",
+    "Redis доступен (1/0)",
+    multiprocess_mode="min",
+    registry=_metric_registry,
+)
+
+#: Блокировки лимитов (S35-003): алерт `RateLimitSpike`.
+RATE_LIMIT_BLOCKED = Counter(
+    "rate_limit_blocked_total",
+    "Запросы, заблокированные лимитом, по области",
+    ["scope"],
+    registry=_metric_registry,
+)
+
+#: Последний успешный прогон планировщика (S35-003), unix timestamp.
+SCHEDULER_LAST_SUCCESS = Gauge(
+    "scheduler_last_success_timestamp",
+    "Время последнего успешного прогона планировщика (unix)",
+    ["job"],
+    multiprocess_mode="max",
+    registry=_metric_registry,
+)
+
+#: Живые воркеры (S35-001): в multiprocess-режиме ProcessCollector недоступен,
+#: поэтому каждый воркер публикует свой pid — по нему проверяется, что метрики
+#: собираются со всех реплик (`scripts/monitoring/check_metrics.py`).
+WORKER_INFO = Gauge(
+    "app_worker_info",
+    "Живой воркер приложения (pid)",
+    ["pid"],
+    multiprocess_mode="all",
+    registry=_metric_registry,
+)
+
 _CACHE_COUNTERS: dict[str, Counter] = {
     "hit": CACHE_HITS,
     "miss": CACHE_MISSES,
@@ -300,6 +344,32 @@ def set_build_info(version: str) -> None:
     BUILD_INFO.labels(version).set(1)
 
 
+def set_dependency_up(*, database: bool | None = None, redis: bool | None = None) -> None:
+    """Обновить gauges доступности зависимостей (S35-003).
+
+    `None` — не трогать соответствующую зависимость.
+    """
+    if database is not None:
+        DB_UP.set(1 if database else 0)
+    if redis is not None:
+        REDIS_UP.set(1 if redis else 0)
+
+
+def rate_limit_blocked_observed(scope: str) -> None:
+    """Зафиксировать блокировку лимитом (`scope`: login/refresh/…)."""
+    RATE_LIMIT_BLOCKED.labels(scope).inc()
+
+
+def scheduler_success_observed(*, job: str, timestamp: float) -> None:
+    """Отметить успешный прогон фонового задания (S35-003)"""
+    SCHEDULER_LAST_SUCCESS.labels(job).set(timestamp)
+
+
+def worker_info_observed(pid: int) -> None:
+    """Опубликовать pid текущего воркера (S35-001)."""
+    WORKER_INFO.labels(str(pid)).set(1)
+
+
 def _refresh_db_pool_gauges() -> None:
     """Снять состояние пула БД в gauge'ы перед scrape"""
     from app.db.database import engine
@@ -356,5 +426,10 @@ def reset_metrics() -> None:
         DB_POOL,
         DB_POOL_SIZE,
         BUILD_INFO,
+        DB_UP,
+        REDIS_UP,
+        RATE_LIMIT_BLOCKED,
+        SCHEDULER_LAST_SUCCESS,
+        WORKER_INFO,
     ):
         _reset_metric(metric)

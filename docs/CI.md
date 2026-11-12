@@ -272,6 +272,8 @@ Free для приватного репозитория не даёт branch pro
    зелёный (run
    [41070317162](https://github.com/iilmchat/ai-teacher_python/actions/runs/41070317162)).
    GitHub-hosted `ci.yml` переведён в ручной режим, чтобы не висеть красным.
+   С S35 добавлен advisory job **Monitoring config**: `promtool check
+   config/rules` и валидация Grafana JSON (`scripts/monitoring/validate_*`).
 2. **Цель — GitFlic как origin (v0.3.0).** `gitflic-ci.yaml` уже содержит порт
    5 job'ов + 3 security-job'а, MR-пайплайн, path-фильтры и job `release` для
    тегов; гейт мержа — опция «Проверять статус последнего конвейера при

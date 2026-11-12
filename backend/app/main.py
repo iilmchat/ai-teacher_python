@@ -1,6 +1,7 @@
 """
 AI Teacher for Python - Main FastAPI Application
 """
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any, TypedDict
@@ -25,10 +26,16 @@ from app.api.v1 import (
 )
 from app.config import settings, validate_security_settings
 from app.core.logging import configure_logging
-from app.core.metrics import HTTPMetricsMiddleware, render_metrics, set_build_info
+from app.core.metrics import (
+    HTTPMetricsMiddleware,
+    render_metrics,
+    set_build_info,
+    worker_info_observed,
+)
 from app.core.rate_limiter import RateLimitMiddleware
 from app.core.request_context import RequestContextMiddleware
 from app.core.runner_pool import close_current_pool as close_executor_pool
+from app.core.sentry import init_sentry
 from app.db.database import async_session_factory
 from app.db.redis import close_redis, ping_redis
 from app.errors import AppError
@@ -38,6 +45,8 @@ from app.services.scheduler import SchedulerHandle, start_scheduler, stop_schedu
 from app.services.seed_service import seed_tasks
 
 configure_logging()
+# S35-002: no-op без SENTRY_DSN; ошибки инициализации не роняют старт.
+init_sentry()
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +65,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # S34-005: fail-fast при небезопасном SECRET_KEY в production.
     validate_security_settings()
     set_build_info(settings.version)
+    # S35-001: каждая реплика отмечает свой pid — smoke-проверка агрегации.
+    worker_info_observed(os.getpid())
     redis_ok = await ping_redis()
     logger.info(
         "app_starting",

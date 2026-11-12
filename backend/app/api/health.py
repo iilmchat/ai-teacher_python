@@ -19,6 +19,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.metrics import set_dependency_up
 from app.db.database import get_db
 from app.db.redis import ping_redis
 
@@ -59,6 +60,8 @@ async def readiness(db: DbSession) -> Any:
     )
 
     ready = checks["database"] and checks["redis"]
+    # S35-003: gauges для алертов DatabaseDown/RedisDown.
+    set_dependency_up(database=checks["database"], redis=checks["redis"])
     payload = {
         "status": "ready" if ready else "not_ready",
         "checks": checks,

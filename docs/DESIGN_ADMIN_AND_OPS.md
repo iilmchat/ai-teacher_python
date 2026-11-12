@@ -283,26 +283,35 @@ code_executions=2), retention удалил тестовый бэкап стар�
 | LLM | `llm_requests_total{provider,model,status}`, `llm_latency_seconds`, `llm_first_token_seconds`, `llm_tokens_total{provider,kind}`, `llm_fallbacks_total{primary}` |
 | Кэш | `cache_hits_total`, `cache_misses_total`, `cache_sets_total`, `cache_invalidations_total`, `cache_errors_total` |
 | Retention | `retention_runs_total{table,result}`, `retention_rows_deleted_total{table}` |
-| БД | `db_pool_connections{state}`, `db_pool_size` |
-| Сборка | `app_build_info{version}` |
+| БД | `db_pool_connections{state}`, `db_pool_size`, `db_up`, `redis_up` |
+| Лимиты | `rate_limit_blocked_total{scope}` |
+| Фоновые задачи | `scheduler_last_success_timestamp{job}` |
+| Сборка | `app_build_info{version}`, `app_worker_info{pid}` |
 
 LLM/кэш/retention — **события** (счётчики и гистограммы), поэтому корректно
-складываются между воркерами. Для нескольких воркеров включите общий экспортёр:
+складываются между воркерами. Prod запускается с `UVICORN_WORKERS=2` и общим
+экспортёром:
 
 ```env
 PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus-multiproc
 ```
 
-и запускайте API с `--workers N` (каталог чистит `docker-entrypoint.sh` перед
-стартом; при запуске без entrypoint очистите его сами). В этом режиме любая
-реплика отдаёт общий агрегат — `sum by (instance)` в Prometheus не нужен.
-Пул БД — состояние процесса: `db_pool_connections` суммируется (`livesum`),
-`db_pool_size` берётся максимумом.
+Каталог — tmpfs, чистит `docker-entrypoint.sh` перед стартом воркеров; в этом
+режиме любая реплика отдаёт общий агрегат — `sum by (instance)` в Prometheus не
+нужен. Пул БД — состояние процесса: `db_pool_connections` суммируется
+(`livesum`), `db_pool_size` берётся максимумом; `db_up`/`redis_up` — минимумом
+(деградация любого воркера видна алерту).
 
-**Алерты (рекомендуемые):** 5xx rate > 1% за 5 мин; p95 `http_request_duration`
-> 2 с; `sandbox_timeouts_total` растёт; `sandbox_runs_total{result="error"}`
-растёт; `llm_requests_total{status="error"}` растёт; `retention_runs_total{result="error"}`
-> 0; `db_pool_connections{state="checked_out"}` близко к `db_pool_size`.
+**Стек мониторинга (S35).** `docker-compose.monitoring.yml` (профиль
+`monitoring`) поднимает Prometheus, Grafana, Loki и Promtail; порты слушают
+`127.0.0.1`. Правила алертов и recording rules — `deploy/monitoring/`,
+дашборды — `deploy/monitoring/grafana/dashboards/`. Валидация — `promtool`
+(CI job **Monitoring config**). Детали и runbook — `docs/MONITORING.md`, SLO —
+`docs/SLO.md`.
+
+**Алерты:** 5xx rate > 5%, p95 HTTP > 2 с, backend/db/redis down, пул БД > 90%,
+LLM error > 10%, LLM p95 > 30 с, fallback spike, таймауты/ошибки песочницы,
+`RateLimitSpike`, `RetentionStale`, `BackupStale` (с S36).
 
 **Логи.** JSON (`LOG_FORMAT=json`), каждая запись содержит `request_id`
 (из `X-Request-ID`), `http_request` пишется на каждый запрос с длительностью.

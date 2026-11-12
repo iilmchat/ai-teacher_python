@@ -17,6 +17,9 @@ FROM nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef
 
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# S35-002: runtime-конфиг Sentry из ENV (DSN, environment, release)
+COPY docker-entrypoint.d/40-runtime-config.sh /docker-entrypoint.d/40-runtime-config.sh
+RUN chmod 0755 /docker-entrypoint.d/40-runtime-config.sh
 
 EXPOSE 80
 

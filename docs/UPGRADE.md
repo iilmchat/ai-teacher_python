@@ -88,7 +88,23 @@ docker compose -f docker-compose.prod.yml ps
 с `Retry-After`); это константа кода (`CHECK_LIMIT` в
 `app/core/rate_limiter.py`), а не ENV. `VERSION` в `.env` по-прежнему не
 задаёт версию приложения — она берётся из `backend/app/config.py` (теперь
-`0.5.0`).
+`0.6.0`).
+
+### 0.3.1. Новые переменные v0.6.0 (S34–S35)
+
+| Переменная | По умолчанию | Назначение |
+|------------|--------------|------------|
+| `TRUSTED_PROXIES` | пусто | IP/CIDR reverse-proxy, которым доверяем `X-Forwarded-For` (S34-003); в prod-compose — `127.0.0.1` |
+| `DOCS_ENABLED` | `true` | `false` убирает Swagger/ReDoc/OpenAPI (S34-006); в prod — `false` |
+| `UVICORN_WORKERS` | `1` (prod — `2`) | число воркеров (S35-001) |
+| `PROMETHEUS_MULTIPROC_DIR` | пусто | каталог multiprocess-метрик; в prod — `/tmp/prometheus-multiproc` |
+| `METRICS_ENABLED` | `true` | публикация `/metrics` (S35-001); в prod обязателен |
+| `SENTRY_DSN` / `SENTRY_ENVIRONMENT` / `SENTRY_TRACES_SAMPLE_RATE` / `SENTRY_RELEASE` | пусто / `development` / `0` / версия | ошибки и трейсы без PII (S35-002); пустой DSN — выключено |
+| `GRAFANA_ADMIN_PASSWORD` | — | только для профиля `monitoring`; задать перед запуском |
+
+Обязательных переменных по-прежнему нет, кроме production-секретов
+(`SECRET_KEY`, `POSTGRES_PASSWORD`), которые проверяет `${VAR:?}` в
+`docker-compose.prod.yml`.
 
 ### 0.4. Обратная совместимость API
 

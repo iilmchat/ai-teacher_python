@@ -8,9 +8,20 @@
 #
 # Запуск:  docker compose -f docker-compose.prod.yml up -d --build
 
+# S35-005: ротация логов Docker для всех сервисов (JSON, 10 МБ × 3).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: pgvector/pgvector:pg17@sha256:7d0a41464797aeb9862dfdc0bbf1526b82cfd324cdd8036df19e3545f4a9ccb8
+    # S35-005: пилот 7,7 ГБ на общем VPS — жёсткие лимиты.
+    mem_limit: 1g
+    cpus: "1.0"
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-ai_teacher}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
@@ -27,6 +38,9 @@ services:
   redis:
     image: redis:7-alpine@sha256:8da19c7399dca900c6822a1cf30f9d2285585e2c4b457ff4095b0f4500054d3f
     command: ["redis-server", "--appendonly", "yes"]
+    mem_limit: 128m
+    cpus: "0.5"
+    logging: *default-logging
     volumes:
       - redis_data:/data
     healthcheck:
@@ -40,6 +54,22 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # S35-001: 2 воркера uvicorn; метрики собираются в multiprocess-режиме.
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "${UVICORN_WORKERS:-2}"
+    mem_limit: 2g
+    cpus: "2.0"
+    logging: *default-logging
+    # S35-001: общий каталог метрик, доступный всем воркерам (tmpfs, 1777).
+    tmpfs:
+      - /tmp/prometheus-multiproc:mode=1777
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
@@ -60,6 +90,15 @@ services:
       DOCS_ENABLED: "false"
       # S34-003: доверяем X-Forwarded-For только reverse-proxy (Caddy/nginx).
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1}
+      # S35-001: multiprocess-метрики для нескольких воркеров.
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-2}
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus-multiproc
+      METRICS_ENABLED: "true"
+      # S35-002: ошибки/трейсы. Пустой DSN — Sentry выключен.
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
       # Встроенный retention-планировщик (KI-025): раз в сутки удаляет данные
       # старше RETENTION_*_DAYS, внешний cron на хосте больше не обязателен.
       RETENTION_SCHEDULER_ENABLED: "true"
@@ -81,6 +120,15 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    mem_limit: 256m
+    cpus: "0.5"
+    logging: *default-logging
+    environment:
+      # S35-002: runtime-конфиг фронтенда (entrypoint пишет /config.js).
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-production}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0}
+      APP_RELEASE: ${APP_RELEASE:-}
     ports:
       - "${HTTP_PORT:-3000}:80"
     depends_on:

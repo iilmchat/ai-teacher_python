@@ -1,0 +1,195 @@
+# Prometheus-алерты AI Teacher (S35-003).
+# Валидация: promtool check rules deploy/monitoring/prometheus/rules/alerts.yml
+# Каждый алерт содержит severity, summary и runbook_url (docs/MONITORING.md).
+groups:
+  - name: ai-teacher-http
+    rules:
+      - alert: High5xxRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+            clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Более 5% HTTP-ответов — 5xx за 10 минут"
+          description: "Доля 5xx = {{ $value | humanizePercentage }}. Проверьте /health/ready и логи backend."
+          runbook_url: "docs/MONITORING.md#high5xxrate"
+
+      - alert: ApiLatencyHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "p95 HTTP-запросов выше 2 с"
+          description: "p95 = {{ $value | humanizeDuration }}. Проверьте БД, LLM и песочницу."
+          runbook_url: "docs/MONITORING.md#apilatencyhigh"
+
+      - alert: BackendDown
+        expr: up{job="backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: backend
+        annotations:
+          summary: "Prometheus не может scrape'ить backend"
+          description: "Target backend недоступен более 2 минут."
+          runbook_url: "docs/MONITORING.md#backenddown"
+
+      - alert: RateLimitSpike
+        expr: sum(rate(rate_limit_blocked_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Всплеск блокировок rate limit"
+          description: "Более 1 блокировки/с за 5 минут. Возможен брутфорс или абуз."
+          runbook_url: "docs/MONITORING.md#ratelimitspike"
+
+  - name: ai-teacher-dependencies
+    rules:
+      - alert: DatabaseDown
+        expr: db_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "PostgreSQL недоступен по данным /health/ready"
+          description: "db_up=0. Проверьте контейнер postgres и соединение backend."
+          runbook_url: "docs/MONITORING.md#databasedown"
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis недоступен"
+          description: "redis_up=0: лимиты и кэш работают fail-open, но деградируют."
+          runbook_url: "docs/MONITORING.md#redisdown"
+
+      - alert: DatabasePoolSaturated
+        expr: |
+          db_pool_connections{state="checked_out"}
+          /
+          clamp_min(db_pool_size, 1) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: postgres
+        annotations:
+          summary: "Пул соединений БД заполнен более чем на 90%"
+          description: "Проверьте медленные запросы и утечки соединений."
+          runbook_url: "docs/MONITORING.md#databasepoolsaturated"
+
+  - name: ai-teacher-llm
+    rules:
+      - alert: LLMErrorRateHigh
+        expr: |
+          (
+            sum(rate(llm_requests_total{status="error"}[5m]))
+            /
+            clamp_min(sum(rate(llm_requests_total[5m])), 0.001)
+          ) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: llm
+        annotations:
+          summary: "Более 10% вызовов LLM завершаются ошибкой"
+          description: "Проверьте провайдера, ключ и fallback."
+          runbook_url: "docs/MONITORING.md#llmerrorratehigh"
+
+      - alert: LLMSlowResponses
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(llm_latency_seconds_bucket[5m])) by (le, provider)
+          ) > 30
+        for: 10m
+        labels:
+          severity: warning
+          service: llm
+        annotations:
+          summary: "p95 латентности LLM выше 30 с ({{ $labels.provider }})"
+          description: "p95 = {{ $value | humanizeDuration }}. Проверьте провайдера и сеть."
+          runbook_url: "docs/MONITORING.md#llmslowresponses"
+
+      - alert: LLMFallbackSpike
+        expr: sum(rate(llm_fallbacks_total[10m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: llm
+        annotations:
+          summary: "Частые переключения на резервного LLM-провайдера"
+          description: "Основной провайдер нестабилен: проверьте его доступность."
+          runbook_url: "docs/MONITORING.md#llmfallbackspike"
+
+  - name: ai-teacher-sandbox
+    rules:
+      - alert: SandboxTimeoutsSpike
+        expr: sum(rate(sandbox_timeouts_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          service: sandbox
+        annotations:
+          summary: "Рост таймаутов песочницы"
+          description: "Более 3 таймаутов в минуту. Проверьте нагрузку и лимиты executor."
+          runbook_url: "docs/MONITORING.md#sandboxtimeoutsspike"
+
+      - alert: SandboxErrorRateHigh
+        expr: |
+          (
+            sum(rate(sandbox_runs_total{result="error"}[5m]))
+            /
+            clamp_min(sum(rate(sandbox_runs_total[5m])), 0.001)
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          service: sandbox
+        annotations:
+          summary: "Более 20% запусков песочницы завершаются ошибкой"
+          description: "Проверьте Docker/runner pool и последние релизы."
+          runbook_url: "docs/MONITORING.md#sandboxerrorratehigh"
+
+  - name: ai-teacher-ops
+    rules:
+      - alert: RetentionStale
+        expr: |
+          time() - scheduler_last_success_timestamp{job="retention"} > 172800
+        for: 1h
+        labels:
+          severity: warning
+          service: backend
+        annotations:
+          summary: "Retention не выполнялся более 48 часов"
+          description: "Проверьте RETENTION_SCHEDULER_ENABLED и логи retention_scheduler_*."
+          runbook_url: "docs/MONITORING.md#retentionstale"
+
+      - alert: BackupStale
+        expr: |
+          time() - backup_last_success_timestamp > 172800
+        for: 1h
+        labels:
+          severity: critical
+          service: backup
+        annotations:
+          summary: "Нет успешного бэкапа более 48 часов"
+          description: "Метрика появится в S36-006 (node-exporter textfile). Проверьте backup.timer."
+          runbook_url: "docs/MONITORING.md#backupstale"

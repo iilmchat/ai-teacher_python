@@ -15,7 +15,7 @@
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
 | планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.7.md](../TODO_V0.7.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
-| администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
+| администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [MONITORING.md](MONITORING.md), [SLO.md](SLO.md), [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
 
@@ -60,6 +60,8 @@
 ### Для эксплуатации и LLMOps
 
 - [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) — админка, мониторинг, FinOps, guardrails
+- [MONITORING.md](MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry, лимиты и логи
+- [SLO.md](SLO.md) — SLI/SLO, error budget и связь с алертами
 - [PROMPT_CURRENT.md](PROMPT_CURRENT.md) — актуальные системные инструкции ассистента и метрики
 
 ### История и проблемы
@@ -76,9 +78,9 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены, текущий этап — v0.6.0 (49–52) |
-| Тесты backend | **579** (557 passed + 22 skip в образе Python 3.12; локальный venv отстаёт — KI-017) |
-| Тесты frontend | 125 unit + 22 e2e (Playwright; 22/22 green) |
+| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–35, далее 36–41); v0.7.0 (49–52) — следующий |
+| Тесты backend | **773** (772 passed + 1 skipped) |
+| Тесты frontend | 279 unit + 22 e2e (Playwright; 22/22 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
 | Миграции | head 015 (`alembic check` чист) |

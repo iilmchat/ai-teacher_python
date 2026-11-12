@@ -110,6 +110,15 @@ class Settings(BaseSettings):
     #: Включить Swagger/OpenAPI (S34-006). В production — false
     docs_enabled: bool = True
 
+    # Sentry (S35-002): пустой DSN — SDK не инициализируется (no-op).
+    #: PII не отправляется никогда: send_default_pii=False + before_send-фильтр.
+    sentry_dsn: str = ""
+    sentry_environment: str = "development"
+    #: Доля транзакций для performance-трейсинга (0 — только ошибки)
+    sentry_traces_sample_rate: float = 0.0
+    #: Релиз для Sentry (обычно версия + git-sha); пусто — версия приложения
+    sentry_release: str = ""
+
     # LLM
     llm_provider: str = "deepseek"  # deepseek, lm_studio
     #: Резервный провайдер при недоступности основного (S12-002); пусто — выключен

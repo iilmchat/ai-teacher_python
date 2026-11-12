@@ -35,6 +35,8 @@ export default defineConfig({
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
           i18n: ['i18next', 'react-i18next'],
+          // S35-002: Sentry не должен раздувать entry-чанк (лимит 80 kB gzip).
+          sentry: ['@sentry/react'],
           stores: [
             './src/store/auth.ts',
             './src/store/chat.ts',

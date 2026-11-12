@@ -7,9 +7,11 @@
 
 ---
 
-## [0.6.0] — 2026-11-11 «Auth & Edge Hardening»
+## [0.6.0] — 2026-11-12 «Auth & Edge Hardening + Observability»
 
-**v0.6.0** — спринт 34: улучшение безопасности и защиты от атак на edge.
+**v0.6.0** — спринты 34–35: безопасность auth/edge и подключённая
+наблюдаемость (метрики с 2 воркеров, Sentry без PII, алерты и дашборды как
+код, лимиты ресурсов, SLO).
 
 **Ограничения (D-001).** Multi-node, registry, публичный pilot и e-mail подтверждение отложены на v0.7.0.
 
@@ -19,6 +21,24 @@
 - **S34-003**: функция `client_ip(request)` для корректного парсинга `X-Forwarded-For` (справа налево) только для доверенных прокси.
 - **S34-006**: флаг `DOCS_ENABLED` (default true, в prod false) — отключение Swagger/OpenAPI в production.
 - **S34-007**: обновлена документация безопасности (`SECURITY.md`, `SPEC.md`, `RULES.md`).
+- **S35-001**: prod запускает `UVICORN_WORKERS=2` с multiprocess-метриками
+  (`PROMETHEUS_MULTIPROC_DIR`); метрики HTTP/LLM/sandbox агрегируются с обоих
+  воркеров, проверка — `scripts/monitoring/check_metrics.py`.
+- **S35-002**: Sentry для backend (`sentry-sdk[fastapi]`) и frontend
+  (`@sentry/react`) с runtime-конфигом `/config.js`; PII вычищается
+  `before_send`/`dataCollection` (код, промпты, email, IP, токены).
+- **S35-003**: `deploy/monitoring/prometheus/` — scrape, алерты и recording
+  rules; валидация `promtool` в CI и локальных скриптах; новые метрики
+  `db_up`, `redis_up`, `rate_limit_blocked_total`,
+  `scheduler_last_success_timestamp`.
+- **S35-004**: Grafana provisioning и дашборд `AI Teacher — Overview`
+  (HTTP, LLM, БД, песочница).
+- **S35-005**: жёсткие лимиты RAM/CPU (app 2 ГБ, postgres 1 ГБ, redis 128 МБ)
+  и ротация Docker-логов `json-file` (10 МБ × 3) для всех сервисов.
+- **S35-006**: `docs/SLO.md` — доступность 99%, health p95 < 100 мс, ошибки
+  < 1%, error budget и связь с алертами.
+- **S35-007**: `docs/MONITORING.md` — запуск стека, дашборды, Sentry, runbook
+  по каждому алерту.
 
 ### Изменено
 
@@ -40,12 +60,16 @@
 
 - Тесты для auth: добавлены 4 новых теста для проверки `require_role` с деактивированными пользователями.
 - Тесты для refresh: обновлены все тесты для использования тела JSON.
+- **S35**: тесты multiprocess-агрегации метрик, Sentry PII-фильтра,
+  конфигурации мониторинга и Grafana JSON.
 
 ### Документация
 
 - `KNOWN_ISSUES.md`: добавлены KI-032, KI-033, KI-034, KI-035.
 - `UPGRADE.md`: добавлена секция 0.6 о ломающих изменениях.
 - `CHANGELOG.md`: добавлена запись для v0.6.0.
+- `docs/SLO.md`, `docs/MONITORING.md`, `docs/PRIVACY.md` §7, `docs/RULES.md`
+  §11.50, `docs/DESIGN_ADMIN_AND_OPS.md` §10.
 
 ---
 

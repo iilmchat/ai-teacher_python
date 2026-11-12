@@ -10,17 +10,24 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+from prometheus_client import CollectorRegistry, generate_latest
+from prometheus_client.multiprocess import MultiProcessCollector
 
 from app.core.metrics import (
     build_registries,
     cache_observed,
     llm_call_observed,
     llm_fallback_observed,
+    rate_limit_blocked_observed,
     render_metrics,
     reset_metrics,
+    set_dependency_up,
 )
 from app.services.cache import cache_metrics
 from app.services.llm.base import LLMUsage
@@ -130,3 +137,122 @@ def test_build_registries_multiprocess_separates_registries(
     # Агрегат отдаёт MultiProcessCollector, своих метрик в реестре рендера нет.
     families = {family.name for family in render.collect()}
     assert "llm_requests_total" not in families
+
+
+# --- S35-001: multiprocess-агрегация и новые метрики S35-003 ---------------
+
+_WORKER_SNIPPET = """
+import sys
+from prometheus_client import Counter, Histogram
+
+worker, count = sys.argv[1], int(sys.argv[2])
+Counter("mp_test_total", "test counter", ["worker"]).labels(worker).inc(count)
+Histogram("mp_test_seconds", "test histogram", buckets=(0.1, 1.0)).observe(
+    float(count) / 10.0
+)
+"""
+
+
+def _run_worker(tmp_path: Path, worker: str, count: int) -> None:
+    env = {**os.environ, "PROMETHEUS_MULTIPROC_DIR": str(tmp_path)}
+    subprocess.run(
+        [sys.executable, "-c", _WORKER_SNIPPET, worker, str(count)],
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_multiprocess_counters_and_histograms_are_summed(tmp_path: Path) -> None:
+    """Метрики двух «воркеров» не теряются: счётчики и гистограммы суммируются."""
+    _run_worker(tmp_path, "worker-a", 3)
+    _run_worker(tmp_path, "worker-b", 5)
+
+    registry = CollectorRegistry()
+    MultiProcessCollector(registry, path=str(tmp_path))
+    text = generate_latest(registry).decode()
+
+    assert 'mp_test_total{worker="worker-a"} 3.0' in text
+    assert 'mp_test_total{worker="worker-b"} 5.0' in text
+    # Гистограмма: по одному наблюдению на воркер → count = 2, sum = 0.3 + 0.5.
+    assert "mp_test_seconds_count 2.0" in text
+    assert "mp_test_seconds_sum 0.8" in text
+
+
+def test_multiprocess_dir_is_reused_without_duplication(tmp_path: Path) -> None:
+    """Повторный scrape не задваивает значения (файлы живут, агрегат один)."""
+    _run_worker(tmp_path, "worker-a", 2)
+
+    registry = CollectorRegistry()
+    MultiProcessCollector(registry, path=str(tmp_path))
+    first = generate_latest(registry).decode()
+    second = generate_latest(registry).decode()
+
+    assert 'mp_test_total{worker="worker-a"} 2.0' in first
+    assert 'mp_test_total{worker="worker-a"} 2.0' in second
+
+
+def test_metrics_endpoint_can_be_disabled() -> None:
+    """При METRICS_ENABLED=false маршрут /metrics не регистрируется (S35-001)."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    env = {
+        **os.environ,
+        "METRICS_ENABLED": "false",
+        "SECRET_KEY": "x" * 40,
+        "DEBUG": "true",
+    }
+    code = (
+        "import app.main as m\n"
+        "from app.config import settings\n"
+        "print(any(getattr(r, 'path', None) == settings.metrics_path "
+        "for r in m.app.routes))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        env=env,
+        cwd=backend_dir,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip().splitlines()[-1] == "False"
+
+
+def test_metrics_endpoint_is_registered_by_default() -> None:
+    """По умолчанию /metrics зарегистрирован."""
+    from app.config import settings
+    from app.main import app
+
+    assert any(
+        getattr(route, "path", None) == settings.metrics_path for route in app.routes
+    )
+
+
+def test_rate_limit_blocked_counter_has_scope() -> None:
+    """Блокировки лимитов считаются по областям (S35-003)."""
+    rate_limit_blocked_observed("login")
+    rate_limit_blocked_observed("login")
+    rate_limit_blocked_observed("code_execute")
+
+    text = _text()
+    assert 'rate_limit_blocked_total{scope="login"} 2.0' in text
+    assert 'rate_limit_blocked_total{scope="code_execute"} 1.0' in text
+
+
+def test_dependency_gauges_are_min_across_workers(tmp_path: Path) -> None:
+    """db_up/redis_up — gauges, доступные Prometheus (S35-003)."""
+    set_dependency_up(database=True, redis=False)
+
+    text = _text()
+    assert "db_up 1.0" in text
+    assert "redis_up 0.0" in text
+
+
+def test_worker_info_exposes_pid() -> None:
+    """Каждая реплика публикует app_worker_info{pid} (S35-001)."""
+    from app.core.metrics import worker_info_observed
+
+    worker_info_observed(4242)
+
+    assert 'app_worker_info{pid="4242"} 1.0' in _text()

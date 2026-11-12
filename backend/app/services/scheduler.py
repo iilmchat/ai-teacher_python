@@ -29,6 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.core.metrics import scheduler_success_observed
 from app.db.database import async_session_factory
 from app.services.retention import apply_retention
 
@@ -107,6 +108,10 @@ async def run_retention_once(
                 dry_run=False, only=None, batch_size=max(1, batch_size)
             )
             logger.info("retention_scheduler_applied", deleted=results)
+            # S35-003: алерт RetentionStale смотрит на этот timestamp.
+            scheduler_success_observed(
+                job="retention", timestamp=datetime.now(UTC).timestamp()
+            )
             return results
         finally:
             await _release_lock(session)

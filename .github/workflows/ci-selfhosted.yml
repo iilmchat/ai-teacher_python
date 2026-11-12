@@ -63,6 +63,17 @@ jobs:
             python:3.12-slim bash /src/scripts/ci/backend-lint.sh
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  monitoring:
+    name: Monitoring config
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: promtool check config/rules + dashboards JSON
+        run: |
+          pwsh -NoProfile -File ./scripts/monitoring/validate_prometheus.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   test:
     name: Test (backend)
     runs-on: [self-hosted, windows, ai-teacher]

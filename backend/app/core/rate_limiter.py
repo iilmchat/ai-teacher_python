@@ -29,6 +29,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.core.ip_utils import client_ip
+from app.core.metrics import rate_limit_blocked_observed
 
 logger = structlog.get_logger(__name__)
 
@@ -110,7 +111,10 @@ async def is_user_limited(
 
     try:
         limiter = RateLimiter(get_redis())
-        return await limiter.is_limited(f"{scope}:{user_id}", limit=limit, period=period)
+        limited = await limiter.is_limited(f"{scope}:{user_id}", limit=limit, period=period)
+        if limited:
+            rate_limit_blocked_observed(scope)
+        return limited
     except Exception as exc:  # noqa: BLE001 — fail-open при сбое Redis
         logger.warning("rate_limit_user_check_failed", scope=scope, error=str(exc))
         return False
@@ -163,6 +167,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         if limited:
             logger.info("rate_limit_exceeded", path=request.url.path, key=key)
+            rate_limit_blocked_observed(key.split(":", 1)[0])
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 content={"detail": "Слишком много запросов. Попробуйте позже."},

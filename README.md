@@ -95,7 +95,7 @@ pnpm dev
 | Показатель | Значение |
 |------------|----------|
 | Версия | **v0.5.0** (2026-11-10), single-node (D-001) |
-| Спринты | 1–48 завершены; этап v0.5.0 выпущен, v0.6.0 «Auth & Edge Hardening» — в работе (спринт 34), v0.7.0 (49–52) — следующий |
+| Спринты | 1–48 завершены; v0.6.0 «Production Hardening» — спринты 34–35 закрыты, 36–41 по плану; v0.7.0 (49–52) — следующий |
 | Тесты backend | **708 passed + 22 skip** в образе Python 3.12 (контейнерная изоляция без Docker-in-Docker); локально — **729 passed + 1 skip** |
 | Миграции | Alembic head **022** (22 миграции) |
 | Тесты frontend | **274** unit + **37** e2e (Playwright; 1 skip) |
@@ -123,12 +123,15 @@ pnpm dev
 - [docs/PROMPT_CURRENT.md](docs/PROMPT_CURRENT.md) — актуальные инструкции ассистента
 - [docs/RULES.md](docs/RULES.md) — правила разработки
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
+- [docs/MONITORING.md](docs/MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry и runbook
+- [docs/SLO.md](docs/SLO.md) — SLI/SLO, error budget и burn-rate
 - [docs/releases/v0.5.0.md](docs/releases/v0.5.0.md) — релиз-ноты v0.5.0 (single-node, D-001)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
-- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.5.0 (v0.3.3 → v0.5.0,
-  миграции `014`–`022`; архив v0.2.0–v0.3.3);
-- [TODO_V0.4.md](TODO_V0.4.md) — **этап v0.4.0 отложен** (D-001): multi-node,
-  HA, DR и SLO 2.0 не входят в v0.5.0;
+- [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.6.0 (auth & edge hardening,
+  breaking refresh; архив v0.3.3 → v0.5.0);
+- [TODO_V0.4.md](TODO_V0.4.md) — **текущий этап v0.6.0** «Production
+  Hardening»: спринт 34 закрыт, спринты 35–41 по плану; multi-node вынесен
+  за границы этапа;
 - [TODO_V0.5.md](TODO_V0.5.md) — **завершённый этап v0.5.0** (спринты 42–48):
   аудит продукта и план задач `S42-001`…`S48-003`;
 - [TODO_V0.7.md](TODO_V0.7.md) — этап v0.7.0 (спринты 49–52): траектории,

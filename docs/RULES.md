@@ -1451,6 +1451,33 @@ Deep-link `/chat?task=<task_id>` и кнопка «Спросить ассист
   `get_current_active_user`: деактивированный teacher/admin получает 401 даже
   с валидным токеном (S34-001).
 
+### 11.50. Наблюдаемость, PII и лимиты ресурсов (S35)
+
+- **Метрики — события.** HTTP/LLM/sandbox/rate-limit/retention пишутся в момент
+  события (counters/histograms), а не gauge из памяти процесса: только так
+  значения корректно складываются при `UVICORN_WORKERS=2` и
+  `PROMETHEUS_MULTIPROC_DIR`. Gauges состояния (`db_pool_*`, `db_up`,
+  `redis_up`) используют `livesum`/`max`/`min` осознанно.
+- **`/metrics` — только внутренняя сеть.** nginx отдаёт 404; наружу не
+  публиковать. Проверка после деплоя —
+  `python scripts/monitoring/check_metrics.py --expect-workers 2`.
+- **Алерты как код.** Правила — `deploy/monitoring/prometheus/rules/*.yml`,
+  у каждого алерта `severity`, `summary`, `runbook_url` на
+  `docs/MONITORING.md`. Любое изменение проходит `promtool check rules`
+  (локально и в CI job **Monitoring config**).
+- **Sentry без PII.** `send_default_pii=False` / `dataCollection` (frontend),
+  тела запросов не отправляются; `before_send` вычищает email, username, IP,
+  токены, код и промпты; в тексте маскируются email/IP. Не отключать фильтр
+  ради «удобной отладки».
+- **Логи без PII.** Не логировать токены, пароли, полные email, тексты кода и
+  промптов сверх необходимого; email маскируется. Ротация — Docker `json-file`
+  `10m × 3`; Loki retention 7 дней.
+- **Лимиты ресурсов.** Prod-compose задаёт `mem_limit`/`cpus` для всех
+  сервисов (app 2 ГБ, postgres 1 ГБ, redis 128 МБ). Мониторинг — опциональный
+  профиль, его отсутствие не ломает прод.
+- **SLO и runbook.** `docs/SLO.md` — SLI/SLO/error budget; `docs/MONITORING.md`
+  — как поднять стек и что делать по каждому алерту.
+
 ---
 
 ## 12. Отчёты по шагам спринта

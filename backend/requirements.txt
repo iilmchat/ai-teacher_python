@@ -61,6 +61,8 @@ PyYAML==6.0.3
 # Logging & metrics (S25)
 structlog==26.1.0
 prometheus-client==0.26.0
+# Ошибки и performance (S35-002): PII вычищается before_send-хуком
+sentry-sdk[fastapi]==2.74.0
 
 # Linting & Testing (dev)
 # S22-003 (KI-016): pytest 8.3.3 → 9.2.0 + плагины (asyncio 1.4.1, cov 7.1.0,

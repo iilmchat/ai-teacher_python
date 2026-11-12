@@ -1,0 +1,47 @@
+# Recording rules для дашбордов и SLO (S35-003/S35-006).
+# Валидация: promtool check rules deploy/monitoring/prometheus/rules/recording.yml
+groups:
+  - name: ai-teacher-recordings
+    interval: 30s
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum(rate(http_requests_total[5m]))
+
+      - record: job:http_errors_5xx:ratio5m
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+
+      - record: job:http_latency_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket[5m])) by (le)
+          )
+
+      - record: job:health_latency_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(http_request_duration_seconds_bucket{path="/health/ready"}[5m])) by (le)
+          )
+
+      - record: provider:llm_latency_p95_5m
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(llm_latency_seconds_bucket[5m])) by (le, provider)
+          )
+
+      - record: provider:llm_error_ratio5m
+        expr: |
+          sum(rate(llm_requests_total{status="error"}[5m])) by (provider)
+          /
+          clamp_min(sum(rate(llm_requests_total[5m])) by (provider), 0.001)
+
+      - record: job:sandbox_error_ratio5m
+        expr: |
+          sum(rate(sandbox_runs_total{result="error"}[5m]))
+          /
+          clamp_min(sum(rate(sandbox_runs_total[5m])), 0.001)
