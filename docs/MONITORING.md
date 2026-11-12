@@ -29,11 +29,11 @@
 
 ```bash
 # 1. Секреты (Grafana)
-cp .env.example .env
-# GRAFANA_ADMIN_PASSWORD=...
+cp .env.prod.example .env.prod
+# DOMAIN, SECRET_KEY, POSTGRES_PASSWORD, GRAFANA_ADMIN_PASSWORD
 
 # 2. Prod + мониторинг
-docker compose -f docker-compose.prod.yml \
+docker compose --env-file .env.prod -f docker-compose.prod.yml \
   -f docker-compose.monitoring.yml --profile monitoring up -d
 
 # 3. Проверки
@@ -48,10 +48,14 @@ ssh -L 3001:127.0.0.1:3001 -L 9090:127.0.0.1:9090 user@vps
 # Prometheus: http://127.0.0.1:9090
 ```
 
+> `/metrics` и health-check доступны только внутри Docker-сети: Caddy их
+> наружу не проксирует. `check_metrics.py` запускайте на хосте через
+> `docker compose exec` или SSH-туннель к backend.
+
 Без профиля мониторинга:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
 ```
 
 ---

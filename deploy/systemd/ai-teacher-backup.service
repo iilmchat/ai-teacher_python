@@ -1,0 +1,20 @@
+[Unit]
+Description=AI Teacher PostgreSQL backup
+Documentation=https://github.com/iilmchat/ai-teacher_python/blob/main/docs/RUNBOOK.md
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/ai-teacher
+EnvironmentFile=/etc/ai-teacher/backup.env
+ExecStart=/usr/bin/env bash /opt/ai-teacher/scripts/backup.sh
+User=root
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=multi-user.target

@@ -86,7 +86,7 @@ TLS-периметр, автоматизированные деплой/бэка
 | 33 | Supply chain & Repo hygiene | v0.5.0 | 3 дня | `[~]` S33-001/002 готовы |
 | 34 | P0: Auth & Edge Hardening | 33 (мягко) | 3 дня | `[x]` завершён |
 | 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[x]` завершён |
-| 36 | Registry, Deploy, TLS & Backup/DR | 35, 34 | 5,5 дня | `[ ]` |
+| 36 | Registry, Deploy, TLS & Backup/DR | 35, 34 | 5,5 дня | `[x]` завершён |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[ ]` |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[ ]` |
 | 39 | Performance & Capacity | 35 | 3 дня | `[ ]` |

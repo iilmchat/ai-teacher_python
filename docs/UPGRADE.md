@@ -226,14 +226,36 @@ docker compose -f docker-compose.prod.yml up -d --build
    выгрузка аналитики скачивается; в шапке есть бейдж уведомлений.
 7. `alembic check` — без расхождений; в логах нет `alembic`-ошибок.
 
-### 0.7. Известные ограничения v0.5.0
+### 0.7.1. Деплой v0.6.0: GHCR, Caddy и миграции (S36)
 
-См. `docs/reports/DEVOPS_AUDIT_2026-11.md` и `docs/KNOWN_ISSUES.md`.
-Кратко: single-node (нет HA/DR/SLO 2.0), нет registry/CD и автоматических
-TLS/бэкапов, refresh-токен передаётся в query string, rate limit обходится
-подделкой `X-Forwarded-For`, нет e-mail-подтверждения и сброса пароля. Продукт
-**не готов к публичному production**; для закрытого пилота нужны меры из
-аудита (merge и артефакт, TLS, бэкапы, auth/anti-abuse, наблюдаемость).
+Prod больше не собирается на хосте. Порядок:
+
+```bash
+cp .env.prod.example .env.prod && $EDITOR .env.prod
+docker login ghcr.io -u <user> --password-stdin
+bash scripts/pin_images.sh --tag v0.6.0   # digest в .env.prod
+bash scripts/deploy.sh                    # бэкап → migrate → up → health
+```
+
+- Caddy — единственный публичный вход (TLS/ACME, WebSocket), frontend/backend
+  наружу не публикуются; на пилоте — `CADDY_HTTP_PORT=8080`,
+  `CADDY_HTTPS_PORT=8443`.
+- Миграции: one-shot `migrate` (`--profile tools`), backend —
+  `SKIP_MIGRATIONS=true`.
+- Откат: `scripts/rollback.sh` (`.last_deploy`).
+- Бэкапы: `scripts/backup.sh` + systemd-таймер 03:00; DR —
+  `scripts/restore_drill.sh`.
+- Подробно: `docs/RUNBOOK.md`, `docs/GETTING_STARTED.md` §7–8.
+
+### 0.8. Известные ограничения v0.6.0
+
+Multi-node/HA/DR-SLO 2.0 не входят. Merge-gate на GitHub Free не обеспечен
+(`KI-023`, действие владельца). Access-токен не отзывается, JWT в
+localStorage (`KI-027`); e-mail-подтверждение и сброс пароля отложены
+(`KI-035`, v0.7.0). Guardrails LLM — частично. TLS и автоматические бэкапы
+**реализованы** (S36), refresh-токен больше не в query, rate limit защищён
+trusted proxy (S34). Для публичного production нужен отдельный VPS и
+юридическая проверка (152-ФЗ).
 
 ---
 

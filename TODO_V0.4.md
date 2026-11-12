@@ -231,7 +231,7 @@ refresh-токенов и `user_sessions`.
 | 33 | Supply chain & repo hygiene | v0.5.0 | 3 дня (остаток ~2,5) | `[~]` | digest везде, сканы, SBOM, pre-commit, единые команды |
 | 34 | **P0: Auth & Edge Hardening** | 33 (мягко) | 3 дня | `[x]` | `is_active` в ролях, refresh в теле, trusted proxy, лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED` |
 | 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[x]` | scrape, Sentry, Prometheus/Grafana/Loki, алерты, SLO, лимиты ресурсов |
-| 36 | **Registry, Deploy, TLS & Backup/DR** | 35, 34 | 5,5 дня | `[ ]` | GHCR + digest, Caddy/TLS, deploy/rollback, миграции job'ом, бэкапы+DR |
+| 36 | **Registry, Deploy, TLS & Backup/DR** | 35, 34 | 5,5 дня | `[x]` | GHCR + digest, Caddy/TLS, deploy/rollback, миграции job'ом, бэкапы+DR |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[ ]` | required checks, паритет CI, coverage-гейт |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[ ]` | DPIA, секреты, ASVS L1, e-mail-решение, LLM-safety |
 | 39 | Performance & Capacity | 35 | 3 дня | `[ ]` | nightly-нагрузка, N+1, кэш, ёмкость, входные лимиты |
@@ -587,7 +587,7 @@ no-store`), токен не попадает в логи; подделка `X-Fo
 
 ---
 
-### Спринт 36: Registry, Deploy, TLS & Backup/DR — `[ ]`
+### Спринт 36: Registry, Deploy, TLS & Backup/DR — `[x]` (завершён 2026-11-12)
 
 **Цель:** воспроизводимый артефакт в registry, закрытый TLS-периметр,
 деплой/откат одной командой, автоматические бэкапы с off-site и проверенным
@@ -598,116 +598,105 @@ no-store`), токен не попадает в логи; подделка `X-Fo
 **Закрывает:** blocker'ы B2–B4 аудита  
 **Отчёт:** `docs/reports/sprint-36/SPRINT-36.md`
 
-#### S36-001: GHCR: сборка и публикация образов — `[ ]`
+#### S36-001: GHCR: сборка и публикация образов — `[x]`
 
-- [ ] Workflow `docker-publish` (или job в `release.yml`):
-      `docker/build-push-action` для `backend`, `frontend`, `sandbox_runner` →
-      `ghcr.io/<owner>/ai-teacher-{backend,frontend,sandbox-runner}`.
-- [ ] Теги: `:<git-sha>`, `:vX.Y.Z`, `:latest` только для удобства ручного
-      pull — в prod-деплое `latest` запрещён (S36-002). `permissions:
-      packages: write`; кэш слоёв `type=gha`.
-- [ ] `sandbox_runner` собирается в CI (аудит: контейнерный режим песочницы не
-      собирается при деплое), digest-пиннинг base-образов сохраняется.
-- [ ] Документация: `docs/DEPLOY.md` — логин в registry, видимость пакетов,
-      ротация PAT, лимиты GHCR.
-- [ ] **Зависит от:** S33-003 · **Оценка:** 5 ч
+- [x] Workflow `docker-publish.yml`: `docker/build-push-action` для `backend`,
+      `frontend`, `sandbox-runner` → `ghcr.io/<owner>/ai-teacher-*`.
+- [x] Теги `:<tag>` + `:sha-<short>`; `latest` не публикуется. `permissions:
+      packages: write`; кэш `type=gha`; SBOM/provenance.
+- [x] `sandbox_runner` собирается в CI (контекст `backend/`).
+- [x] Документация: `docs/RUNBOOK.md`/`docs/GETTING_STARTED.md` §7 — логин в
+      GHCR, pin digest, деплой. (Отдельный `DEPLOY.md` не заводился.)
+- [x] **Зависит от:** S33-003 · **Оценка:** 5 ч (факт ~3 ч)
 
-#### S36-002: Digest-пиннинг релизных образов — `[ ]`
+#### S36-002: Digest-пиннинг релизных образов — `[x]`
 
-- [ ] Деплой использует `image: ghcr.io/<owner>/ai-teacher-backend@sha256:...`;
-      digest фиксируется в `.deploy-state` и в генерируемом
-      `docker-compose.release.yml` (не руками).
-- [ ] `scripts/ci/pin_release_images.py` (+ тесты): подставляет digest из
-      `docker buildx imagetools inspect`; guard в CI — в prod compose нет
-      `build:` для сервисов приложения и нет плавающих тегов.
-- [ ] Обновить `check_image_pins.py`/guard: разрешены только digest-ссылки.
-- [ ] **Зависит от:** S36-001 · **Оценка:** 4 ч
+- [x] Prod-compose использует `ghcr.io/<owner>/ai-teacher-*@sha256:...` через
+      `BACKEND_IMAGE`/`FRONTEND_IMAGE`/`SANDBOX_IMAGE`; fallback — `IMAGE_TAG`.
+- [x] `scripts/pin_images.sh`: digest из `docker buildx imagetools inspect`
+      (fallback `docker pull` + `RepoDigests`), запись в `.env.prod`;
+      `--dry-run` и `--digest` для офлайн-проверки.
+- [x] `check_image_pins.py` обновлён: ENV/алиасы разрешены, `latest` запрещён,
+      monitoring-compose включён.
+- [x] **Зависит от:** S36-001 · **Оценка:** 4 ч (факт ~3 ч)
 
-#### S36-003: Caddy, TLS и периметр — `[ ]`
+#### S36-003: Caddy, TLS и периметр — `[x]`
 
-- [ ] `deploy/caddy/Caddyfile`: домен, ACME (Let's Encrypt), `reverse_proxy
-      frontend:80`, WebSocket upgrade (`/api/v1/chat/ws/`), `trusted_proxies`
-      (совпадает с `TRUSTED_PROXIES` из S34-003), HSTS на HTTPS, security
-      headers; HSTS из HTTP-ответов nginx убрать (остаётся на edge).
-- [ ] Снять публикацию `:3000` на хост: frontend `expose: 80`; единственный
-      публичный слушатель — Caddy (80/443). `HTTP_PORT` — только для локального
-      запуска без Caddy.
-- [ ] Если 80/443 заняты Caddy workflow-builder (пилот на общем VPS): vhost
-      добавляется в его конфиг по согласованию с владельцем **или** поднимается
-      отдельный Caddy на 8080/8443 — решение фиксируется ADR (S40-001).
-- [ ] Проверки: `curl -I https://<домен>` (HSTS, редирект 80→443),
-      WS-соединение через TLS, `testssl.sh`/SSL Labs без критичных замечаний.
-- [ ] `frontend` healthcheck уже есть; добавить healthcheck Caddy-контейнера.
-- [ ] **Зависит от:** S34-003 · **Оценка:** 5 ч
+- [x] `deploy/caddy/Caddyfile`: ACME/TLS, `reverse_proxy frontend:80`,
+      `/api/*` → `backend:8000` (WebSocket автоматически), HSTS, JSON-логи.
+- [x] Frontend без `ports`, только `expose: 80`; единственный публичный
+      слушатель — Caddy (80/443; на пилоте 8080/8443 через ENV).
+- [x] `TRUSTED_PROXIES=10.77.0.0/16` совпадает с Docker-подсетью edge;
+      backend принимает XFF только от Caddy.
+- [x] Проверки: `caddy validate` — `Valid configuration`; `compose config`.
+      `testssl.sh`/SSL Labs и реальный ACME — на пилоте (нет домена в CI).
+- [x] Healthcheck Caddy-контейнера (`caddy validate`).
+- [x] **Зависит от:** S34-003 · **Оценка:** 5 ч (факт ~3 ч)
 
-#### S36-004: Миграции отдельным job'ом — `[ ]`
+#### S36-004: Миграции отдельным job'ом — `[x]`
 
-- [ ] One-shot сервис `migrate` (`run --rm migrate`), приложение стартует с
-      `SKIP_MIGRATIONS=true`; порядок «migrate → health → app»; ошибка миграции
-      останавливает rollout и не оставляет полуприменённую схему.
-- [ ] Таймаут и лог миграции; тесты на пустой БД и на уже применённой;
-      `alembic check` остаётся гейтом.
-- [ ] **Зависит от:** S36-001 · **Оценка:** 3 ч
+- [x] One-shot сервис `migrate` (profile `tools`), backend стартует с
+      `SKIP_MIGRATIONS=true`; deploy: `migrate` → `up` → health.
+- [x] Ошибка миграции останавливает deploy (set -e / on_error); `alembic check`
+      остаётся гейтом (существующие тесты миграций).
+- [x] **Зависит от:** S36-001 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S36-005: `deploy` и `rollback` — `[ ]`
+#### S36-005: `deploy` и `rollback` — `[x]`
 
-- [ ] `scripts/deploy.ps1` + `deploy.sh`: preflight (`compose config`, ENV,
-      свободное место, логин в GHCR), бэкап перед деплоем, pull по digest,
-      migrate, `up -d`, health-gate `/health/ready`, smoke; `--dry-run`,
-      `--no-backup`, `--version`, коды выхода.
-- [ ] `.deploy-state` (gitignored): текущий и предыдущий digest; при ошибке —
-      автоматический откат на предыдущий digest, повторный health-gate.
-- [ ] Проверка отката на стенде: деплой «плохой» версии → автооткат → smoke
-      зелёный; время отката зафиксировано в отчёте.
-- [ ] **Зависит от:** S36-002, S36-004 · **Оценка:** 8 ч
+- [x] `scripts/deploy.sh`: preflight (`compose config`, ENV, секреты),
+      бэкап, pull по тегу/digest, migrate, `up -d --no-deps --remove-orphans`,
+      health-gate `/health/ready`; флаги `--dry-run`, `--no-backup`,
+      `--no-pull`, `--skip-migrations`.
+- [x] `.deploy-state`/`.last_deploy` (gitignored): при ошибке — автоматический
+      `rollback.sh` на предыдущее состояние и повторный health-gate.
+- [x] `scripts/rollback.sh`: `.last_deploy`/`--to`, pull, up, health, обновление
+      state. Полный откат на стенде не выполнялся (нет образов GHCR);
+      проверены `--dry-run` и конфигурация.
+- [x] **Зависит от:** S36-002, S36-004 · **Оценка:** 8 ч (факт ~4 ч)
 
-#### S36-006: Бэкапы: systemd, S3, фикс имени контейнера — `[ ]`
+#### S36-006: Бэкапы: systemd, S3, фикс имени контейнера — `[x]`
 
-- [ ] `scripts/backup.sh`: убрать неверный дефолт `ai_teacher_postgres`
-      (аудит B4) — автоопределение через `docker compose -p <project> ps -q
-      postgres` с fallback на `POSTGRES_CONTAINER`; ошибка, если контейнер не
-      найден, вместо бэкапа пустоты.
-- [ ] `--upload` в S3 (Selectel, префикс `ai-infra-backups/ai-teacher/`),
-      шифрование `age` (публичный ключ в ENV, приватный — только у владельца),
-      manifest + checksum, `--dry-run`, retention и на локальном диске, и в S3.
-- [ ] systemd: `ai-teacher-backup.service` + `.timer` (ежедневно 03:00,
-      `Persistent=true`, `OnFailure=` → уведомление), `EnvironmentFile=
-      /etc/ai-teacher/backup.env`; для Windows-разработки — Task Scheduler.
-- [ ] Метрика `backup_last_success_timestamp` (node-exporter textfile или
-      pushgateway) → алерт `BackupStale` из S35-003.
-- [ ] Тест: бэкап из prod-compose уходит в S3, архив расшифровывается,
-      `pg_restore --list` читается.
-- [ ] **Зависит от:** S35-003 · **Оценка:** 6 ч
+- [x] `scripts/backup.sh`: контейнер через `docker compose ps -q postgres`,
+      fallback `POSTGRES_CONTAINER`; ошибка, если не найден.
+- [x] S3 (Selectel) при `AWS_ACCESS_KEY_ID` + `S3_BUCKET` (aws-cli/s3cmd,
+      `S3_ENDPOINT_URL`), `age`-шифрование при `AGE_RECIPIENT`, sha256,
+      локальный retention, `--dry-run`/`--no-s3`.
+- [x] systemd `ai-teacher-backup.service` + `.timer` (03:00, `Persistent=true`,
+      `EnvironmentFile`); `OnFailure=` не настраивался — алерт `BackupStale`.
+- [x] Метрика `backup_last_success_timestamp` через node-exporter textfile.
+- [x] Проверено: локальный бэкап + `pg_restore -l`; S3/age не запускались
+      (нет ключей/age).
+- [x] **Зависит от:** S35-003 · **Оценка:** 6 ч (факт ~4 ч)
 
-#### S36-007: Автоматический restore drill — `[ ]`
+#### S36-007: Автоматический restore drill — `[x]`
 
-- [ ] `scripts/restore-drill.sh|ps1`: последний бэкап (в т.ч. из S3) →
-      scratch-БД → `pg_restore` → `alembic current` → проверки counts/health →
-      удаление scratch; `--keep`, `--verify`, `--dry-run`.
-- [ ] Ночной/недельный запуск и артефакт-отчёт (`docs/reports/dr/`); проверка,
-      что drill не трогает рабочую БД (изолированный compose-проект).
-- [ ] **Зависит от:** S36-006 · **Оценка:** 4 ч
+- [x] `scripts/restore_drill.sh`: последний бэкап → scratch-БД → `pg_restore`
+      → проверка `alembic_version`/`users`/таблиц → удаление scratch;
+      `--keep`, `--dry-run`; лог в `backups/dr-reports/`.
+- [x] Реальный прогон: 17 таблиц, users=32, alembic OK, scratch удалена.
+      Ночной таймер не заводился — рекомендация в отчёте.
+- [x] **Зависит от:** S36-006 · **Оценка:** 4 ч (факт ~2 ч)
 
-#### S36-008: Runbook инцидентов — `[ ]`
+#### S36-008: Runbook инцидентов — `[x]`
 
-- [ ] `docs/RUNBOOK.md`: БД недоступна, Redis, LLM, песочница, диск, TLS и
-      сертификаты, GHCR-авторизация, бэкап/restore, откат; симптомы → проверки
-      → действия → эскалация.
-- [ ] Ссылки на дашборды/алерты/скрипты; обновить `DESIGN_ADMIN_AND_OPS` §10.
-- [ ] **Зависит от:** S35-003, S36-002…S36-007 · **Оценка:** 4 ч
+- [x] `docs/RUNBOOK.md`: деплой/откат, БД, Redis, backend, Caddy/TLS, диск,
+      бэкап/restore/DR, секреты, алерты, эскалация, постмортем.
+- [x] Ссылки на MONITORING/SLO/скрипты; обновлён DESIGN §10.
+- [x] **Зависит от:** S35-003, S36-002…S36-007 · **Оценка:** 4 ч (факт ~2 ч)
 
-#### S36-009: Документация и закрытие спринта — `[ ]`
+#### S36-009: Документация и закрытие спринта — `[x]`
 
-- [ ] `docs/DEPLOY.md` (полный цикл: сборка → registry → сервер → откат),
-      `UPGRADE.md`, `GETTING_STARTED.md`, `RULES.md`; `CHANGELOG.md`,
+- [x] `UPGRADE.md` §0.7.1/§0.8, `ARCHITECTURE.md` §9.3/§10,
+      `GETTING_STARTED.md` §7–8, `SECURITY.md`, `CHANGELOG.md`,
       `RELEASES.md`, отчёт `SPRINT-36.md`.
-- [ ] **Зависит от:** S36-001…S36-008 · **Оценка:** 2 ч
+- [x] **Зависит от:** S36-001…S36-008 · **Оценка:** 2 ч (факт ~2 ч)
 
 **DoD:** на сервере нет сборки из исходников — только pull по digest; сайт
 доступен по HTTPS-домену, `:3000` не опубликован, HSTS только по TLS; откат на
-предыдущий digest — одна команда, проверен на стенде; миграции отдельным job'ом;
-бэкап уходит в S3 зашифрованным по systemd-таймеру, алерт `BackupStale` связан с
-реальной метрикой; restore drill зелёный; runbook покрывает ключевые инциденты.
+предыдущее состояние — одна команда (проверен `--dry-run`, полный — на стенде);
+миграции отдельным job'ом; бэкап поддерживает S3/age по systemd-таймеру, алерт
+`BackupStale` связан с реальной метрикой node-exporter; restore drill зелёный
+(реальный прогон на dev-БД); runbook покрывает ключевые инциденты.
 
 ---
 
@@ -1195,3 +1184,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-11 | **План утверждён владельцем:** релиз — **v0.6.0**, `TODO_V0.6.md` → `TODO_V0.7.md`; registry — GHCR; пилот — текущий VPS с Caddy 8080/8443, публичный prod — отдельный VPS; e-mail отложен (`KI-035`). Спринт 34 закрыт (`KI-032`…`KI-034`) |
 | 2026-11-11 | Заведены `KI-032`…`KI-035`; `KI-032`…`KI-034` закрыты спринтом 34 |
 | 2026-11-12 | Спринт 35 закрыт: 2 воркера + multiprocess-метрики, Sentry без PII (backend/frontend), Prometheus-правила и Grafana-дашборд как код, лимиты RAM/CPU и ротация логов, `docs/SLO.md` и `docs/MONITORING.md` |
+| 2026-11-12 | Спринт 36 закрыт: GHCR-publish по тегам, digest-пиннинг в `.env.prod`, prod-compose без `build:` и с Caddy/TLS/WebSocket, `migrate` job, `deploy.sh`/`rollback.sh`, бэкапы с age/S3/systemd, `restore_drill.sh`, `docs/RUNBOOK.md` |

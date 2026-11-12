@@ -30,6 +30,7 @@ DOCKERFILES = (
 COMPOSE_FILES = (
     "docker-compose.yml",
     "docker-compose.prod.yml",
+    "docker-compose.monitoring.yml",
 )
 
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}\b")
@@ -65,6 +66,16 @@ def check_compose(text: str) -> list[str]:
             continue
         reference = match.group(1).strip("'\"")
         if is_pinned(reference):
+            continue
+        # S36-002: релизные образы GHCR задаются через ENV (${BACKEND_IMAGE:-...})
+        # и фиксируются по digest в .env.prod; проверяем, что это не `latest`.
+        # S36-002: YAML-алиасы (*backend-image) ссылаются на x-*-image,
+        # которые задаются через ENV и фиксируются по digest в .env.prod.
+        if reference.startswith("*"):
+            continue
+        if "${" in reference:
+            if re.search(r":latest(?:[}\"']|$)", reference):
+                problems.append(f"строка {lineno}: image {reference} использует latest")
             continue
         problems.append(f"строка {lineno}: image {reference} без @sha256")
     return problems

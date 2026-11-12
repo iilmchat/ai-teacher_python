@@ -26,6 +26,8 @@ CREATE_DB=0
 CLEAN=0
 FORCE=0
 VERIFY=0
+AGE_IDENTITY="${AGE_IDENTITY:-}"
+TEMP_PLAIN=""
 
 usage() {
     cat <<'EOF'
@@ -33,10 +35,11 @@ usage() {
 
 Использование: bash scripts/restore.sh -f FILE [опции]
 
-  -f FILE       файл бэкапа *.dump.gz (обязательно)
+  -f FILE       файл бэкапа *.dump.gz или *.dump.gz.age (обязательно)
   -t DB         целевая БД (default: ai_teacher_restore_check)
   -c CONTAINER  имя контейнера Postgres (default: ai_teacher_postgres)
   -u USER       пользователь Postgres (default: ai_teacher)
+  --age-identity FILE  приватный ключ age для *.age (или ENV AGE_IDENTITY)
   --create      создать целевую БД, если её нет
   --clean       удалить объекты в целевой БД перед восстановлением
   --force       разрешить восстановление поверх рабочей БД (POSTGRES_DB)
@@ -57,6 +60,7 @@ while [ $# -gt 0 ]; do
         -t) TARGET_DB="${2:-}"; shift 2 ;;
         -c) CONTAINER="${2:-}"; shift 2 ;;
         -u) DB_USER="${2:-}"; shift 2 ;;
+        --age-identity) AGE_IDENTITY="${2:-}"; shift 2 ;;
         --create) CREATE_DB=1; shift ;;
         --clean) CLEAN=1; shift ;;
         --force) FORCE=1; shift ;;
@@ -76,6 +80,25 @@ if [ ! -f "${BACKUP_FILE}" ]; then
     echo "Ошибка: файл не найден: ${BACKUP_FILE}" >&2
     exit 1
 fi
+
+# S36-006: age-шифрованный бэкап распаковываем во временный gzip.
+case "${BACKUP_FILE}" in
+    *.age)
+        command -v age >/dev/null 2>&1 || {
+            echo "Ошибка: ${BACKUP_FILE} зашифрован, но age не установлен" >&2
+            exit 1
+        }
+        if [ -z "${AGE_IDENTITY}" ] || [ ! -f "${AGE_IDENTITY}" ]; then
+            echo "Ошибка: для *.age нужен --age-identity FILE (или AGE_IDENTITY)" >&2
+            exit 2
+        fi
+        TEMP_PLAIN="$(mktemp "${TMPDIR:-/tmp}/ai_teacher_restore.XXXXXX.gz")"
+        trap 'rm -f "${TEMP_PLAIN}"' EXIT
+        echo "Расшифровка ${BACKUP_FILE}..."
+        age -d -i "${AGE_IDENTITY}" -o "${TEMP_PLAIN}" "${BACKUP_FILE}"
+        BACKUP_FILE="${TEMP_PLAIN}"
+        ;;
+esac
 if [ -z "${TARGET_DB}" ]; then
     echo "Ошибка: пустое имя целевой БД" >&2
     exit 2

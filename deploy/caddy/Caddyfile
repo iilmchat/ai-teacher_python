@@ -1,0 +1,48 @@
+# Caddy — edge для AI Teacher for Python (S36-003).
+#
+# - автоматический TLS (Let's Encrypt ACME) для $DOMAIN;
+# - frontend:80 — SPA, backend:8000 — /api/* (включая WebSocket-стриминг чата);
+# - метрики и health-эндпоинты наружу НЕ проксируются (остаются внутренними);
+# - WebSocket upgrade Caddy делает автоматически при reverse_proxy.
+#
+# Проверка конфига:
+#   docker run --rm -e DOMAIN=example.com -e ACME_EMAIL=admin@example.com \
+#     -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2.10.0-alpine \
+#     caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+#
+# Пилот: если 80/443 заняты другим Caddy, задайте
+# CADDY_HTTP_PORT=8080 CADDY_HTTPS_PORT=8443 и проксируйте на них.
+{
+	admin off
+
+	# Если перед этим Caddy стоит ещё один reverse-proxy (например,
+	# workflow-builder), раскомментируйте и укажите его IP/CIDR:
+	# servers {
+	#     trusted_proxies static {$UPSTREAM_PROXY_CIDR}
+	# }
+}
+
+{$DOMAIN:localhost} {
+	encode zstd gzip
+
+	# REST API и WebSocket чата (/api/v1/chat/ws/...)
+	@api path /api/*
+	handle @api {
+		reverse_proxy backend:8000
+	}
+
+	# SPA и статика
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

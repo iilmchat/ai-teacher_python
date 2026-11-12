@@ -110,3 +110,9 @@ frontend/.pnp.js
 
 # Wheelhouse для офлайн-установки (S22-005)
 .wheelhouse/
+
+# S36: production env и состояние деплоя
+.env.prod
+.last_deploy
+.deploy-state
+backups/

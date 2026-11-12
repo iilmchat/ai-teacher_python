@@ -69,6 +69,36 @@ jobs:
       - name: Validate Grafana dashboards
         run: python scripts/monitoring/validate_dashboards.py
 
+  deploy-config:
+    name: Deploy config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compose config
+        run: |
+          docker compose --env-file .env.prod.example -f docker-compose.prod.yml config --quiet
+          docker compose --env-file .env.prod.example -f docker-compose.prod.yml \
+            -f docker-compose.monitoring.yml --profile monitoring config --quiet
+
+      - name: Caddyfile
+        run: |
+          docker run --rm -e DOMAIN=example.com \
+            -v "$PWD/deploy/caddy:/etc/caddy:ro" \
+            caddy:2.10.0-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Shell syntax
+        run: |
+          for script in scripts/deploy.sh scripts/rollback.sh scripts/backup.sh \
+            scripts/restore.sh scripts/restore_drill.sh scripts/pin_images.sh scripts/lib/env.sh; do
+            docker run --rm -v "$PWD:/src:ro" bash:5 bash -n "/src/$script"
+          done
+
+      - name: Image pinning
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src \
+            python:3.12-slim python backend/scripts/check_image_pins.py
+
   test:
     name: Test (Backend)
     runs-on: ubuntu-latest

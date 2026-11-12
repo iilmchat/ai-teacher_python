@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily AI Teacher PostgreSQL backup (03:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=ai-teacher-backup.service
+
+[Install]
+WantedBy=timers.target

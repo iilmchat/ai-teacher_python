@@ -29,3 +29,8 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+
+  # S36-006: textfile-метрика backup_last_success_timestamp.
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]

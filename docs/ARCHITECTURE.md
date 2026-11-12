@@ -330,22 +330,42 @@ Playwright: Monaco грузится под CSP без `unsafe-eval`.
   2.15.1), `python-multipart` 0.0.31, `RestrictedPython` 8.5, frontend
   `vitest` 4.1.12.
 
-### 9.3. Бэкапы и восстановление
+### 9.3. Бэкапы, шифрование и DR (S20-004, S36-006/007)
 
-`scripts/backup.sh` делает `pg_dump -Fc` через `docker exec` в контейнер
-БД, сжимает gzip, пишет `.sha256`, проверяет архив `pg_restore -l`, чистит
-старые по retention (14 дней по умолчанию). `scripts/restore.sh`
-восстанавливает в scratch-БД (`--create`/`--clean`/`--verify`), не
-перезаписывает рабочую БД без `--force`, запрещает системные БД. Подробно —
-[GETTING_STARTED.md](GETTING_STARTED.md) §8 и
-[DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) §6/§7.
+`scripts/backup.sh` находит контейнер БД через `docker compose ps` (имя не
+хардкодится), делает `pg_dump -Fc`, проверяет архив `pg_restore -l`, сжимает
+gzip, опционально шифрует `age` (`AGE_RECIPIENT`) и выгружает в S3
+(`AWS_ACCESS_KEY_ID` + `S3_BUCKET`, aws-cli/s3cmd; Selectel — `S3_ENDPOINT_URL`).
+Локальный retention — 14 дней по умолчанию; метрика
+`backup_last_success_timestamp` пишется в node-exporter textfile для алерта
+`BackupStale`. Ежедневный запуск — systemd `ai-teacher-backup.timer` (03:00 UTC).
 
-## 10. Docker
+`scripts/restore.sh` восстанавливает в scratch- или рабочую БД (`--create`,
+`--clean`, `--force`, `--verify`), поддерживает `*.age` (`--age-identity`).
+`scripts/restore_drill.sh` автоматически восстанавливает последний бэкап в
+scratch-БД, проверяет `alembic_version`/`users` и удаляет её.
+
+Процедуры — [RUNBOOK.md](RUNBOOK.md) §5, [GETTING_STARTED.md](GETTING_STARTED.md) §8.
+
+## 10. Docker и деплой
 
 - `docker-compose.yml` — dev: публикует БД и Redis на loopback, монтирует код backend.
-- `docker-compose.prod.yml` — prod: БД/Redis без публикации портов, только
-  frontend наружу; nginx проксирует `/api` и WebSocket.
-- `frontend/Dockerfile` — node (build) → nginx (serve + reverse proxy).
+- `docker-compose.prod.yml` — prod: образы приложения из **GHCR** по
+  тегу/digest (`BACKEND_IMAGE`/`FRONTEND_IMAGE`/`SANDBOX_IMAGE`), без `build:`;
+  Caddy — единственный публичный слушатель (TLS/ACME, WebSocket);
+  frontend/backend/БД/Redis — только во внутренних сетях; миграции —
+  one-shot сервис `migrate`.
+- `deploy/caddy/Caddyfile` — edge: `frontend:80`, `/api/*` → `backend:8000`,
+  автоматический HTTPS и WebSocket upgrade.
+- `.github/workflows/docker-publish.yml` — сборка и пуш трёх образов в GHCR по
+  тегу `v*` (GITHUB_TOKEN + github.actor).
+- `scripts/pin_images.sh` — получает digest и пишет полные ссылки в `.env.prod`;
+  `scripts/deploy.sh`/`rollback.sh` — деплой с бэкапом, миграциями, health-gate
+  и авто-откатом на `.last_deploy`.
+- `frontend/Dockerfile` — node (build) → nginx (serve статики); TLS и прокси —
+  на Caddy.
+- `docker-compose.monitoring.yml` — опциональный профиль `monitoring`
+  (Prometheus/Grafana/Loki/Promtail/node-exporter).
 
 ## 11. Что ещё не сделано
 

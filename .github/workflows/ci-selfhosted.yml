@@ -74,6 +74,36 @@ jobs:
           pwsh -NoProfile -File ./scripts/monitoring/validate_prometheus.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  deploy-config:
+    name: Deploy config
+    runs-on: [self-hosted, windows, ai-teacher]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: compose config + Caddyfile + shell syntax + image pins
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker compose --env-file .env.prod.example -f docker-compose.prod.yml config --quiet
+          if ($LASTEXITCODE -ne 0) { throw 'prod compose config failed' }
+          docker compose --env-file .env.prod.example -f docker-compose.prod.yml -f docker-compose.monitoring.yml --profile monitoring config --quiet
+          if ($LASTEXITCODE -ne 0) { throw 'monitoring compose config failed' }
+          docker run --rm -e DOMAIN=example.com `
+            -v "${env:GITHUB_WORKSPACE}/deploy/caddy:/etc/caddy:ro" `
+            caddy:2.10.0-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          if ($LASTEXITCODE -ne 0) { throw 'Caddyfile invalid' }
+          $scripts = @(
+            'scripts/deploy.sh', 'scripts/rollback.sh', 'scripts/backup.sh',
+            'scripts/restore.sh', 'scripts/restore_drill.sh',
+            'scripts/pin_images.sh', 'scripts/lib/env.sh'
+          )
+          foreach ($script in $scripts) {
+            docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" bash:5 bash -n "/src/$script"
+            if ($LASTEXITCODE -ne 0) { throw "syntax: $script" }
+          }
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" -w /src `
+            python:3.12-slim python backend/scripts/check_image_pins.py
+          if ($LASTEXITCODE -ne 0) { throw 'image pins check failed' }
+
   test:
     name: Test (backend)
     runs-on: [self-hosted, windows, ai-teacher]

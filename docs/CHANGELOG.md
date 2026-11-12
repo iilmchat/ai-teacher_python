@@ -7,11 +7,10 @@
 
 ---
 
-## [0.6.0] — 2026-11-12 «Auth & Edge Hardening + Observability»
+## [0.6.0] — 2026-11-12 «Auth & Edge Hardening + Observability + Deploy/DR»
 
-**v0.6.0** — спринты 34–35: безопасность auth/edge и подключённая
-наблюдаемость (метрики с 2 воркеров, Sentry без PII, алерты и дашборды как
-код, лимиты ресурсов, SLO).
+**v0.6.0** — спринты 34–36: безопасность auth/edge, наблюдаемость и
+production-деплой (GHCR, TLS, бэкапы/DR).
 
 **Ограничения (D-001).** Multi-node, registry, публичный pilot и e-mail подтверждение отложены на v0.7.0.
 
@@ -39,6 +38,26 @@
   < 1%, error budget и связь с алертами.
 - **S35-007**: `docs/MONITORING.md` — запуск стека, дашборды, Sentry, runbook
   по каждому алерту.
+- **S36-001**: workflow `docker-publish.yml` собирает и публикует
+  backend/frontend/sandbox-runner в GHCR по тегу `v*` (GITHUB_TOKEN,
+  `github.actor`, SBOM/provenance).
+- **S36-002**: prod-compose без `build:`; образы из GHCR по
+  `BACKEND_IMAGE`/`FRONTEND_IMAGE`/`SANDBOX_IMAGE` или `IMAGE_TAG`;
+  `scripts/pin_images.sh` фиксирует digest в `.env.prod`.
+- **S36-003**: `deploy/caddy/Caddyfile` — автоматический TLS (ACME), прокси на
+  frontend и `/api/*` (WebSocket), HSTS; Caddy — единственный публичный
+  слушатель; `TRUSTED_PROXIES` = Docker-подсеть.
+- **S36-004**: one-shot `migrate` (`alembic upgrade head`), backend стартует с
+  `SKIP_MIGRATIONS=true`.
+- **S36-005**: `scripts/deploy.sh` (валидация, бэкап, миграции, pull, up,
+  healthcheck, авто-откат) и `scripts/rollback.sh` (`.last_deploy`).
+- **S36-006**: `scripts/backup.sh` — автоопределение контейнера, gzip, age,
+  S3 (Selectel), retention, метрика `backup_last_success_timestamp`;
+  systemd unit/timer (03:00 UTC).
+- **S36-007**: `scripts/restore_drill.sh` — восстановление в scratch-БД,
+  проверки и очистка; `restore.sh` поддерживает `*.age`.
+- **S36-008/009**: `docs/RUNBOOK.md`, обновлены `ARCHITECTURE`,
+  `GETTING_STARTED`, `SECURITY` (TLS, бэкапы, digest).
 
 ### Изменено
 

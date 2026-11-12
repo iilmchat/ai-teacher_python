@@ -16,8 +16,9 @@ x-logging: &default-logging
 
 services:
   prometheus:
-    image: prom/prometheus:v3.5.0
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
     profiles: ["monitoring"]
+    networks: [edge]
     mem_limit: 512m
     cpus: "0.5"
     logging: *default-logging
@@ -40,8 +41,9 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:11.6.0
+    image: grafana/grafana:11.6.0@sha256:62d2b9d20a19714ebfe48d1bb405086081bc602aa053e28cf6d73c7537640dfb
     profiles: ["monitoring"]
+    networks: [edge]
     mem_limit: 256m
     cpus: "0.5"
     logging: *default-logging
@@ -69,8 +71,9 @@ services:
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:3.4.2
+    image: grafana/loki:3.4.2@sha256:58a6c186ce78ba04d58bfe2a927eff296ba733a430df09645d56cdc158f3ba08
     profiles: ["monitoring"]
+    networks: [edge]
     mem_limit: 256m
     cpus: "0.5"
     logging: *default-logging
@@ -86,8 +89,9 @@ services:
     restart: unless-stopped
 
   promtail:
-    image: grafana/promtail:3.4.2
+    image: grafana/promtail:3.4.2@sha256:c6e9a987ca086cbfef945b8ebd708eb09f98b5e78bfb659e4e5a8b3bd604d11b
     profiles: ["monitoring"]
+    networks: [edge]
     mem_limit: 128m
     cpus: "0.25"
     logging: *default-logging
@@ -100,6 +104,24 @@ services:
     depends_on:
       loki:
         condition: service_healthy
+    restart: unless-stopped
+
+  # S36-006: метрика backup_last_success_timestamp из textfile-коллектора.
+  node-exporter:
+    image: prom/node-exporter:v1.9.1@sha256:d00a542e409ee618a4edc67da14dd48c5da66726bbd5537ab2af9c1dfc442c8a
+    profiles: ["monitoring"]
+    networks: [edge]
+    mem_limit: 64m
+    cpus: "0.1"
+    logging: *default-logging
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro
+      - /var/lib/node_exporter/textfile:/var/lib/node_exporter/textfile:ro
     restart: unless-stopped
 
 volumes:

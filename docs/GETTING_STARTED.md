@@ -163,64 +163,82 @@ docker compose up -d --build
 - Frontend: <http://127.0.0.1:3000>
 - API: <http://127.0.0.1:8000/api/docs>
 
-Production-конфиг (без публикации БД наружу):
+Production-конфиг (образы из GHCR, Caddy + TLS):
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+cp .env.prod.example .env.prod
+$EDITOR .env.prod                 # DOMAIN, SECRET_KEY, POSTGRES_PASSWORD
+
+docker login ghcr.io -u <github-user> --password-stdin
+bash scripts/pin_images.sh --tag v0.6.0   # зафиксировать digest в .env.prod
+bash scripts/deploy.sh                    # бэкап → миграции → up → health
 ```
 
-Проверка после запуска: `GET /` отдаёт SPA, `curl -I http://127.0.0.1:3000/` —
-все security-заголовки (CSP, `nosniff`, `DENY`, HSTS и др. — см.
-[SPEC.md §6.1](SPEC.md#61-заголовки-безопасности-nginx-s20-002)); WS-чат
-работает через nginx. Секреты (`POSTGRES_PASSWORD`, `SECRET_KEY`) обязательны —
-compose не стартует с дефолтами (`:?`).
+- Публичный вход — только **Caddy** (`https://<DOMAIN>`), он же проксирует
+  `/api/*` и WebSocket чата. `frontend:80` и `backend:8000` наружу не
+  публикуются.
+- Пилот на общем VPS: `CADDY_HTTP_PORT=8080`, `CADDY_HTTPS_PORT=8443`
+  (внешний reverse-proxy проксирует на них).
+- `deploy.sh` делает бэкап, применяет `alembic upgrade head` отдельным
+  контейнером `migrate`, поднимает `backend/frontend/caddy`, проверяет
+  `/health/ready` и при провале откатывается на `.last_deploy`.
+- Ручной запуск без скрипта:
+  ```bash
+  docker compose --env-file .env.prod -f docker-compose.prod.yml \
+    --profile tools run --rm migrate
+  docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+  ```
+- Миграции больше не применяются в entrypoint backend
+  (`SKIP_MIGRATIONS=true`): их выполняет `migrate`. Если поднимаете стек
+  вручную, не забудьте про `migrate`.
+- Проверка: `curl -fsS https://<DOMAIN>/` (SPA), `/api/v1/health`, WebSocket
+  чата. TLS-сертификат Caddy получает автоматически (ACME).
+- Домен/порты/бэкапы/откат — `docs/RUNBOOK.md`; секреты — `SECURITY.md`.
 
-**Миграции применяются автоматически (S20-006).** Backend-контейнер запускает
-`alembic upgrade head` в `docker-entrypoint.sh` до старта uvicorn, поэтому
-чистая БД не даёт `UndefinedTableError`. Выкатить миграции отдельным job'ом
-можно с `SKIP_MIGRATIONS=true` (см. `backend/docker-entrypoint.sh`).
+**Миграции применяются автоматически (S20-006) в dev-стеке.** В prod —
+отдельным one-shot контейнером `migrate` (S36-004), см. выше.
 
 ---
 
-## 8. Бэкап и восстановление БД (S20-004)
+## 8. Бэкап, шифрование и восстановление (S36)
 
-Скрипты работают через `docker exec` в контейнер `ai_teacher_postgres`,
-поэтому локальный `pg_dump` не нужен. Запуск — из корня репозитория
-в Git Bash / Linux / macOS (Windows: `bash scripts/backup.sh`).
+`scripts/backup.sh` сам находит контейнер БД через `docker compose ps`
+(имя не хардкодится), делает `pg_dump -Fc`, проверяет архив, сжимает gzip,
+опционально шифрует `age` и выгружает в Selectel S3. Ежедневный запуск —
+systemd `ai-teacher-backup.timer` (03:00 UTC).
 
 ```bash
-# Бэкап: backups/<db>_<UTC>.dump.gz + .sha256, retention 14 дней
+# Локально: backups/<db>_<UTC>.dump.gz[.age] + .sha256, retention 14 дней
 bash scripts/backup.sh
 
-# Свои параметры
-bash scripts/backup.sh -o /backups -r 30
-```
+# С шифрованием и S3 (ключи в ENV или /etc/ai-teacher/backup.env)
+AGE_RECIPIENT=age1... S3_BUCKET=... bash scripts/backup.sh
 
-Скрипт проверяет, что контейнер запущен (иначе дамп мог бы уйти в чужую БД —
-KI-001), делает `pg_dump -Fc`, сжимает gzip, проверяет архив через
-`pg_restore -l`, пишет sha256 и удаляет бэкапы старше retention.
-
-Восстановление — **в отдельную БД**, рабочую `ai_teacher` скрипт перезапишет
-только с `--force`:
-
-```bash
-# Smoke-проверка на scratch-БД: создать, восстановить, показать счётчики
-bash scripts/restore.sh -f backups/ai_teacher_20261030T075746Z.dump.gz \
+# Восстановление в scratch-БД (безопасно): --create -y --verify
+bash scripts/restore.sh -f backups/ai_teacher_<stamp>.dump.gz \
      -t ai_teacher_restore_check --create -y --verify
 
-# Удалить scratch-БД после проверки
-docker exec ai_teacher_postgres dropdb -U ai_teacher ai_teacher_restore_check
+# Автоматический DR-drill: последний бэкап → scratch → проверки → удаление
+bash scripts/restore_drill.sh
 ```
 
-`restore.sh` требует подтверждения (`yes`) без `-y`, запрещает восстановление
-в `postgres`/`template0`/`template1`, умеет `--create` (создать БД) и
-`--clean` (очистить объекты перед восстановлением). Коды возврата: `0` —
-успех, `1` — ошибка, `2` — отказ/неверные аргументы.
+Для `*.age`: `--age-identity /etc/ai-teacher/age.key` (или ENV
+`AGE_IDENTITY`). Рабочая БД перезаписывается только с `--force`; системные
+БД (`postgres`, `template0/1`) запрещены. Метрика
+`backup_last_success_timestamp` уходит в node-exporter для алерта
+`BackupStale`.
 
-Проверено 2026-10-30: бэкап dev-БД, восстановление в
-`ai_teacher_restore_check` — 14 таблиц, счётчики строк совпали с источником
-(users=5, tasks=6, chat_sessions=2, chat_messages=2); retention удаляет
-бэкапы старше N дней. Детали — `docs/reports/sprint-20/SECURITY_AUDIT.md`.
+Установка systemd-таймера:
+
+```bash
+sudo install -d -m 0750 /etc/ai-teacher
+sudo install -m 0600 deploy/systemd/backup.env.example /etc/ai-teacher/backup.env
+sudo editor /etc/ai-teacher/backup.env
+sudo cp deploy/systemd/ai-teacher-backup.* /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ai-teacher-backup.timer
+```
+
+Подробные процедуры — `docs/RUNBOOK.md` §5.
 
 ---
 

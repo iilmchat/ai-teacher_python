@@ -38,8 +38,9 @@
 - [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
 - [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
   патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
-- [../TODO_V0.4.md](../TODO_V0.4.md) — **этап v0.4.0 отложен** (D-001, спринты
-  33–41): multi-node, HA, DR и SLO 2.0 не входят в v0.5.0
+- [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.6.0** «Production
+  Hardening» (спринты 33–41): закрыты 34–36 (auth/edge, monitoring, deploy/DR),
+  multi-node вынесен за границы
 - [../TODO_V0.5.md](../TODO_V0.5.md) — **завершённый этап v0.5.0** «Learning Experience &
   Teaching Workflow» (спринты 42–48): аудит продукта по 7 срезам, план задач
   `S42-001`…`S48-003`, зависимости, оценки, DoD, риски и границы этапа
@@ -60,6 +61,7 @@
 ### Для эксплуатации и LLMOps
 
 - [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) — админка, мониторинг, FinOps, guardrails
+- [RUNBOOK.md](RUNBOOK.md) — деплой/откат, падения БД/Caddy, бэкап и восстановление
 - [MONITORING.md](MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry, лимиты и логи
 - [SLO.md](SLO.md) — SLI/SLO, error budget и связь с алертами
 - [PROMPT_CURRENT.md](PROMPT_CURRENT.md) — актуальные системные инструкции ассистента и метрики
@@ -78,8 +80,8 @@
 
 | Показатель | Значение |
 |------------|----------|
-| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–35, далее 36–41); v0.7.0 (49–52) — следующий |
-| Тесты backend | **773** (772 passed + 1 skipped) |
+| Версия | **v0.5.0** (2026-11-10); спринты 1–48 завершены; текущий этап — v0.6.0 «Production Hardening» (закрыты 34–36, далее 37–41); v0.7.0 (49–52) — следующий |
+| Тесты backend | **781** (780 passed + 1 skipped) |
 | Тесты frontend | 279 unit + 22 e2e (Playwright; 22/22 green) |
 | Покрытие | backend порог 70% (последний замер 80%), frontend 73.6% строк |
 | Ruff / MyPy strict | 0 / 0 |
