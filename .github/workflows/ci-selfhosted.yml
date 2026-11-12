@@ -53,6 +53,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: Ruff + MyPy в python:3.12-slim
         run: |
           # Кэш pip + офлайн-wheelhouse: PyPI с runner'а нестабилен (KI-017).
@@ -69,6 +71,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: promtool check config/rules + dashboards JSON
         run: |
           pwsh -NoProfile -File ./scripts/monitoring/validate_prometheus.ps1
@@ -80,6 +84,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: compose config + Caddyfile + shell syntax + image pins
         run: |
           $ErrorActionPreference = 'Stop'
@@ -103,6 +109,11 @@ jobs:
           docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" -w /src `
             python:3.12-slim python backend/scripts/check_image_pins.py
           if ($LASTEXITCODE -ne 0) { throw 'image pins check failed' }
+          docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" -w /src `
+            python:3.12-slim python scripts/ci/check_ci_parity.py
+          if ($LASTEXITCODE -ne 0) { throw 'CI parity check failed' }
+          pwsh -NoProfile -File ./scripts/ci/gitflic-gate.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'GitFlic pipeline jobs missing' }
 
   test:
     name: Test (backend)
@@ -111,6 +122,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: Alembic + pytest c Postgres/Redis
         run: |
           $ErrorActionPreference = 'Stop'
@@ -145,6 +158,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: typecheck / lint / test / build в node:22-alpine
         run: |
           # pnpm-store — named volume: npm-реестр тоже нестабилен, а без кэша
@@ -160,6 +175,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: pip-audit (backend)
         run: |
           docker run --rm -v "${env:GITHUB_WORKSPACE}:/src:ro" `
@@ -186,6 +203,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: Playwright e2e на Windows-хосте
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}
@@ -212,6 +231,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: Сборка образов и проверка prod-compose
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -227,6 +248,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
       - name: submit 0.5 RPS, p95 ≤ 2000 мс
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}

@@ -99,6 +99,9 @@ jobs:
           docker run --rm -v "$PWD:/src:ro" -w /src \
             python:3.12-slim python backend/scripts/check_image_pins.py
 
+      - name: CI parity
+        run: python scripts/ci/check_ci_parity.py
+
   test:
     name: Test (Backend)
     runs-on: ubuntu-latest
@@ -167,10 +170,10 @@ jobs:
           cd backend
           alembic check
 
-      - name: Run tests
+      - name: Run tests (coverage gate 70%)
         run: |
           cd backend
-          pytest -v --cov=app --cov-report=xml
+          pytest -v --cov=app --cov-report=xml --cov-report=term --cov-fail-under=70
 
       - name: Upload coverage
         uses: codecov/codecov-action@v7
@@ -299,9 +302,9 @@ jobs:
         working-directory: frontend
         run: pnpm lint
 
-      - name: Unit tests
+      - name: Unit tests (coverage gate)
         working-directory: frontend
-        run: pnpm test
+        run: pnpm test:coverage
 
       - name: Build
         working-directory: frontend

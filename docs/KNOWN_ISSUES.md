@@ -31,20 +31,29 @@ Workaround: временное решение (если есть)
 
 ## Активные проблемы
 
-### KI-023 · Open · High · CI · merge-gate не обеспечен: GitHub Free не даёт required checks, GitFlic-пилот ждёт доступа
+### KI-023 · In Progress · High · CI · merge-gate не обеспечен: GitHub Free не даёт required checks, GitFlic-гейт готов к включению
 
 **Описание:** зелёный CI восстановлен (KI-014), но *заблокировать* мерж красного
 PR нечем: GitHub Free для приватного репозитория отвечает `403 Upgrade to GitHub
 Pro or make this repository public` на `PUT /repos/.../branches/main/protection`
 (проверено 2026-10-30, дважды). GitFlic даёт защиту ветвей и опцию «Проверять
-статус последнего конвейера при слиянии» на бесплатном тарифе, но пилот
-(S21-002) требует access token GitFlic и зарегистрированного агента — это доступ
+статус последнего конвейера при слиянии» на бесплатном тарифе, но включение
+требует access token GitFlic и зарегистрированного агента — это доступ
 владельца, у агента разработки его нет.
 
-**Что уже готово:** `scripts/ci/protect-branch.ps1` (payload с 6 required
-checks, запрет force-push, `-DryRun`/`-Verify`); `gitflic-ci.yaml` с MR-правилами;
-ADR и инструкции — `docs/CI.md` §10; проверка того, что красный пайплайн
-блокирует merge, описана пошагово.
+**Что уже готово (S37):**
+- `scripts/ci/preflight.ps1` — первый шаг каждого self-hosted job'а и
+  `release.yml`: Docker/диск/workspace/checkout проверяются за десятки секунд;
+  онлайн-раннер с поломкой падает красным, а не висит (offline-раннер — 
+  платформенное ограничение, см. `docs/CI.md` §14.1);
+- `scripts/ci/gitflic-gate.ps1` — проверяет наличие обязательных job'ов и
+  печатает пошаговую настройку UI;
+- `gitflic-ci.yaml` содержит `lint`, `test`, `frontend`, `security-backend`,
+  `security-frontend`, `gitleaks` (паритет с GitHub, проверяется
+  `scripts/ci/check_ci_parity.py`);
+- `scripts/ci/protect-branch.ps1` (GitHub Pro/public) — payload с 6 required
+  checks, `-DryRun`/`-Verify`;
+- инструкции — `docs/CI.md` §10.3 и §14.
 
 **Workaround:** RULES §10 — мерж только при зелёном `CI (self-hosted fallback)`
 (проверка глазами), зелёный прогон 6/6 известен (run 41070317162).
@@ -52,11 +61,12 @@ ADR и инструкции — `docs/CI.md` §10; проверка того, ч
 Free/private нет ни branch protection, ни auto-merge — группа обновлений
 мержится вручную после зелёного CI.
 
-**План закрытия:** (1) владелец выдаёт GitFlic-токен/регистрирует агент →
-прогнать пилот → включить гейт и проверить красным MR; либо (2) GitHub Pro /
-публичный репозиторий → `pwsh scripts/ci/protect-branch.ps1`.
+**План закрытия:** владелец включает GitFlic MR-пайплайн и защиту `main`
+(§14.2), проводит красный MR → Merge заблокирован, зелёный → разрешён; после
+этого `KI-023` закрывается для GitFlic. Альтернатива — GitHub Pro/публичный
+репозиторий и `pwsh scripts/ci/protect-branch.ps1`.
 
-**Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-10-30
+**Создано:** 2026-10-30 (S21-004) · **Обновлено:** 2026-11-12 (S37)
 
 ---
 

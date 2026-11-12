@@ -62,6 +62,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
+
       - name: Определить версию и режим
         id: resolve
         run: |

@@ -105,6 +105,6 @@ echo "==> alembic upgrade head"
 alembic upgrade head
 echo "==> alembic check (модели == миграции, RULES §11.5)"
 alembic check
-echo "==> pytest"
-pytest -q
+echo "==> pytest (coverage gate 70%)"
+pytest -q --cov=app --cov-report=xml --cov-report=term --cov-fail-under="${COVERAGE_MIN:-70}"
 echo "==> BACKEND TEST OK"

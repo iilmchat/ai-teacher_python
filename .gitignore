@@ -116,3 +116,6 @@ frontend/.pnp.js
 .last_deploy
 .deploy-state
 backups/
+
+# S37: локальный отчёт гейтов
+gates-report.json

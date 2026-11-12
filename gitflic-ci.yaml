@@ -81,6 +81,7 @@ lint:
     paths:
       - .pip-cache
   before_script:
+    - sh scripts/ci/preflight.sh
     - python -m pip install --upgrade pip
     # Ставим весь requirements.txt: mypy нужны импортируемые пакеты
     # (`Cannot find implementation for fastapi/sqlalchemy` — найдено на
@@ -88,6 +89,10 @@ lint:
     # (ruff==0.8.1, mypy==1.13.0): unpinned ruff ломал lint (54 новых правила).
     - pip install -r backend/requirements.txt
   script:
+    - echo "==> python backend/scripts/check_image_pins.py"
+    - python backend/scripts/check_image_pins.py
+    - echo "==> python scripts/ci/check_ci_parity.py"
+    - python scripts/ci/check_ci_parity.py
     - echo "==> ruff check app tests scripts"
     # Скоуп как в RULES §3.1/§10: app + tests + scripts; `backend/` целиком
     # тянет чужие правила unpinned-ruff и шумит.
@@ -137,6 +142,7 @@ test:
     SECRET_KEY: "ci_secret_key_do_not_use_in_production"
     RATE_LIMIT_ENABLED: "false"
   before_script:
+    - sh scripts/ci/preflight.sh
     - |
       set -eu
 
@@ -223,8 +229,8 @@ test:
     - cd backend && alembic upgrade head
     - echo "==> alembic check (модели == миграции, RULES §11.5)"
     - cd backend && alembic check
-    - echo "==> pytest"
-    - cd backend && pytest -v --cov=app --cov-report=xml
+    - echo "==> pytest (coverage gate 70%)"
+    - cd backend && pytest -v --cov=app --cov-report=xml --cov-report=term --cov-fail-under=70
 
 # =============================================================================
 # 3. FRONTEND — typecheck / lint / unit / build (аналог `frontend`)
@@ -249,6 +255,7 @@ frontend:
     paths:
       - frontend/.pnpm-store
   before_script:
+    - sh scripts/ci/preflight.sh
     # pnpm 12: corepack из Node 22; настройки build-скриптов — в
     # frontend/pnpm-workspace.yaml (RULES §11.10). `prepare` — основной способ
     # закрепить версию, `install --global` — fallback для новых corepack.
@@ -262,8 +269,10 @@ frontend:
     - cd frontend && pnpm typecheck
     - echo "==> lint"
     - cd frontend && pnpm lint
-    - echo "==> unit tests (vitest)"
-    - cd frontend && pnpm test
+    - echo "==> i18n audit (S29-002)"
+    - cd frontend && node scripts/check-i18n.mjs
+    - echo "==> unit tests (vitest, coverage gate)"
+    - cd frontend && pnpm test:coverage
     - echo "==> build"
     - cd frontend && pnpm build
 
@@ -283,6 +292,7 @@ security-backend:
     paths:
       - .pip-cache
   before_script:
+    - sh scripts/ci/preflight.sh
     - python -m pip install --upgrade pip
     - pip install pip-audit
   script:
@@ -300,6 +310,7 @@ security-frontend:
   tags:
     - docker
   before_script:
+    - sh scripts/ci/preflight.sh
     - corepack enable
     - corepack prepare pnpm@12 --activate || corepack install --global pnpm@12
   script:
@@ -316,6 +327,8 @@ gitleaks:
     entrypoint: [""]
   tags:
     - docker
+  before_script:
+    - sh scripts/ci/preflight.sh
   script:
     # Сканируется вся доступная история клона. Если агент клонирует shallow,
     # проверка ограничена глубиной клона — для полного скана нужен full clone
@@ -379,6 +392,7 @@ e2e:
       # PowerShell-агент запускает скрипты прямо на хосте; работаем из корня клона.
       $repoRoot = if ($env:CI_PROJECT_DIR) { $env:CI_PROJECT_DIR } else { (Get-Location).Path }
       Set-Location $repoRoot
+      & (Join-Path $repoRoot 'scripts/ci/preflight.ps1')
       Write-Host "==> Рабочий каталог: $repoRoot"
 
       function Assert-Step([string]$Name) {
@@ -498,6 +512,7 @@ docker:
       $ErrorActionPreference = 'Stop'
       $repoRoot = if ($env:CI_PROJECT_DIR) { $env:CI_PROJECT_DIR } else { (Get-Location).Path }
       Set-Location $repoRoot
+      & (Join-Path $repoRoot 'scripts/ci/preflight.ps1')
 
       function Assert-Step([string]$Name) {
           if ($LASTEXITCODE -ne 0) {
@@ -557,6 +572,8 @@ release:
     - if: $CI_COMMIT_TAG
       when: on_success
     - when: never
+  before_script:
+    - sh scripts/ci/preflight.sh
   script:
     - echo "==> проверка заметок релиза для $CI_COMMIT_TAG"
     - python backend/scripts/release_notes.py --version "${CI_COMMIT_TAG#v}" --output notes.md

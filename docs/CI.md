@@ -355,7 +355,17 @@ hosted-минуты.
    webhook/API-скрипт, который по статусу последнего пайплайна ставит
    label/approval; результат записать в этот раздел.
 
-Статус: ⏳ ждёт access token/агент владельца — `KI-023`.
+Статус: ⏳ настройка требует доступа владельца к GitFlic (агент/токен).
+Локальная проверка пайплайна и пошаговый чек-лист:
+
+```powershell
+pwsh scripts/ci/gitflic-gate.ps1          # проверяет job'ы + печатает шаги
+pwsh scripts/ci/gitflic-gate.ps1 -Json    # машинный вывод для отчёта
+```
+
+Скрипт проверяет наличие `lint`, `test`, `frontend`, `security-backend`,
+`security-frontend`, `gitleaks`; настройка UI и проверка красным MR — в §14.
+`KI-023` остаётся открытым до фактического включения гейта владельцем.
 
 ---
 
@@ -505,7 +515,104 @@ E2E-джоб поднимает `docker compose up -d postgres redis` сам и 
 
 ---
 
-## 14. Ссылки
+## 14. Preflight раннера и merge-gate (S37)
+
+### 14.1. Зачем preflight
+
+Аудит v0.5.0: если self-hosted runner offline, GitHub не запускает job — PR
+висит в `queued` до возвращения раннера. Скрипт **внутри** job'а этот случай
+не лечит, но закрывает второй класс сбоев: раннер онлайн, а Docker/диск/
+checkout не готовы — job падал посреди прогона или висел на `pip install`.
+
+`scripts/ci/preflight.ps1` — первый шаг **каждого** self-hosted job'а и
+`release.yml`:
+
+| Проверка | Порог/действие |
+|----------|----------------|
+| `docker info` | daemon отвечает за 25 с (Docker Desktop запущен) |
+| свободное место | ≥ 2 ГБ (`CI_MIN_FREE_GB`) |
+| workspace | записываемый |
+| обязательные файлы | скрипты CI, `gitflic-ci.yaml`, `backend/requirements.txt` |
+
+Ошибка → job красный за десятки секунд с понятным сообщением, а не через
+15–30 минут. В GitFlic аналогичный `scripts/ci/preflight.sh` вызывается в
+`before_script` каждого job'а (Docker daemon проверяет `preflight.ps1` на
+Windows-агенте).
+
+**Если job остаётся `queued` > 5 минут:** раннер offline — preflight не
+запустится. Проверьте службу/сессию раннера (`C:\actions-runner\run.cmd`,
+`_diag`), поднимите его; GitHub сам запустит job. Отмена/повтор —
+`gh run cancel <id>` / `gh run rerun <id>`, затем preflight даст красный/зелёный
+статус. Полностью гарантировать красный статус при offline-раннере на GitHub
+Free нельзя (нет hosted-job и branch protection, `KI-023`).
+
+### 14.2. Merge-gate GitFlic (KI-023)
+
+1. GitFlic → проект → **Settings → CI/CD**:
+   - включить **Enable Merge Request Pipeline**;
+   - при доступности — merge-result pipeline.
+2. **Branches / защита ветвей:** для `main` запретить force-push и прямые
+   push; разрешить только Merge Request.
+3. Включить **«Проверять статус последнего конвейера при слиянии»**
+   (required pipeline status).
+4. Обязательные job'ы: `lint`, `test`, `frontend`, `security-backend`,
+   `security-frontend`, `gitleaks`.
+5. Проверка гейта: MR с намеренно красным job'ом (например, сломать `ruff`) —
+   кнопка Merge недоступна. Исправить — Merge доступен. Зафиксировать дату и
+   результат в `KNOWN_ISSUES.md` (`KI-023`).
+
+`scripts/ci/gitflic-gate.ps1` проверяет, что эти job'ы есть в
+`gitflic-ci.yaml`, и печатает чек-лист. API-режим не используется: токен
+владельца и endpoint зависят от версии GitFlic; настройка выполняется в UI.
+
+### 14.3. Если CI упал
+
+1. Открыть job в Actions/GitFlic; начать с **Preflight** — если красный, CI
+   не дошел до кода (Docker/диск/раннер).
+2. Повторить локально тот же скрипт: `bash scripts/ci/backend-lint.sh`,
+   `backend-test.sh`, `frontend.sh` (в Docker — как в workflow), либо
+   `ruff check app tests scripts` + `mypy app`.
+3. Для flaky-инфраструктуры: `gh run rerun <id>`; при зависании на `pip` —
+   §12.5 (wheelhouse/зеркала); при `queued` — §14.1 (раннер).
+4. Контрактный тест/миграции: не обновлять снапшот «чтобы позеленело»;
+   проверить аддитивность (`docs/SPEC.md` §3.13).
+5. Красный CI на `main` — приоритет: откат (`docs/RUNBOOK.md` §2), затем
+   фикс; не мержить новые PR до зелёного.
+
+---
+
+## 15. Coverage gate и паритет CI (S37)
+
+### 15.1. Покрытие
+
+| Платформа | Backend | Frontend |
+|-----------|---------|----------|
+| GitHub `ci.yml` | `pytest --cov-fail-under=70` | `pnpm test:coverage` |
+| GitHub self-hosted | `scripts/ci/backend-test.sh` (`COVERAGE_MIN=70`) | `scripts/ci/frontend.sh` (`test:coverage`) |
+| GitFlic | `pytest --cov-fail-under=70` | `pnpm test:coverage` |
+
+Порог frontend — в `frontend/vite.config.ts` (`lines/functions 70%`,
+`branches/statements 60%`). Падение порога = красный job.
+
+### 15.2. Паритет
+
+| Проверка | GitHub (self-hosted) | GitFlic |
+|----------|----------------------|---------|
+| Lint | `lint` (ruff, mypy, image pins) | `lint` (те же + parity) |
+| Test | `test` (pytest + coverage) | `test` (pytest + coverage) |
+| Frontend | `frontend` (typecheck/lint/i18n/coverage/build) | `frontend` (то же) |
+| Security | `security` (pip-audit, pnpm audit, gitleaks) | `security-backend`, `security-frontend`, `gitleaks` |
+| Preflight | первый шаг каждого job | `before_script` каждого job |
+| E2E/Docker | self-hosted Windows | Windows-агент (технически неизбежно) |
+
+Проверка: `python scripts/ci/check_ci_parity.py` (stdlib) — входит в job
+**Deploy config** и `lint` GitFlic. Тест
+`backend/tests/test_ci_config.py` валидирует YAML, preflight, покрытие и
+наличие обязательных job'ов.
+
+---
+
+## 16. Ссылки
 
 - Тарифы GitFlic: <https://gitflic.ru/price>
 - Справочник `gitflic-ci.yaml`: <https://docs.gitflic.ru/latest/en/cicd/gitflic-ci-yaml/>

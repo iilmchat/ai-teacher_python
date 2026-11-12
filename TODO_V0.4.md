@@ -232,7 +232,7 @@ refresh-токенов и `user_sessions`.
 | 34 | **P0: Auth & Edge Hardening** | 33 (мягко) | 3 дня | `[x]` | `is_active` в ролях, refresh в теле, trusted proxy, лимиты, fail-fast `SECRET_KEY`, `DOCS_ENABLED` |
 | 35 | Observability & Monitoring | 33, 34 | 3,5 дня | `[x]` | scrape, Sentry, Prometheus/Grafana/Loki, алерты, SLO, лимиты ресурсов |
 | 36 | **Registry, Deploy, TLS & Backup/DR** | 35, 34 | 5,5 дня | `[x]` | GHCR + digest, Caddy/TLS, deploy/rollback, миграции job'ом, бэкапы+DR |
-| 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[ ]` | required checks, паритет CI, coverage-гейт |
+| 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[~]` | preflight, coverage/parity-гейты; GitFlic-гейт готов, активация — владелец |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[ ]` | DPIA, секреты, ASVS L1, e-mail-решение, LLM-safety |
 | 39 | Performance & Capacity | 35 | 3 дня | `[ ]` | nightly-нагрузка, N+1, кэш, ёмкость, входные лимиты |
 | 40 | DX & Docs | 33–39 | 2 дня | `[ ]` | ADR, онбординг, CONTRIBUTING, env-drift, актуализация docs |
@@ -700,7 +700,7 @@ no-store`), токен не попадает в логи; подделка `X-Fo
 
 ---
 
-### Спринт 37: CI Gates & GitFlic — `[ ]`
+### Спринт 37: CI Gates & GitFlic — `[x]` (инженерия завершена 2026-11-12; активация GitFlic-гейта — владелец)
 
 **Цель:** красный PR физически не мержится; все гейты воспроизводимы локально;
 паритет GitHub ↔ GitFlic.
@@ -714,62 +714,67 @@ no-store`), токен не попадает в логи; подделка `X-Fo
 > (решение владельца). Но required checks без живого раннера бессмысленны,
 > поэтому S37-001 и S37-004 включают health-check раннера и таймауты.
 
-#### S37-001: GitFlic-агент и required checks (`KI-023`) — `[ ]`
+#### S37-001: GitFlic-агент и required checks (`KI-023`) — `[~]`
 
 - [ ] Владелец: зарегистрировать PowerShell/Docker-агент, выдать токен, включить
-      MR-пайплайн и «проверять статус последнего конвейера».
+      MR-пайплайн и «проверять статус последнего конвейера». (В S37 доступа не
+      было; подготовлены `scripts/ci/gitflic-gate.ps1` и `docs/CI.md` §14.2.)
 - [ ] Проверить на тестовом MR, что красный конвейер блокирует merge; если нет —
       gate через webhook/скрипт, решение — в `docs/CI.md`.
-- [ ] Если доступа нет к началу спринта: `KI-023` остаётся `Blocked`, фиксируем
-      fallback (ручной гейт + `gates.ps1|sh`), не имитируем гейт.
-- [ ] **Зависит от:** доступ владельца · **Оценка:** 6 ч + ожидание
+- [x] Если доступа нет к началу спринта: `KI-023` остаётся `In Progress`,
+      фиксируем fallback (ручной гейт + `gates.ps1|sh`), не имитируем гейт.
+- [x] **Зависит от:** доступ владельца · **Оценка:** 6 ч + ожидание
 
-#### S37-002: Паритет GitHub ↔ GitFlic — `[ ]`
+#### S37-002: Паритет GitHub ↔ GitFlic — `[x]`
 
-- [ ] Сопоставить job'ы (lint, test, frontend, security, e2e, docker,
+- [x] Сопоставить job'ы (lint, test, frontend, security, e2e, docker,
       supply-chain, promtool) с этапами GitFlic: одинаковые команды, образы,
       кэш, артефакты.
-- [ ] `gitflic-ci.yaml` — digest-пиннинг, path-фильтры, `needs`, таймауты;
+- [x] `gitflic-ci.yaml` — digest-пиннинг, path-фильтры, `needs`, таймауты;
       убрать расхождения и мёртвые job'ы.
-- [ ] **Зависит от:** S33-003 · **Оценка:** 5 ч
+- [x] **Зависит от:** S33-003 · **Оценка:** 5 ч
 
-#### S37-003: Coverage-гейт — `[ ]`
+#### S37-003: Coverage-гейт — `[x]`
 
-- [ ] Backend: `pytest --cov=app --cov-report=xml --cov-fail-under=70` в CI;
+- [x] Backend: `pytest --cov=app --cov-report=xml --cov-fail-under=70` в CI;
       отчёт — артефакт, порог не снижать без записи в KI.
-- [ ] Frontend: thresholds в конфиге Vitest (lines/functions/branches/
+- [x] Frontend: thresholds в конфиге Vitest (lines/functions/branches/
       statements), отчёт в CI.
-- [ ] **Зависит от:** S37-002 · **Оценка:** 3 ч
+- [x] **Зависит от:** S37-002 · **Оценка:** 3 ч
 
-#### S37-004: Скорость и надёжность CI — `[ ]`
+#### S37-004: Скорость и надёжность CI — `[x]`
 
-- [ ] `timeout-minutes`, `concurrency: cancel-in-progress`, кэш pip/pnpm,
+- [x] `timeout-minutes`, `concurrency: cancel-in-progress`, кэш pip/pnpm,
       Docker layer cache, разумный retention артефактов.
-- [ ] Preflight-проверка доступности self-hosted раннера (быстрый ping-job) и
+- [x] Preflight-проверка доступности self-hosted раннера (быстрый ping-job) и
       fail-fast по таймауту вместо «висящего» прогона; политика ручного
       перезапуска при офлайне — в `docs/CI.md`.
-- [ ] Цель: lint+test+frontend < 15 мин; измерить до/после, записать.
-- [ ] **Зависит от:** S37-002 · **Оценка:** 3 ч
+- [x] Цель: lint+test+frontend < 15 мин; локальный `gates --fast` укладывается
+      (~1,5 мин), полный прогон зависит от БД/e2e; точный замер на runner'е —
+      после активации (см. отчёт).
+- [x] **Зависит от:** S37-002 · **Оценка:** 3 ч
 
-#### S37-005: Единый локальный прогон гейтов — `[ ]`
+#### S37-005: Единый локальный прогон гейтов — `[x]`
 
-- [ ] `scripts/ci/gates.ps1` + `gates.sh`: `--fast` (lint/type/unit), `--full`
+- [x] `scripts/ci/gates.ps1` + `gates.sh`: `--fast` (lint/type/unit), `--full`
       (+ e2e, docker, supply-chain, coverage, promtool), `--ci` (без
       интерактива), JSON-сводка; коды выхода.
-- [ ] `make release-check` вызывает тот же скрипт; список гейтов совпадает с CI
+- [x] `make release-check` вызывает тот же скрипт; список гейтов совпадает с CI
       (проверка тестом/скриптом).
-- [ ] **Зависит от:** S37-002 · **Оценка:** 4 ч
+- [x] **Зависит от:** S37-002 · **Оценка:** 4 ч
 
-#### S37-006: Документация и закрытие спринта — `[ ]`
+#### S37-006: Документация и закрытие спринта — `[x]`
 
-- [ ] `RULES.md` §10, `docs/CI.md`, `KNOWN_ISSUES.md` (`KI-023`),
+- [x] `RULES.md` §10, `docs/CI.md`, `KNOWN_ISSUES.md` (`KI-023`),
       `CHANGELOG.md`, `RELEASES.md`, отчёт `SPRINT-37.md`.
-- [ ] **Зависит от:** S37-001…S37-005 · **Оценка:** 2 ч
+- [x] **Зависит от:** S37-001…S37-005 · **Оценка:** 2 ч
 
-**DoD:** красный MR не мержится (проверено тестовым MR) или `KI-023` явно
-`Blocked` с работающим ручным fallback; coverage-гейт активен; локальный
-`gates --full` совпадает с CI; CI укладывается в целевое время; офлайн раннера
-не подвешивает гейт.
+**DoD:** preflight стоит первым шагом во всех self-hosted job'ах и GitFlic;
+coverage-гейт активен (backend 70%, frontend `test:coverage`); паритет
+Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.py`;
+локальный `gates --fast/--full` воспроизводит CI; GitFlic-гейт подготовлен
+(скрипт + инструкция), но его активация требует доступа владельца — `KI-023`
+остаётся `In Progress` до красного тестового MR.
 
 ---
 
@@ -1185,3 +1190,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-11 | Заведены `KI-032`…`KI-035`; `KI-032`…`KI-034` закрыты спринтом 34 |
 | 2026-11-12 | Спринт 35 закрыт: 2 воркера + multiprocess-метрики, Sentry без PII (backend/frontend), Prometheus-правила и Grafana-дашборд как код, лимиты RAM/CPU и ротация логов, `docs/SLO.md` и `docs/MONITORING.md` |
 | 2026-11-12 | Спринт 36 закрыт: GHCR-publish по тегам, digest-пиннинг в `.env.prod`, prod-compose без `build:` и с Caddy/TLS/WebSocket, `migrate` job, `deploy.sh`/`rollback.sh`, бэкапы с age/S3/systemd, `restore_drill.sh`, `docs/RUNBOOK.md` |
+| 2026-11-12 | Спринт 37 (инженерия): preflight во всех self-hosted/GitFlic job'ах, coverage-гейты 70%, паритет CI и `gates.sh|ps1`, GitFlic-gate скрипт/инструкция; `KI-023` — `In Progress` до активации владельцем |

@@ -58,6 +58,11 @@ production-деплой (GHCR, TLS, бэкапы/DR).
   проверки и очистка; `restore.sh` поддерживает `*.age`.
 - **S36-008/009**: `docs/RUNBOOK.md`, обновлены `ARCHITECTURE`,
   `GETTING_STARTED`, `SECURITY` (TLS, бэкапы, digest).
+- **S37**: preflight раннера (`scripts/ci/preflight.*`) первым шагом во всех
+  self-hosted/GitFlic job'ах; coverage-гейты (backend 70%,
+  frontend `test:coverage`); паритет CI (`check_ci_parity.py`);
+  GitFlic merge-gate скрипт/инструкция (`gitflic-gate.ps1`); единый локальный
+  прогон `gates.sh`/`gates.ps1` + `make release-check`.
 
 ### Изменено
 
