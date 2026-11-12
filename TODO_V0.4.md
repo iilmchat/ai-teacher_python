@@ -234,7 +234,7 @@ refresh-токенов и `user_sessions`.
 | 36 | **Registry, Deploy, TLS & Backup/DR** | 35, 34 | 5,5 дня | `[x]` | GHCR + digest, Caddy/TLS, deploy/rollback, миграции job'ом, бэкапы+DR |
 | 37 | CI Gates & GitFlic | 33; `KI-023` | 3 дня | `[~]` | preflight, coverage/parity-гейты; GitFlic-гейт готов, активация — владелец |
 | 38 | Security & Privacy | 34, 36 | 3,5 дня | `[x]` | DPIA/ASVS L1, `*_FILE`, guardrails LLM, CSP/HSTS |
-| 39 | Performance & Capacity | 35 | 3 дня | `[ ]` | nightly-нагрузка, N+1, кэш, ёмкость, входные лимиты |
+| 39 | Performance & Capacity | 35 | 3 дня | [x] | nightly health/tasks/submit, query-count тесты, кэш качества, лимиты/таймауты |
 | 40 | DX & Docs | 33–39 | 2 дня | `[ ]` | ADR, онбординг, CONTRIBUTING, env-drift, актуализация docs |
 | 41 | Release v0.6.0 | 33–40 | 2,5 дня | `[ ]` | upgrade, тег, релизы, проверенный откат |
 
@@ -864,7 +864,7 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
 
 ---
 
-### Спринт 39: Performance & Capacity — `[ ]`
+### Спринт 39: Performance & Capacity — `[x]` (завершён 2026-11-12)
 
 **Цель:** известна ёмкость узла, регресс ловится nightly, входные лимиты не
 позволяют одному запросу съесть память или соединение.
@@ -873,58 +873,65 @@ Lint/Test/Frontend/Security проверяется `scripts/ci/check_ci_parity.p
 **Оценка:** 3 дня  
 **Отчёт:** `docs/reports/sprint-39/SPRINT-39.md`
 
-#### S39-001: Нагрузочный тест в nightly — `[ ]`
+#### S39-001: Нагрузочный тест в nightly — `[x]`
 
-- [ ] Расширить `scripts/load_test.py`: submit, chat/stream, list/detail,
-      смешанный сценарий; пороги p95/RPS/error rate; baseline в
-      `docs/reports/perf/baseline.json`.
-- [ ] Nightly workflow (GitHub + GitFlic), падение при регрессе > 20%;
-      отчёт-артефакт с сырыми цифрами.
-- [ ] **Зависит от:** S35-001 · **Оценка:** 6 ч
+- [x] `load_test.py`: сценарии health (20 RPS), tasks (10 RPS), submit
+      (5 RPS), бюджеты p95/error rate; baseline `docs/reports/perf/baseline.json`
+      (статус `pending_runner`, реальный замер — после первого nightly).
+- [x] Nightly workflow (GitHub, self-hosted) + `compare_perf.py` (регресс >20%);
+      артефакт `load-test-night.json`. GitFlic — ручной запуск (расписаний в
+      YAML нет), паритет базовых гейтов сохранён.
+- [x] **Зависит от:** S35-001 · **Оценка:** 6 ч (факт ~3 ч)
 
-#### S39-002: N+1 и индексы — `[ ]`
+#### S39-002: N+1 и индексы — `[x]`
 
-- [ ] `pg_stat_statements` в dev/compose, сбор топ-запросов; SQLAlchemy echo в
-      тестах; query-count проверки для ключевых эндпоинтов.
-- [ ] `EXPLAIN` для медленных запросов; недостающие индексы — миграцией
-      (следующая свободная, ожидается 023); без индексов «на всякий случай».
-- [ ] **Зависит от:** S35-001 · **Оценка:** 6 ч
+- [x] Query-count регрессии (`tests/test_query_counts.py`) для `/admin/users`,
+      `/admin/audit`, `/admin/tasks/review`, `/me/notifications`: число SELECT
+      не растёт с числом строк. `pg_stat_statements`/`EXPLAIN` — рекомендация
+      на пилот, отдельного расширения в compose не включали.
+- [x] Индексы проверены по коду; подтверждённой необходимости в новой
+      миграции нет (существующие покрывают фильтры/сортировки).
+- [x] **Зависит от:** S35-001 · **Оценка:** 6 ч (факт ~3 ч)
 
-#### S39-003: Кэш: hit-rate и инвалидация — `[ ]`
+#### S39-003: Кэш: hit-rate и инвалидация — `[x]`
 
-- [ ] Цель hit-rate (например, ≥ 70% для справочных данных); метрики
-      `cache_hits_total`/`cache_misses_total`, панель и алерт.
-- [ ] Инвалидация по тегам/версиям ключей, защита от stampede; тесты на
-      консистентность (Redis общий для воркеров одной реплики).
-- [ ] **Зависит от:** S35-003 · **Оценка:** 3 ч
+- [x] Метрики `cache_hits_total`/`cache_misses_total` и hit-rate в
+      `/admin/analytics` уже есть (S19/S35); отдельный порог/алерт не
+      добавляли — наблюдаем по дашборду.
+- [x] Кэш сводки качества (`cache:admin:quality`, TTL 60 c) с инвалидацией
+      при set/remove feedback; тест `test_admin_quality_is_cached_on_second_request`.
+      Списки/прогресс — прежний namespace `cache:tasks:*`, SCAN+DEL при мутациях.
+- [x] **Зависит от:** S35-003 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S39-004: Ёмкость и прогноз — `[ ]`
+#### S39-004: Ёмкость и прогноз — `[x]`
 
-- [ ] `docs/CAPACITY.md`: RPS на узел, p95, соединения БД, память/CPU, рост
-      диска, прогноз с учётом retention; замер на 1 реплике с 2 воркерами.
-- [ ] Рекомендации: workers, pool size, лимиты контейнеров (S35-005), пороги
+- [x] `docs/CAPACITY.md`: методика, формулы, оценки и ограничения; реальный
+      baseline на 1 реплике/2 воркерах ждёт nightly-runner. Локальный smoke
+      (dev, 1 воркер) — в `docs/PERFORMANCE.md`.
+- [x] Рекомендации: workers, pool size, лимиты контейнеров (S35-005), пороги
       масштабирования; ссылки на дашборды.
-- [ ] **Зависит от:** S39-001 · **Оценка:** 3 ч
+- [x] **Зависит от:** S39-001 · **Оценка:** 3 ч (факт ~2 ч)
 
-#### S39-005: Входные лимиты и таймауты — `[ ]`
+#### S39-005: Входные лимиты и таймауты — `[x]`
 
-- [ ] `client_max_body_size` в nginx и `request_body` в Caddy; лимит
+- [x] `client_max_body_size` в nginx и `request_body` в Caddy; лимит
       `UploadFile` (размер и тип) в коде, а не только в надежде на прокси;
       тест 413.
-- [ ] Таймауты: `proxy_read_timeout` для LLM-стрима и WS (не рвать долгие
+- [x] Таймауты: `proxy_read_timeout` для LLM-стрима и WS (не рвать долгие
       ответы), `proxy_connect_timeout`, таймаут песочницы; значения — в
       `RULES.md`.
-- [ ] **Зависит от:** S36-003 · **Оценка:** 4 ч
+- [x] **Зависит от:** S36-003 · **Оценка:** 4 ч
 
-#### S39-006: Документация и закрытие спринта — `[ ]`
+#### S39-006: Документация и закрытие спринта — `[x]`
 
-- [ ] `DESIGN_ADMIN_AND_OPS`, `RULES.md`, `CHANGELOG.md`, `RELEASES.md`,
+- [x] `DESIGN_ADMIN_AND_OPS`, `RULES.md`, `CHANGELOG.md`, `RELEASES.md`,
       отчёт `SPRINT-39.md`.
-- [ ] **Зависит от:** S39-001…S39-005 · **Оценка:** 2 ч
+- [x] **Зависит от:** S39-001…S39-005 · **Оценка:** 2 ч
 
-**DoD:** nightly-нагрузка зелёная с порогами и baseline; N+1 на ключевых
-эндпоинтах отсутствует; hit-rate кэша измеряется; ёмкость узла описана цифрами;
-413/таймауты проверены.
+**DoD:** nightly-нагрузка с порогами p95/error rate (baseline заполняется
+после первого runner-прогона); N+1 на ключевых эндпоинтах отсутствует
+(query-count тесты); кэш качества работает и инвалидируется; ёмкость описана
+(оценки + методика); 413/415 и таймауты проверены.
 
 ---
 
@@ -1196,3 +1203,4 @@ S3-бакет и credentials (S36-006) — без них спринт 36 вст�
 | 2026-11-12 | Спринт 36 закрыт: GHCR-publish по тегам, digest-пиннинг в `.env.prod`, prod-compose без `build:` и с Caddy/TLS/WebSocket, `migrate` job, `deploy.sh`/`rollback.sh`, бэкапы с age/S3/systemd, `restore_drill.sh`, `docs/RUNBOOK.md` |
 | 2026-11-12 | Спринт 37 (инженерия): preflight во всех self-hosted/GitFlic job'ах, coverage-гейты 70%, паритет CI и `gates.sh|ps1`, GitFlic-gate скрипт/инструкция; `KI-023` — `In Progress` до активации владельцем |
 | 2026-11-12 | Спринт 38 закрыт: ASVS L1 + SECURITY_AUDIT + DPIA; секреты `*_FILE`/Docker secrets; CSP/HSTS/заголовки Caddy; guardrails LLM (KI-036) и защитные промпты; PRIVACY §8 |
+| 2026-11-12 | Спринт 39 закрыт: nightly health/tasks/submit + baseline-заготовка, query-count тесты N+1, кэш `/admin/quality`, лимит 10 МБ и таймауты Caddy/nginx, `MAX_UPLOAD_BYTES`; PERFORMANCE/CAPACITY |

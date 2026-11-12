@@ -19,6 +19,8 @@ param(
     [double]$Rps = 0.5,
     [int]$Duration = 20,
     [int]$Port = 8002,
+    [string]$Scenario = 'submit',
+    [string]$JsonOut = '',
     [string]$RepoRoot = $env:GITHUB_WORKSPACE
 )
 
@@ -86,13 +88,27 @@ try {
     }
     if (-not $ready) { throw "backend не поднялся на $baseUrl за 30 с" }
 
-    Write-Host "==> perf-smoke: submit $Rps RPS, $Duration с, p95 ≤ 2000 мс"
-    & $Python (Join-Path $backend 'scripts\load_test.py') `
-        --scenario submit --rps $Rps --duration $Duration --base-url $baseUrl
-    if ($LASTEXITCODE -ne 0) {
-        throw "perf-smoke FAIL: submit $Rps RPS не уложился в бюджет p95"
+    Write-Host "==> perf: scenario=$Scenario, duration=$Duration с, budgets из load_test.py"
+    $loadArgs = @(
+        (Join-Path $backend 'scripts\load_test.py'),
+        '--scenario', $Scenario,
+        '--duration', "$Duration",
+        '--base-url', $baseUrl
+    )
+    if ($Scenario -eq 'submit' -and $Rps -gt 0) {
+        $loadArgs += @('--rps', "$Rps")
     }
-    Write-Host '==> PERF SMOKE OK'
+    if ($JsonOut) {
+        $jsonPath = if ([System.IO.Path]::IsPathRooted($JsonOut)) { $JsonOut } else { Join-Path $RepoRoot $JsonOut }
+        $jsonDir = Split-Path $jsonPath -Parent
+        if ($jsonDir) { New-Item -ItemType Directory -Force $jsonDir | Out-Null }
+        $loadArgs += @('--json-out', $jsonPath)
+    }
+    & $Python @loadArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "perf FAIL: scenario=$Scenario не уложился в бюджет p95/error rate"
+    }
+    Write-Host '==> PERF OK'
 }
 finally {
     if ($backendProcess -and -not $backendProcess.HasExited) {

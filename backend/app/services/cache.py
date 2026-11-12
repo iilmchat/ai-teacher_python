@@ -41,6 +41,8 @@ TASKS_NAMESPACE = f"{PREFIX}:tasks:"
 LEVELS_KEY = f"{PREFIX}:chat:levels"
 CATEGORIES_KEY = f"{PREFIX}:tasks:categories"
 TASKS_LIST_PREFIX = f"{PREFIX}:tasks:list:"
+#: Тяжёлая сводка качества ответов (S39-003): агрегаты по feedback/чатам.
+QUALITY_KEY = f"{PREFIX}:admin:quality"
 
 #: Сколько секунд не трогать Redis после сбоя (fail-open без ожидания таймаута)
 CACHE_COOLDOWN_SECONDS = 10.0
@@ -226,6 +228,16 @@ def levels_cache_key() -> str:
 def categories_cache_key() -> str:
     """Ключ категорий задач"""
     return CATEGORIES_KEY
+
+
+def quality_cache_key() -> str:
+    """Ключ сводки качества ответов (S39-003)"""
+    return QUALITY_KEY
+
+
+async def invalidate_quality_cache() -> int:
+    """Сбросить кэш сводки качества (после изменения оценок)."""
+    return await cache_invalidate_prefix(QUALITY_KEY)
 
 
 def tasks_list_cache_key(

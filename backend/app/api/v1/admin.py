@@ -43,7 +43,12 @@ from app.schemas.admin import (
 from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.audit_service import list_audit, record_audit
-from app.services.cache import cache_metrics
+from app.services.cache import (
+    cache_get_json,
+    cache_metrics,
+    cache_set_json,
+    quality_cache_key,
+)
 from app.services.export_service import stream_csv, stream_json
 from app.services.feedback_service import FeedbackService
 from app.services.llm.metrics import llm_metrics
@@ -276,11 +281,19 @@ async def moderate_task(
 async def get_quality(_: AdminUser, db: DbSession) -> AdminQualityResponse:
     """Сводка качества ответов ассистента по оценкам учеников (S43-003).
 
-    Негативные оценки с текстом ответа — вход для LLM-as-judge
-    (см. `docs/LLM_EVAL.md`).
+    Тяжёлые агрегаты кэшируются на 60 с (S39-003); инвалидация — при
+    изменении/удалении оценки (`FeedbackService`). Для админского экрана
+    задержка в минуту допустима; свежесть гарантируется инвалидацией.
     """
+    key = quality_cache_key()
+    cached = await cache_get_json(key)
+    if isinstance(cached, dict):
+        return AdminQualityResponse.model_validate(cached)
+
     summary = await FeedbackService(db).quality_summary()
-    return AdminQualityResponse.model_validate(summary)
+    response = AdminQualityResponse.model_validate(summary)
+    await cache_set_json(key, response.model_dump(mode="json"), ttl=60)
+    return response
 
 
 @router.get("/quality/export")

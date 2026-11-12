@@ -20,25 +20,42 @@ permissions:
   contents: read
 
 jobs:
-  submit:
-    name: submit 2 RPS
+  perf:
+    name: health/tasks/submit
     runs-on: [self-hosted, windows, ai-teacher]
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
-      - name: submit 2 RPS, p95 ≤ 2000 мс
+      - name: Preflight (runner health)
+        run: pwsh -NoProfile -File ./scripts/ci/preflight.ps1
+      - name: Портфель сценариев (health 20, tasks 10, submit 5 RPS)
         env:
           E2E_PYTHON: ${{ vars.E2E_PYTHON }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           E2E_POSTGRES_PORT: ${{ vars.E2E_POSTGRES_PORT }}
           E2E_REDIS_PORT: ${{ vars.E2E_REDIS_PORT }}
         run: |
-          pwsh -NoProfile -File ./scripts/ci/perf.ps1 -Rps 2 -Duration 60
+          pwsh -NoProfile -File ./scripts/ci/perf.ps1 `
+            -Scenario all -Duration 30 `
+            -JsonOut docs/reports/perf/load-test-night.json
+      - name: Сравнить с baseline (регресс > 20%)
+        if: always()
+        env:
+          E2E_PYTHON: ${{ vars.E2E_PYTHON }}
+        run: |
+          if (Test-Path docs/reports/perf/load-test-night.json) {
+            & $env:E2E_PYTHON scripts/ci/compare_perf.py `
+              --baseline docs/reports/perf/baseline.json `
+              --current docs/reports/perf/load-test-night.json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+            Write-Warning 'нет load-test-night.json — сравнение пропущено'
+          }
       - name: Загрузить артефакт perf
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: perf-night
-          path: docs/reports/sprint-23/load-test.json
+          path: docs/reports/perf/load-test-night.json
           if-no-files-found: ignore
           retention-days: 14

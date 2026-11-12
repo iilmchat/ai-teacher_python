@@ -1,0 +1,35 @@
+{
+  "generated_at": "2026-11-12T00:00:00Z",
+  "status": "pending_runner",
+  "note": "Базовый прогон на self-hosted runner будет добавлен nightly-пайплайном. Пока зафиксированы только бюджеты и методика; цифры не выдумываем.",
+  "environment": {
+    "runner": "self-hosted, windows, ai-teacher",
+    "expected_cpu": "4 vCPU",
+    "expected_ram_gb": 8,
+    "uvicorn_workers": 2
+  },
+  "scenarios": {
+    "health": {
+      "rps": 20,
+      "budget_p95_ms": 300,
+      "budget_error_rate": 0.01,
+      "measured": null
+    },
+    "tasks": {
+      "rps": 10,
+      "budget_p95_ms": 300,
+      "budget_error_rate": 0.01,
+      "measured": null
+    },
+    "submit": {
+      "rps": 5,
+      "budget_p95_ms": 2000,
+      "budget_error_rate": 0.01,
+      "measured": null
+    }
+  },
+  "regression_rule": {
+    "p95_threshold_percent": 20,
+    "description": "Ночной прогон сравнивается с заполненным baseline: рост p95 > 20% — регресс; отчёт — docs/reports/perf/."
+  }
+}

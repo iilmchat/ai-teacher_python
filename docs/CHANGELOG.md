@@ -68,6 +68,10 @@ production-деплой (GHCR, TLS, бэкапы/DR), CI-гейты и ASVS L1/g
   и Docker secrets; CSP/HSTS/security-headers Caddy; guardrails LLM
   (prompt injection/токсичность) и защитные инструкции в промптах
   (basic v2, intermediate v3, advanced v2); `KI-036` (полная модерация — v0.7.0).
+- **S39**: нагрузочные сценарии health 20 / tasks 10 / submit 5 RPS и nightly
+  с artifact/baseline; query-count тесты против N+1; кэш `/admin/quality`
+  (TTL 60 c + инвалидация); Caddy `request_body 10MB`, таймауты upstream и
+  `MAX_UPLOAD_BYTES` (413/415); `docs/PERFORMANCE.md`, `docs/CAPACITY.md`.
 
 ### Изменено
 

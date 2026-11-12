@@ -87,6 +87,11 @@ def test_caddy_security_headers_and_docs_off() -> None:
     ):
         assert header in caddyfile, header
 
+    # S39-004: лимит тела и таймауты upstream.
+    assert "max_size 10MB" in caddyfile
+    assert "read_timeout 600s" in caddyfile
+    assert "flush_interval -1" in caddyfile
+
     compose = _yaml("docker-compose.prod.yml")
     assert compose["services"]["backend"]["environment"]["DOCS_ENABLED"] == "false"
 

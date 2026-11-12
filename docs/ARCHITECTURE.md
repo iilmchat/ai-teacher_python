@@ -191,9 +191,10 @@ GET  /code/limits                 → {timeout_seconds, memory_limit_mb,
 ## 6.2 Кэш справочников (S19-003)
 
 ```
-GET /chat/levels      → cache:chat:levels        (TTL 60 c)
-GET /tasks/categories → cache:tasks:categories   (TTL 60 c)
-GET /tasks            → cache:tasks:list:<user>:<filters> (TTL 60 c)
+GET /chat/levels       → cache:chat:levels        (TTL 60 c)
+GET /tasks/categories  → cache:tasks:categories   (TTL 60 c)
+GET /tasks             → cache:tasks:list:<user>:<filters> (TTL 60 c)
+GET /admin/quality     → cache:admin:quality      (TTL 60 c, S39-003)
 ```
 
 - Слой — `app/services/cache.py`; Redis-клиент берётся лениво из
@@ -211,6 +212,22 @@ GET /tasks            → cache:tasks:list:<user>:<filters> (TTL 60 c)
   `cache_invalidated` в structlog.
 - Флаг `CACHE_ENABLED` (по умолчанию `true`); в тестах выключен autouse-
   фикстурой, тесты кэша подставляют in-memory FakeRedis.
+- **Сводка качества (S39-003):** `GET /admin/quality` — тяжёлые агрегаты;
+  кэш 60 c, инвалидация при `set_feedback`/`remove_feedback`. Для админского
+  экрана задержка в минуту допустима; списки задач/прогресс не кэшируются
+  дольше TTL из-за зависимости от действий ученика.
+
+## 6.2.1 Производительность и входные лимиты (S39)
+
+- Нагрузка: `backend/scripts/load_test.py`, nightly
+  `.github/workflows/perf-nightly.yml` (health 20, tasks 10, submit 5 RPS).
+  Бюджеты и baseline — `docs/PERFORMANCE.md`.
+- N+1: `tests/test_query_counts.py` проверяет, что число SELECT не растёт с
+  числом строк для `/admin/users`, `/admin/audit`, `/admin/tasks/review`,
+  `/me/notifications`.
+- Лимиты: Caddy `request_body max_size 10MB`, `client_max_body_size 10m` в
+  nginx, `MAX_UPLOAD_BYTES` (10 МБ) + чтение `limit+1`; таймауты upstream —
+  `docs/PERFORMANCE.md` §4.
 
 ## 6.3 Поиск по истории чата (RAG-lite, S19-005)
 

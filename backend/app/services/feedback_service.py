@@ -27,6 +27,7 @@ from app.models.chat import (
 )
 from app.models.task import Task
 from app.models.user import User
+from app.services.cache import invalidate_quality_cache
 from app.services.quality_queries import level_column, negative_contexts_cte
 
 #: Сколько негативных оценок показывать в сводке
@@ -84,12 +85,15 @@ class FeedbackService:
         if value not in (1, -1):
             raise ValidationError("Оценка может быть только 1 или -1")
         await self._own_message(message_id, user)
-        return await self.feedback.upsert(message_id, user.id, value, comment)
+        feedback = await self.feedback.upsert(message_id, user.id, value, comment)
+        await invalidate_quality_cache()
+        return feedback
 
     async def remove_feedback(self, message_id: UUID, user: User) -> None:
         """Снять свою оценку ответа"""
         await self._own_message(message_id, user)
         await self.feedback.delete_for_user(message_id, user.id)
+        await invalidate_quality_cache()
 
     async def list_for_session(
         self, session_id: UUID, user: User

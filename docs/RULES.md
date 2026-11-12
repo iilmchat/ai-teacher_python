@@ -1496,6 +1496,21 @@ Deep-link `/chat?task=<task_id>` и кнопка «Спросить ассист
 - Полная модерация ответов для детей — `KI-036`; новые правила контента
   фиксировать в `PRIVACY.md`/`ASVS_L1.md`.
 
+### 11.52. Лимиты тела, загрузок и таймауты (S39)
+
+- **Тело запроса:** Caddy `request_body { max_size 10MB }`, nginx
+  `client_max_body_size 10m`. Не увеличивать без пересмотра памяти/диска.
+- **Импорт задач:** `MAX_UPLOAD_BYTES` (10 МБ) проверяется в приложении
+  (`UploadFile.size` и чтение `limit+1`); JSON/YAML/UTF-8, иначе 413/415.
+  Полагаться только на прокси нельзя — приложение должно отказывать само.
+- **Таймауты upstream:** Caddy `dial 5s`, `response_header 60s`, `read 600s`,
+  `flush_interval -1` (LLM-стрим); nginx `proxy_connect_timeout 5s`,
+  `proxy_send_timeout 60s`, `proxy_read_timeout 3600s` (WS). Песочница —
+  `EXECUTOR_TIMEOUT`. Значения синхронизировать с `docs/PERFORMANCE.md`.
+- **Perf-регресс:** nightly запускает health/tasks/submit; p95 > бюджета или
+  +20% к измеренному baseline — красный job. Обновлять baseline только после
+  осознанного изменения производительности.
+
 ---
 
 ## 12. Отчёты по шагам спринта

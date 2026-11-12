@@ -205,8 +205,41 @@ async def import_tasks_file(
     author: TeacherUser,
     db: DbSession,
 ) -> TaskImportResponse:
-    """Импорт задач из загруженного JSON/YAML-файла (S15-003)"""
-    raw = await file.read()
+    """Импорт задач из загруженного JSON/YAML-файла (S15-003).
+
+    S39-004: размер ограничен `MAX_UPLOAD_BYTES` в приложении (не только в
+    Caddy/nginx), тип — JSON/YAML/plain. Файл читается не больше лимита + 1
+    байт, поэтому память не растёт безгранично.
+    """
+    allowed_types = {
+        "application/json",
+        "application/x-yaml",
+        "application/yaml",
+        "text/yaml",
+        "text/x-yaml",
+        "text/plain",
+        "",
+    }
+    content_type = (file.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Поддерживаются только JSON/YAML-файлы",
+        )
+
+    limit = max(1, settings.max_upload_bytes)
+    if file.size is not None and file.size > limit:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Файл больше {limit} байт",
+        )
+
+    raw = await file.read(limit + 1)
+    if len(raw) > limit:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=f"Файл больше {limit} байт",
+        )
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:

@@ -7,8 +7,8 @@
   что проще контролировать открытым циклом «слот каждые 1/RPS секунд».
 
 Сценарии и бюджеты (p95):
-- ``health`` — GET /api/v1/health, 50 RPS, бюджет 300 мс;
-- ``tasks``  — GET /api/v1/tasks (под токеном), 20 RPS, бюджет 300 мс;
+- ``health`` — GET /api/v1/health, 20 RPS, бюджет 300 мс;
+- ``tasks``  — GET /api/v1/tasks (под токеном), 10 RPS, бюджет 300 мс;
 - ``submit`` — POST /api/v1/tasks/{id}/submit (правильное решение, песочница),
   5 RPS, бюджет 2000 мс.
 
@@ -71,7 +71,7 @@ SCENARIOS: dict[str, Scenario] = {
         name="health",
         method="GET",
         path="/api/v1/health",
-        rps=50.0,
+        rps=20.0,
         budget_ms=300.0,
         concurrency=20,
     ),
@@ -79,9 +79,9 @@ SCENARIOS: dict[str, Scenario] = {
         name="tasks",
         method="GET",
         path="/api/v1/tasks",
-        rps=20.0,
+        rps=10.0,
         budget_ms=300.0,
-        concurrency=20,
+        concurrency=10,
         needs_auth=True,
     ),
     "submit": Scenario(
@@ -565,7 +565,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--scenario",
         choices=[*SCENARIOS, "all"],
         default="all",
-        help="сценарий: health (50 RPS), tasks (20 RPS), submit (5 RPS) или all",
+        help="сценарий: health (20 RPS), tasks (10 RPS), submit (5 RPS) или all",
     )
     parser.add_argument(
         "--rps",

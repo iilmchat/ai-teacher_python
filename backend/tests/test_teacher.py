@@ -172,3 +172,34 @@ async def test_import_preview_and_file(
     assert len(preview.json()["errors"]) == 1
     assert upload.status_code == 200
     assert upload.json()["created"] == 1
+
+
+async def test_import_file_returns_413_when_too_large(
+    client: AsyncClient, db_session: AsyncSession, monkeypatch: Any
+) -> None:
+    """S39-004: приложение само ограничивает размер UploadFile."""
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "max_upload_bytes", 100)
+    teacher = await teacher_token(client, db_session, "bigfileteacher")
+    response = await client.post(
+        f"{TASKS_URL}/import/file",
+        files={"file": ("tasks.json", b"[" + b" " * 200 + b"]", "application/json")},
+        headers=auth(teacher),
+    )
+
+    assert response.status_code == 413, response.text
+
+
+async def test_import_file_rejects_unsupported_type(
+    client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """S39-004: загружать можно только JSON/YAML."""
+    teacher = await teacher_token(client, db_session, "badtype")
+    response = await client.post(
+        f"{TASKS_URL}/import/file",
+        files={"file": ("tasks.csv", b"a,b", "text/csv")},
+        headers=auth(teacher),
+    )
+
+    assert response.status_code == 415, response.text

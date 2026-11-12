@@ -21,7 +21,9 @@ from app.services.cache import (
     cache_get_json,
     cache_metrics,
     cache_set_json,
+    invalidate_quality_cache,
     invalidate_tasks_cache,
+    quality_cache_key,
     reset_cache_state,
     tasks_list_cache_key,
 )
@@ -281,3 +283,33 @@ async def test_admin_analytics_exposes_cache_metrics(
     assert cache["hits"] >= 1
     assert cache["misses"] >= 1
     assert 0.0 < cache["hit_rate"] <= 1.0
+
+
+async def test_quality_cache_is_invalidated(fake_redis: FakeRedis) -> None:
+    """Сводка качества кэшируется и сбрасывается по ключу (S39-003)."""
+    key = quality_cache_key()
+    await cache_set_json(key, {"total": 1}, ttl=60)
+    assert key in fake_redis.data
+
+    removed = await invalidate_quality_cache()
+
+    assert removed == 1
+    assert key not in fake_redis.data
+
+
+async def test_admin_quality_is_cached_on_second_request(
+    client: AsyncClient, db_session: Any, fake_redis: FakeRedis
+) -> None:
+    """GET /admin/quality: первый запрос — set, второй — hit (S39-003)."""
+    admin = await _admin_token(client, db_session, "qualityadmin")
+    key = quality_cache_key()
+
+    first = await client.get("/api/v1/admin/quality", headers=auth(admin))
+    assert first.status_code == 200, first.text
+    assert key in fake_redis.data
+    assert fake_redis.ttls[key] == 60
+
+    second = await client.get("/api/v1/admin/quality", headers=auth(admin))
+    assert second.status_code == 200, second.text
+    assert second.json() == first.json()
+    assert cache_metrics.snapshot()["hits"] >= 1
