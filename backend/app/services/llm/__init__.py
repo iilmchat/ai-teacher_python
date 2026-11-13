@@ -34,7 +34,7 @@ __all__ = [
 def _create_single(provider_name: str) -> LLMProvider:
     """Создать один провайдер по имени без fallback-обёртки"""
     if provider_name in {"deepseek", "openai"}:
-        return DeepSeekProvider()
+        return DeepSeekProvider(model=settings.deepseek_model)
     if provider_name in {"lm_studio", "lmstudio", "local"}:
         return LMStudioProvider()
     if provider_name == "echo":
