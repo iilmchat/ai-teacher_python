@@ -1,0 +1,28 @@
+# v0.6.1 — GHCR image digests
+
+**Дата:** 2026-11-13
+**Тег:** `v0.6.1`
+**Commit:** `bedccf3bc52c8c44ad7e63304f4e5e58a0bf8e96`
+**Registry:** GHCR, multi-arch index (linux/amd64)
+
+| Image | Tag | Digest |
+|-------|-----|--------|
+| backend | `ghcr.io/iilmchat/ai-teacher-backend:v0.6.1` | `sha256:3df6a0e368b60bea5552442fd7984a3b6224f481b3515145b4812edb37321e1a` |
+| frontend | `ghcr.io/iilmchat/ai-teacher-frontend:v0.6.1` | `sha256:1bbb21432305bd6599f95a76cdcf3f6baacd061e686d936465b20a6b7f9436f4` |
+| sandbox-runner | `ghcr.io/iilmchat/ai-teacher-sandbox-runner:v0.6.1` | `sha256:81786eeb6f0e69d1873b40a08dbcfd1d39d1f4ff632027aa4d42608d2730f5ad` |
+
+Проверено локально:
+
+```bash
+docker buildx imagetools inspect ghcr.io/iilmchat/ai-teacher-backend:v0.6.1
+docker buildx imagetools inspect ghcr.io/iilmchat/ai-teacher-frontend:v0.6.1
+docker buildx imagetools inspect ghcr.io/iilmchat/ai-teacher-sandbox-runner:v0.6.1
+```
+
+Для деплоя использовать полные ссылки с digest:
+
+```
+BACKEND_IMAGE=ghcr.io/iilmchat/ai-teacher-backend@sha256:3df6a0e368b60bea5552442fd7984a3b6224f481b3515145b4812edb37321e1a
+FRONTEND_IMAGE=ghcr.io/iilmchat/ai-teacher-frontend@sha256:1bbb21432305bd6599f95a76cdcf3f6baacd061e686d936465b20a6b7f9436f4
+SANDBOX_IMAGE=ghcr.io/iilmchat/ai-teacher-sandbox-runner@sha256:81786eeb6f0e69d1873b40a08dbcfd1d39d1f4ff632027aa4d42608d2730f5ad
+```
