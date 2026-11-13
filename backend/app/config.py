@@ -142,6 +142,21 @@ class Settings(BaseSettings):
     #: только если они в этом списке. Пусто — X-Forwarded-For игнорируется
     #: (только request.client.host). Пример: ["10.0.0.1", "192.168.1.0/24"]
     trusted_proxies: Annotated[list[str], NoDecode] = []
+
+    @field_validator("trusted_proxies", mode="before")
+    @classmethod
+    def parse_trusted_proxies(cls, value: Any) -> Any:
+        """Поддержка CSV (a,b) и JSON-массива из ENV, как allowed_origins."""
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                import json
+
+                return json.loads(raw)
+            if not raw:
+                return []
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
     #: Включить Swagger/OpenAPI (S34-006). В production — false
     docs_enabled: bool = True
 
@@ -164,6 +179,9 @@ class Settings(BaseSettings):
     #: S38-002: API-ключ из файла (приоритет выше ENV).
     deepseek_api_key_file: str = ""
     deepseek_base_url: str = "https://api.deepseek.com/v1"
+    #: Имя модели у провайдера. Для OpenAI-совместимых агрегаторов (RouterAI)
+    #: указывается с префиксом: deepseek/deepseek-chat.
+    deepseek_model: str = "deepseek-chat"
     lm_studio_url: str = "http://localhost:1234/v1"
     #: Модель локального сервера (LM Studio отдаёт её в /v1/models)
     lm_studio_model: str = "local-model"
