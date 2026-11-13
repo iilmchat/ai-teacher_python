@@ -19,9 +19,9 @@ x-logging: &default-logging
     max-file: "3"
 
 # S36-002: приложение из GHCR; digest подставляется через ENV.
-x-backend-image: &backend-image ${BACKEND_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-backend:${IMAGE_TAG:-v0.6.0}}
-x-frontend-image: &frontend-image ${FRONTEND_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-frontend:${IMAGE_TAG:-v0.6.0}}
-x-sandbox-image: &sandbox-image ${SANDBOX_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-sandbox-runner:${IMAGE_TAG:-v0.6.0}}
+x-backend-image: &backend-image ${BACKEND_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-backend:${IMAGE_TAG:-v0.6.1}}
+x-frontend-image: &frontend-image ${FRONTEND_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-frontend:${IMAGE_TAG:-v0.6.1}}
+x-sandbox-image: &sandbox-image ${SANDBOX_IMAGE:-ghcr.io/${GHCR_OWNER:-iilmchat}/ai-teacher-sandbox-runner:${IMAGE_TAG:-v0.6.1}}
 
 services:
   postgres:

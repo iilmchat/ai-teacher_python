@@ -7,6 +7,27 @@
 
 ---
 
+## [0.6.1] — 2026-11-13 «Deploy Fixes»
+
+Патч-релиз по итогам первого production-деплоя (VK Cloud, пилот
+`teacher.iiruchating.ru`). Продуктовые контракты не менялись.
+
+### Исправлено
+
+- **`TRUSTED_PROXIES`** — поле объявлено с `NoDecode`, но без валидатора:
+  любое значение в ENV (CSV, JSON, пустая строка) валило старт backend
+  с `ValidationError`. Добавлен разбор CSV и JSON-массива, как у
+  `allowed_origins`.
+- **`DEEPSEEK_MODEL`** — модель была захардкожена (`deepseek-chat`).
+  Добавлено поле `deepseek_model`, проброс в `DeepSeekProvider`,
+  `docker-compose.prod.yml` и примеры env. Позволяет работать через
+  OpenAI-совместимые агрегаторы (RouterAI: `deepseek/deepseek-chat`).
+
+### Проверено на стенде
+
+`teacher.iiruchating.ru`: `llm.model=deepseek/deepseek-v4.1-flash-1017`,
+`configured=true`, `reachable=true`; миграции `022`.
+
 ## [0.6.0] — 2026-11-12 «Production Hardening»
 
 **v0.6.0** — спринты 34–40: безопасность auth/edge, наблюдаемость,
