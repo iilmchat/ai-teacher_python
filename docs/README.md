@@ -13,8 +13,8 @@
 | первый раз запускаете проект | [GETTING_STARTED.md](GETTING_STARTED.md) | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
-| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
-| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.7.md](../TODO_V0.7.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
+| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md), [../TODO_V0.5.md](../TODO_V0.5.md) |
+| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [DECISIONS.md](DECISIONS.md), [../TODO_V0.7.md](../TODO_V0.7.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [MONITORING.md](MONITORING.md), [SLO.md](SLO.md), [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -46,6 +46,10 @@
 - [../TODO_V0.5.md](../TODO_V0.5.md) — **завершённый этап v0.5.0** «Learning Experience &
   Teaching Workflow» (спринты 42–48): аудит продукта по 7 срезам, план задач
   `S42-001`…`S48-003`, зависимости, оценки, DoD, риски и границы этапа
+- [DECISIONS.md](DECISIONS.md) — решения по развилке v0.4.0/v0.5.0 и спринту 47
+  (`D-001`…`D-008`), критерии приёмки и риски
+- [DEEPSEEK_ARCHITECT_PROMPT.md](DEEPSEEK_ARCHITECT_PROMPT.md) — промпт и
+  контекст-пак для внешнего аналитика/архитектора (DeepSeek)
 - [../TODO_V0.7.md](../TODO_V0.7.md) — этап v0.7.0 «Engagement, Accessibility &
   Auth Hardening» (спринты 49–52): траектории и вовлечение, доступность и
   PWA, перенос токенов в httpOnly-cookie (`KI-027`), e-mail-подтверждение и

@@ -6,27 +6,34 @@ Admin API (S10-004): пользователи, задачи, аналитика.
 
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.core.security import require_role
 from app.db.database import get_db
 from app.db.repositories.user import UserRepository
-from app.models.task import Task, TaskDifficulty
-from app.models.user import User, UserRole
+from app.models.audit import AuditLog
+from app.models.task import Task, TaskDifficulty, TaskStatus, UserTaskProgress
+from app.models.user import User, UserRole, UserSession
 from app.schemas.admin import (
     AdminQualityResponse,
     AdminTaskItem,
     AdminTaskListResponse,
     AdminTaskReviewResponse,
+    AdminUserBulkRequest,
+    AdminUserBulkResponse,
+    AdminUserDetail,
     AdminUserItem,
     AdminUserListResponse,
+    AdminUserProgress,
+    AdminUserSessionItem,
+    AdminUserSkipped,
     AdminUserUpdate,
     AnalyticsActivity,
     AnalyticsCache,
@@ -42,7 +49,11 @@ from app.schemas.admin import (
 )
 from app.schemas.audit import AuditLogItem, AuditLogListResponse
 from app.services.analytics_service import AnalyticsService
-from app.services.audit_service import list_audit, record_audit
+from app.services.audit_service import (
+    list_audit,
+    record_audit,
+    stream_audit_csv,
+)
 from app.services.cache import (
     cache_get_json,
     cache_metrics,
@@ -53,6 +64,7 @@ from app.services.export_service import stream_csv, stream_json
 from app.services.feedback_service import FeedbackService
 from app.services.llm.metrics import llm_metrics
 from app.services.moderation_service import ModerationService
+from app.services.sessions import list_sessions, revoke_all_sessions
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -92,6 +104,163 @@ async def list_users(
     return AdminUserListResponse(total=total, items=items)
 
 
+@router.get("/users/{user_id}", response_model=AdminUserDetail)
+async def get_user_detail(
+    user_id: UUID,
+    _: AdminUser,
+    db: DbSession,
+) -> AdminUserDetail:
+    """Карточка пользователя: профиль, прогресс, аудит и сессии (S47-002)"""
+    user = await db.get(User, user_id)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден"
+        )
+
+    progress = (
+        await db.execute(
+            select(
+                func.count()
+                .filter(UserTaskProgress.status == TaskStatus.COMPLETED)
+                .label("solved"),
+                func.coalesce(func.sum(UserTaskProgress.attempts), 0).label("attempts"),
+            ).where(UserTaskProgress.user_id == user_id)
+        )
+    ).one()
+
+    audit_rows = (
+        await db.execute(
+            select(AuditLog, User.username)
+            .outerjoin(User, User.id == AuditLog.actor_id)
+            .where(
+                or_(
+                    AuditLog.actor_id == user_id,
+                    and_(
+                        AuditLog.entity_type == "user",
+                        AuditLog.entity_id == str(user_id),
+                    ),
+                )
+            )
+            .order_by(AuditLog.created_at.desc())
+            .limit(10)
+        )
+    ).all()
+
+    sessions = await list_sessions(db, user_id)
+    return AdminUserDetail(
+        user=AdminUserItem.model_validate(user),
+        progress=AdminUserProgress(
+            solved=int(progress[0]), attempts=int(progress[1])
+        ),
+        audit=[_audit_item(log, username) for log, username in audit_rows],
+        sessions=[
+            AdminUserSessionItem(
+                id=session.id,
+                created_at=session.created_at,
+                last_used_at=session.last_used_at,
+                user_agent=session.user_agent,
+                ip=session.ip,
+            )
+            for session in sessions
+        ],
+    )
+
+
+@router.patch("/users/bulk", response_model=AdminUserBulkResponse)
+async def bulk_update_users(
+    payload: AdminUserBulkRequest,
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+) -> AdminUserBulkResponse:
+    """Массовое изменение роли/активности одной транзакцией (S47-002, D-005).
+
+    Сначала валидируется весь набор, затем изменения применяются вместе.
+    Частичные пропуски объясняются в `skipped`, а не превращаются в 4xx.
+    """
+    changes = payload.changes
+    # Дубликаты не должны приводить к повторному применению
+    requested_ids = list(dict.fromkeys(payload.user_ids))
+    found = {
+        user.id: user
+        for user in (
+            await db.execute(select(User).where(User.id.in_(requested_ids)))
+        )
+        .scalars()
+        .all()
+    }
+
+    to_update: list[User] = []
+    deactivate_ids: list[UUID] = []
+    skipped: list[AdminUserSkipped] = []
+    for user_id in requested_ids:
+        user = found.get(user_id)
+        if user is None:
+            skipped.append(AdminUserSkipped(id=user_id, reason="not_found"))
+            continue
+        if user.id == admin.id:
+            skipped.append(AdminUserSkipped(id=user_id, reason="self"))
+            continue
+
+        role_change = changes.role is not None and user.role != changes.role
+        active_change = (
+            changes.is_active is not None and user.is_active != changes.is_active
+        )
+        if not role_change and not active_change:
+            skipped.append(AdminUserSkipped(id=user_id, reason="no_changes"))
+            continue
+        if (
+            role_change
+            and user.role == UserRole.ADMIN
+            and changes.role != UserRole.ADMIN
+        ):
+            skipped.append(AdminUserSkipped(id=user_id, reason="admin_role"))
+            continue
+
+        if changes.is_active is False and user.is_active:
+            deactivate_ids.append(user.id)
+        to_update.append(user)
+
+    for user in to_update:
+        if changes.role is not None:
+            user.role = changes.role
+        if changes.is_active is not None:
+            user.is_active = changes.is_active
+        if user.id in deactivate_ids:
+            user.token_version += 1
+
+    if deactivate_ids:
+        # Отзыв сессий — в той же транзакции, что и сами изменения
+        await db.execute(
+            update(UserSession)
+            .where(
+                UserSession.user_id.in_(deactivate_ids),
+                UserSession.revoked_at.is_(None),
+            )
+            .values(revoked_at=datetime.utcnow())
+        )
+    if to_update:
+        await db.commit()
+
+    updated = [user.id for user in to_update]
+    if to_update or skipped:
+        await record_audit(
+            db,
+            actor=admin,
+            action="user.bulk_updated",
+            entity_type="user",
+            payload={
+                "role": changes.role.value if changes.role else None,
+                "is_active": changes.is_active,
+                "updated": len(updated),
+                "skipped": len(skipped),
+                "deactivated": len(deactivate_ids),
+            },
+            request=request,
+        )
+    return AdminUserBulkResponse(updated=updated, skipped=skipped)
+
+
 @router.patch("/users/{user_id}", response_model=AdminUserItem)
 async def update_user(
     user_id: UUID,
@@ -100,7 +269,7 @@ async def update_user(
     db: DbSession,
     request: Request,
 ) -> AdminUserItem:
-    """Изменить роль или уровень пользователя"""
+    """Изменить роль, уровень или активность пользователя (S47-002, D-004)"""
     repo = UserRepository(db)
     user = await repo.get(user_id)
     if user is None:
@@ -116,6 +285,23 @@ async def update_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Нельзя понизить собственную роль администратора",
         )
+    if user.id == admin.id and data.get("is_active") is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нельзя деактивировать собственную учётную запись",
+        )
+
+    audit_action = "user.updated"
+    audit_payload: dict[str, Any] = {
+        key: str(value) for key, value in data.items()
+    }
+    if data.get("is_active") is False:
+        revoked = await revoke_all_sessions(db, user_id)
+        data["token_version"] = user.token_version + 1
+        audit_action = "user.deactivated"
+        audit_payload["sessions_revoked"] = str(revoked)
+    elif data.get("is_active") is True:
+        audit_action = "user.activated"
 
     updated = await repo.update(user_id, **data)
     if updated is None:
@@ -123,10 +309,10 @@ async def update_user(
     await record_audit(
         db,
         actor=admin,
-        action="user.updated",
+        action=audit_action,
         entity_type="user",
         entity_id=user_id,
-        payload={key: str(value) for key, value in data.items()},
+        payload=audit_payload,
         request=request,
     )
     return AdminUserItem.model_validate(updated)
@@ -168,21 +354,95 @@ async def list_audit_log(
     action: str | None = Query(default=None, max_length=64),
     entity_type: str | None = Query(default=None, max_length=64),
     actor_id: UUID | None = None,
+    search: str | None = Query(default=None, max_length=64),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> AuditLogListResponse:
-    """Журнал действий teacher/admin (S25-004), новые сверху"""
-    items, total = await list_audit(
+    """Журнал действий teacher/admin (S25-004), новые сверху.
+
+    S47-001: поиск по `action` (ILIKE) и имя актора из `users`.
+    """
+    rows, total = await list_audit(
         db,
         action=action,
         entity_type=entity_type,
         actor_id=actor_id,
+        search=search,
         skip=skip,
         limit=limit,
     )
     return AuditLogListResponse(
-        items=[AuditLogItem.model_validate(item) for item in items],
+        items=[_audit_item(log, username) for log, username in rows],
         total=total,
+    )
+
+
+def _audit_item(log: Any, actor_username: str | None) -> AuditLogItem:
+    """Запись журнала с именем актора (join `users`)"""
+    return AuditLogItem(
+        id=log.id,
+        actor_id=log.actor_id,
+        actor_username=actor_username,
+        actor_role=log.actor_role,
+        action=log.action,
+        entity_type=log.entity_type,
+        entity_id=log.entity_id,
+        payload=log.payload or {},
+        ip=log.ip,
+        created_at=log.created_at,
+    )
+
+
+@router.get("/audit/export")
+async def export_audit(
+    admin: AdminUser,
+    db: DbSession,
+    request: Request,
+    action: str | None = Query(default=None, max_length=64),
+    entity_type: str | None = Query(default=None, max_length=64),
+    actor_id: UUID | None = None,
+    search: str | None = Query(default=None, max_length=64),
+) -> StreamingResponse:
+    """CSV журнала аудита с теми же фильтрами, что и список (S47-001, D-006).
+
+    Отдельный потоковый эндпоинт: набор колонок журнала не совпадает с
+    аналитическими наборами `export_service`.
+    """
+    limit = max(0, settings.export_max_rows)
+    await record_audit(
+        db,
+        actor=admin,
+        action="audit.exported",
+        entity_type="audit",
+        payload={
+            "action": action,
+            "entity_type": entity_type,
+            "actor_id": str(actor_id) if actor_id else None,
+            "has_search": bool(search),
+            "limit": limit,
+        },
+        request=request,
+    )
+
+    async def body() -> AsyncIterator[bytes]:
+        async for chunk in stream_audit_csv(
+            db,
+            action=action,
+            entity_type=entity_type,
+            actor_id=actor_id,
+            search=search,
+            limit=limit,
+        ):
+            yield chunk
+
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    return StreamingResponse(
+        body(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="audit-{stamp}.csv"',
+            "X-Export-Limit": str(limit),
+        },
     )
 
 

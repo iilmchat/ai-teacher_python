@@ -122,6 +122,8 @@ pnpm dev
 - [docs/DESIGN_ADMIN_AND_OPS.md](docs/DESIGN_ADMIN_AND_OPS.md) — админка, LLMOps, FinOps
 - [docs/PROMPT_CURRENT.md](docs/PROMPT_CURRENT.md) — актуальные инструкции ассистента
 - [docs/RULES.md](docs/RULES.md) — правила разработки
+- [docs/DECISIONS.md](docs/DECISIONS.md) — решения по этапам и спринтам (ADR)
+- [docs/DEEPSEEK_ARCHITECT_PROMPT.md](docs/DEEPSEEK_ARCHITECT_PROMPT.md) — промпт для внешнего аналитика
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/MONITORING.md](docs/MONITORING.md) — Prometheus/Grafana/Loki, алерты, Sentry и runbook
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — нагрузочные сценарии, N+1, кэш и лимиты

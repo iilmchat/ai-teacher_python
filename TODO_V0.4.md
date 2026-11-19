@@ -56,6 +56,10 @@
 **Следующий этап:** [TODO_V0.7.md](TODO_V0.7.md) — v0.7.0 «Engagement,
 Accessibility & Auth Hardening»
 
+> Историческое решение D-001 (2026-11-08) о приоритете v0.5.0 над v0.4.0 и
+> границах production-hardening зафиксировано в
+> [docs/DECISIONS.md](docs/DECISIONS.md) §1.
+
 ---
 
 ## 0.0. Решения владельца по пересборке (2026-11-11)

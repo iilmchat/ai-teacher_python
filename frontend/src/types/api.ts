@@ -369,8 +369,63 @@ export interface AdminUserItem {
   username: string;
   role: UserRole;
   level: UserLevel;
+  is_active: boolean;
   created_at: string;
   last_active: string;
+}
+
+/** Активная сессия пользователя в админской карточке (S47-002) */
+export interface AdminUserSessionItem {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  user_agent: string | null;
+  ip: string | null;
+}
+
+export interface AdminUserProgress {
+  solved: number;
+  attempts: number;
+}
+
+/** Карточка пользователя для админа (S47-002) */
+export interface AdminUserDetail {
+  user: AdminUserItem;
+  progress: AdminUserProgress;
+  audit: AuditLogItem[];
+  sessions: AdminUserSessionItem[];
+}
+
+/** Причина пропуска в массовой операции (D-005) */
+export type AdminBulkSkipReason =
+  | 'not_found'
+  | 'self'
+  | 'admin_role'
+  | 'no_changes';
+
+export interface AdminUserBulkResponse {
+  updated: string[];
+  skipped: { id: string; reason: AdminBulkSkipReason }[];
+}
+
+/** Запись журнала аудита (S47-001) */
+export interface AuditLogItem {
+  id: string;
+  actor_id: string | null;
+  /** Имя актора из `users`; null — аккаунт удалён */
+  actor_username: string | null;
+  actor_role: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  payload: Record<string, unknown>;
+  ip: string | null;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLogItem[];
+  total: number;
 }
 
 export interface AdminUserListResponse {

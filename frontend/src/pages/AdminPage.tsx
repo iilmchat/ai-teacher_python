@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 
+import { UserBulkPanel } from '@/components/admin/UserBulkPanel';
 import { Alert } from '@/components/ui/Alert';
+import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { Spinner } from '@/components/ui/Spinner';
 import { Table, Td, Th, Tr } from '@/components/ui/Table';
 import { api } from '@/lib/api';
@@ -40,6 +44,8 @@ export function AdminPage() {
   const [users, setUsers] = useState<AdminUserItem[]>([]);
   const [tasks, setTasks] = useState<AdminTaskItem[]>([]);
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<AdminUserItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -94,9 +100,12 @@ export function AdminPage() {
     try {
       await api.delete(`/admin/users/${userId}`);
       setUsers((items) => items.filter((item) => item.id !== userId));
+      setSelected((items) => items.filter((id) => id !== userId));
       setNotice(t('admin.userDeleted'));
     } catch {
       setError(t('admin.userDeleteError'));
+    } finally {
+      setDeleteTarget(null);
     }
   }
 
@@ -145,13 +154,36 @@ export function AdminPage() {
       : name;
   }
 
+  function toggleSelected(userId: string) {
+    setSelected((items) =>
+      items.includes(userId)
+        ? items.filter((id) => id !== userId)
+        : [...items, userId],
+    );
+  }
+
+  function toggleAll() {
+    const visible = users.map((user) => user.id);
+    setSelected((items) =>
+      visible.every((id) => items.includes(id)) ? [] : visible,
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-slate-900">{t('admin.title')}</h1>
-        <Button variant="secondary" onClick={() => void loadAll()} loading={loading}>
-          {t('admin.refresh')}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/admin/audit"
+            className="rounded-lg px-3 py-1.5 text-sm text-indigo-700 hover:bg-indigo-50"
+          >
+            {t('admin.auditLink')}
+          </Link>
+          <Button variant="secondary" onClick={() => void loadAll()} loading={loading}>
+            {t('admin.refresh')}
+          </Button>
+        </div>
       </div>
 
       {error && <Alert tone="error">{error}</Alert>}
@@ -433,20 +465,61 @@ export function AdminPage() {
           </div>
         </div>
 
+        <div className="mb-3">
+          <UserBulkPanel
+            selectedIds={selected}
+            users={users}
+            onApplied={() => {
+              setSelected([]);
+              void loadAll();
+            }}
+          />
+        </div>
+
         <div className="overflow-x-auto">
           <Table>
             <thead className="text-xs uppercase text-slate-500">
               <Tr>
+                <Th className="py-2">
+                  <input
+                    type="checkbox"
+                    aria-label={t('admin.bulk.selectAll')}
+                    checked={
+                      users.length > 0 &&
+                      users.every((user) => selected.includes(user.id))
+                    }
+                    onChange={toggleAll}
+                  />
+                </Th>
                 <Th className="py-2">{t('admin.colUser')}</Th>
                 <Th className="py-2">{t('admin.colEmail')}</Th>
                 <Th className="py-2">{t('admin.colRole')}</Th>
+                <Th className="py-2">{t('admin.userDetail.status')}</Th>
                 <Th className="py-2">{t('admin.colActions')}</Th>
               </Tr>
             </thead>
             <tbody>
               {users.map((user) => (
                 <Tr key={user.id} className="border-t border-slate-100">
-                  <Td className="py-2 font-medium text-slate-800">{user.username}</Td>
+                  <Td className="py-2">
+                    <input
+                      type="checkbox"
+                      aria-label={t('admin.bulk.selectUser', {
+                        username: user.username,
+                      })}
+                      checked={selected.includes(user.id)}
+                      disabled={user.id === currentUserId}
+                      onChange={() => toggleSelected(user.id)}
+                    />
+                  </Td>
+                  <Td className="py-2 font-medium text-slate-800">
+                    <Link
+                      to={`/admin/users/${user.id}`}
+                      className="text-indigo-700 hover:underline"
+                    >
+                      {user.username}
+                    </Link>
+                  </Td>
                   <Td className="py-2 text-slate-600">{user.email}</Td>
                   <Td className="py-2">
                     <select
@@ -466,19 +539,26 @@ export function AdminPage() {
                     </select>
                   </Td>
                   <Td className="py-2">
+                    <Badge tone={user.is_active ? 'success' : 'danger'}>
+                      {user.is_active
+                        ? t('admin.userDetail.active')
+                        : t('admin.userDetail.inactive')}
+                    </Badge>
+                  </Td>
+                  <Td className="py-2">
                     <Button
                       variant="ghost"
                       disabled={user.id === currentUserId}
-                      onClick={() => void removeUser(user.id)}
+                      onClick={() => setDeleteTarget(user)}
                     >
-                      {t('admin.delete')}
+                      {t('admin.deletePermanent')}
                     </Button>
                   </Td>
                 </Tr>
               ))}
               {users.length === 0 && !loading && (
                 <Tr>
-                  <Td colSpan={4} className="py-4 text-center text-slate-500">
+                  <Td colSpan={6} className="py-4 text-center text-slate-500">
                     {t('admin.nothingFound')}
                   </Td>
                 </Tr>
@@ -506,6 +586,34 @@ export function AdminPage() {
           )}
         </ul>
       </Card>
+
+      <Modal
+        open={deleteTarget !== null}
+        title={t('admin.deleteTitle')}
+        onClose={() => setDeleteTarget(null)}
+        closeLabel={t('common.close')}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              {t('admin.bulk.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() =>
+                deleteTarget ? void removeUser(deleteTarget.id) : undefined
+              }
+            >
+              {t('admin.deletePermanent')}
+            </Button>
+          </>
+        }
+      >
+        <p>
+          {t('admin.deleteText', {
+            username: deleteTarget?.username ?? '',
+          })}
+        </p>
+      </Modal>
     </div>
   );
 }

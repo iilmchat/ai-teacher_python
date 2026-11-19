@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field, model_validator
 
 from app.models.task import TaskDifficulty
 from app.models.user import UserLevel, UserRole
+from app.schemas.audit import AuditLogItem
 
 #: Источники, которые попадают в очередь модерации (S47-003)
 ModerationSource = Literal["generated", "imported"]
@@ -26,6 +27,7 @@ class AdminUserItem(BaseModel):
     username: str
     role: UserRole
     level: UserLevel
+    is_active: bool
     created_at: datetime
     last_active: datetime
 
@@ -37,6 +39,70 @@ class AdminUserUpdate(BaseModel):
 
     role: UserRole | None = None
     level: UserLevel | None = None
+    #: Мягкая деактивация (D-004): `false` отзывает сессии и токены
+    is_active: bool | None = None
+
+
+class AdminUserProgress(BaseModel):
+    """Прогресс пользователя для карточки (S47-002)"""
+
+    #: Задач решено (статус `completed`)
+    solved: int
+    #: Сумма попыток по всем задачам
+    attempts: int
+
+
+class AdminUserSessionItem(BaseModel):
+    """Действующая сессия пользователя без служебного `jti` (S47-002)"""
+
+    id: UUID
+    created_at: datetime
+    last_used_at: datetime
+    user_agent: str | None = None
+    ip: str | None = None
+
+
+class AdminUserDetail(BaseModel):
+    """Карточка пользователя: профиль, прогресс, аудит и сессии (S47-002)"""
+
+    user: AdminUserItem
+    progress: AdminUserProgress
+    audit: list[AuditLogItem] = Field(default_factory=list)
+    sessions: list[AdminUserSessionItem] = Field(default_factory=list)
+
+
+class AdminUserBulkChanges(BaseModel):
+    """Изменения для массовой операции (D-005)"""
+
+    role: UserRole | None = None
+    is_active: bool | None = None
+
+    @model_validator(mode="after")
+    def at_least_one_change(self) -> "AdminUserBulkChanges":
+        if self.role is None and self.is_active is None:
+            raise ValueError("Нужно указать role или is_active")
+        return self
+
+
+class AdminUserBulkRequest(BaseModel):
+    """Массовое изменение пользователей (D-005), не больше 100 за запрос"""
+
+    user_ids: list[UUID] = Field(..., min_length=1, max_length=100)
+    changes: AdminUserBulkChanges
+
+
+class AdminUserSkipped(BaseModel):
+    """Пропущенный пользователь и причина"""
+
+    id: UUID
+    reason: Literal["not_found", "self", "admin_role", "no_changes"]
+
+
+class AdminUserBulkResponse(BaseModel):
+    """Отчёт массовой операции: применённые и пропущенные (D-005)"""
+
+    updated: list[UUID] = Field(default_factory=list)
+    skipped: list[AdminUserSkipped] = Field(default_factory=list)
 
 
 class AdminUserListResponse(BaseModel):

@@ -114,7 +114,9 @@ class SlowStreamingProvider(StreamingProvider):
     ):
         self.calls.append(messages)
         for delta in self.deltas:
-            await asyncio.sleep(0.05)
+            # 200 мс: под нагрузкой полного прогона команда `stop` должна
+            # успевать дойти между токенами (иначе тест флакует, S47-002).
+            await asyncio.sleep(0.2)
             yield delta
 
 
