@@ -13,8 +13,8 @@
 | первый раз запускаете проект | [GETTING_STARTED.md](GETTING_STARTED.md) | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | будете пользоваться как ученик | [USER_GUIDE.md](USER_GUIDE.md) | [ASSISTANT_LEVELS.md](ASSISTANT_LEVELS.md) |
 | проверяете качество / приёмка | [MANUAL_TESTING_GUIDE.md](MANUAL_TESTING_GUIDE.md) | [LLM_EVAL.md](LLM_EVAL.md) |
-| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
-| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [../TODO_V0.6.md](../TODO_V0.6.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
+| пишете код в проекте | [RULES.md](RULES.md) | [ARCHITECTURE.md](ARCHITECTURE.md), [../TODO_V0.5.md](../TODO_V0.5.md) |
+| планируете продуктовые изменения | [../TODO_V0.5.md](../TODO_V0.5.md) | [DECISIONS.md](DECISIONS.md), [../TODO_V0.6.md](../TODO_V0.6.md), [../TODO_V0.4.md](../TODO_V0.4.md) |
 | администрируете и эксплуатируете | [DESIGN_ADMIN_AND_OPS.md](DESIGN_ADMIN_AND_OPS.md) | [RELEASES.md](RELEASES.md) |
 | работаете с ассистентом (LLM) | [PROMPT_CURRENT.md](PROMPT_CURRENT.md) | [LLM_EVAL.md](LLM_EVAL.md) |
 | готовите релиз | [RELEASES.md](RELEASES.md) | [CHANGELOG.md](CHANGELOG.md) |
@@ -38,11 +38,16 @@
 - [../TODO_V0.2.md](../TODO_V0.2.md) — завершённый этап v0.2.0 (спринты 11–20)
 - [../TODO_V0.3.md](../TODO_V0.3.md) — завершённый этап v0.3.0 (спринты 21–30);
   патчи v0.3.1–v0.3.3 — в [RELEASES.md](RELEASES.md)
-- [../TODO_V0.4.md](../TODO_V0.4.md) — **текущий этап v0.4.0** (спринты 33–41):
-  детальный план задач `S33-001`…`S41-005`, зависимости, оценки, DoD и риски
-- [../TODO_V0.5.md](../TODO_V0.5.md) — **следующий этап v0.5.0** «Learning Experience &
+- [../TODO_V0.4.md](../TODO_V0.4.md) — этап v0.4.0 «Production & Multi-node»
+  (спринты 33–41): **отложен** решением [D-001](DECISIONS.md), остаётся
+  бэклогом production-hardening и не блокирует v0.5.0
+- [../TODO_V0.5.md](../TODO_V0.5.md) — **текущий этап v0.5.0** «Learning Experience &
   Teaching Workflow» (спринты 42–48): аудит продукта по 7 срезам, план задач
   `S42-001`…`S48-003`, зависимости, оценки, DoD, риски и границы этапа
+- [DECISIONS.md](DECISIONS.md) — решения по развилке v0.4.0/v0.5.0 и спринту 47
+  (`D-001`…`D-008`), критерии приёмки и риски
+- [DEEPSEEK_ARCHITECT_PROMPT.md](DEEPSEEK_ARCHITECT_PROMPT.md) — промпт и
+  контекст-пак для внешнего аналитика/архитектора (DeepSeek)
 - [../TODO_V0.6.md](../TODO_V0.6.md) — этап v0.6.0 «Engagement, Accessibility &
   Auth Hardening» (спринты 49–52): траектории и вовлечение, доступность и
   PWA, перенос токенов в httpOnly-cookie (`KI-027`), релиз

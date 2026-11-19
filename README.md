@@ -113,6 +113,8 @@ pnpm dev
 - [docs/DESIGN_ADMIN_AND_OPS.md](docs/DESIGN_ADMIN_AND_OPS.md) — админка, LLMOps, FinOps
 - [docs/PROMPT_CURRENT.md](docs/PROMPT_CURRENT.md) — актуальные инструкции ассистента
 - [docs/RULES.md](docs/RULES.md) — правила разработки
+- [docs/DECISIONS.md](docs/DECISIONS.md) — решения по этапам и спринтам (ADR)
+- [docs/DEEPSEEK_ARCHITECT_PROMPT.md](docs/DEEPSEEK_ARCHITECT_PROMPT.md) — промпт для внешнего аналитика
 - [docs/RELEASES.md](docs/RELEASES.md) · [docs/CHANGELOG.md](docs/CHANGELOG.md) · [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md)
 - [docs/reports/sprint-19/SPRINT-19.md](docs/reports/sprint-19/SPRINT-19.md) · [docs/reports/sprint-20/SPRINT-20.md](docs/reports/sprint-20/SPRINT-20.md)
 - [UPGRADE.md](docs/UPGRADE.md) — обновление до v0.3.3 (v0.2.0 → v0.3.0,
